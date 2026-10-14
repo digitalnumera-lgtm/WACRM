@@ -49,6 +49,18 @@ beforeEach(() => {
 
 afterEach(() => vi.clearAllMocks());
 
+describe('Numera monitoring-only entrypoints', () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it('blocks background and operational APIs before authentication or side effects', async () => {
+    vi.stubEnv('NUMERA_MONITORING_ONLY', 'true');
+    for (const path of ['/api/whatsapp/send', '/api/whatsapp/webhook', '/api/automations/cron', '/api/flows/cron', '/api/ai/draft', '/api/v1/messages']) {
+      const response = await middleware(new NextRequest(`https://app.test${path}`, { method: 'POST' }));
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: 'Disabled in monitoring-only mode' });
+    }
+  });
+});
+
 const ROTATED = {
   name: "sb-test-auth-token",
   value: "rotated-refresh-token",

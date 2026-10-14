@@ -1,7 +1,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { blockedMonitoringPath, monitoringOnly } from '@/lib/monitoring/policy'
 
 export async function middleware(request: NextRequest) {
+  // Also blocks legacy cron and webhook entrypoints before they can invoke
+  // sends, automations or AI. The dedicated monitoring webhook is separate.
+  if (monitoringOnly() && blockedMonitoringPath(request.nextUrl.pathname)) {
+    return NextResponse.json({ error: 'Disabled in monitoring-only mode' }, { status: 403 })
+  }
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
