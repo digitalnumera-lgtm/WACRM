@@ -1,76 +1,154 @@
-# Numera recovery checkpoint
+# Numera recovery and deployment
 
-This is a partial recovery, not the original unpushed customization. Original
-upstream: `ArnasDon/wacrm` at `27c6bdf43633d1746410168431a8b0e22b4f2ba6`.
-Original prepared commit: `7025eaa099998d3b031360dd48ab38c7b9f90bce` on
-`codex/numera-monitoring`; it was not fetchable from GitHub during recovery.
+The recovery implementation is on `digitalnumera-lgtm/WACRM`, branch
+`recovery/wacrm`. It rebuilds the monitoring changes on upstream
+`ArnasDon/wacrm` commit `27c6bdf43633d1746410168431a8b0e22b4f2ba6`.
+It is not the original unpushed custom source. Original prepared commit
+`7025eaa099998d3b031360dd48ab38c7b9f90bce` was not available from GitHub.
 
-## Preservation
+## Preserve the original
 
 Do not delete, reset or replace the inaccessible original environment. Its
 `/workspace/deployment-artifacts/numera-wacrm-source.zip`, `numera-wacrm.bundle`
-and `SHA256SUMS` must remain recoverable. None was present in this recovery
-workspace. When accessible, verify checksums and extract into a separate
-directory before comparing; preserve the bundle and full custom history.
+and `SHA256SUMS` were not present in this recovery workspace. If they become
+accessible, verify their checksums and compare in a separate directory. Preserve
+the bundle and full custom history. Recovery archives under
+`/workspace/recovery-artifacts` contain this rebuild, not those original files.
 
-Never reset the existing Supabase database or blindly replay migrations.
-Project: `stvjblztwpohvatdalww`, URL:
-`https://stvjblztwpohvatdalww.supabase.co`. The prior environment reportedly
-applied 47 migrations and recorded their checksums in
-`numera_migrations.applied`. Upstream contains only 46 migrations: the missing
-monitoring schema must be recovered from the existing project or backup.
+## Existing database
 
-Restore the original secure runtime bindings through environment settings:
-`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ENCRYPTION_KEY`,
-`META_APP_SECRET`, `META_MONITORING_VERIFY_TOKEN`. Keep the encryption key stable.
-For schema inspection only, restore `SUPABASE_ACCESS_TOKEN`; do not deploy it.
-Git push works with platform authentication; no temporary push token is needed.
+Use project `stvjblztwpohvatdalww` at
+`https://stvjblztwpohvatdalww.supabase.co`. No schema changes, resets or migration
+replays were performed during recovery. The original environment reported 47
+applied migrations with checksums in `numera_migrations.applied`; upstream has
+46 migration files. Do not blindly run those migrations against this project.
 
-Run `node scripts/inspect-numera-schema.mjs` after restoring management access.
-It uses a read-only transaction, reads monitoring table definitions, policies,
-functions and the checksum ledger, and writes outside the checkout. Compare
-the ledger with upstream SHA256 checksums before any migration consideration.
-It does not read monitoring credentials, message contents or auth-user records.
+REST schema inspection and isolated live fixture tests confirmed the existing
+monitoring tables and RPC contracts. Management API catalog/checksum inspection
+remains blocked: the current setup token lacks `database_read`. Once that
+permission is available, run:
 
-## Current behavior and outstanding work
+```sh
+NODE_USE_ENV_PROXY=1 node scripts/inspect-numera-schema.mjs
+```
 
-Monitoring-only is the default (`NUMERA_MONITORING_ONLY` unset or `true`).
-Operational inbox, sending, broadcasts, automations, flows, AI APIs, public
-operational APIs and the legacy webhook are blocked at middleware. Mutating
-Meta requests are also blocked at the transport boundary, including number
-registration and app subscription. `false` is an explicit legacy-mode override,
-used only to exercise upstream regression tests; do not use it in production.
+This read-only script writes schema and ledger evidence outside the checkout.
+Compare the ledger before considering any schema change. Lack of ledger access
+does not require a database reset or block the existing application RPCs.
 
-Event normalization covers incoming messages, `smb_message_echoes` phone-app
-replies, status observations, per-number/customer thread identity and stable
-deduplication keys. Unsupported/history changes are retained by the normalizer.
-These tests validate fixtures, not live Meta Coexistence delivery.
+The application reuses `monitoring_channels`, `monitoring_credentials`,
+`monitoring_threads`, `monitoring_messages`, `monitoring_events` and
+`monitoring_lead_audit`. Existing `create_monitoring_channel` and
+`ingest_monitoring_event` RPCs are service-only. `set_monitoring_lead_status`
+uses the authenticated manager session to record its actor. Ingest message
+arguments are `id`, `customer`, `name`, `direction`, `timestamp`, `kind`, `text`
+and `media_id`; these differ from table column names. Credentials and retained
+events are service-only; event APIs verify owner/admin and scope by company.
 
-Remaining: inspect/recover the monitoring schema, implement compatible
-transactional persistence and company-scoped owner/admin access, signed
-`/api/monitoring/webhook`, encrypted channel configuration, management inbox,
-search, number/agent filters, pagination, lead statuses and audit trail. There is
-no deployed monitoring endpoint or complete monitoring UI at this checkpoint.
-Embedded Signup, historical import and durable media archiving are unimplemented.
+## Implemented behavior
 
-## Existing production services
+- `/monitoring` is the owner/admin management inbox. Company-scoped access is
+  enforced by the server and the existing database policies.
+- Each thread identifies its business number and agent label. The existing
+  channel `label` supplies the assigned-agent display label; no new agent-user
+  assignment schema was introduced. The same customer on two numbers has two
+  separate threads.
+- Search covers customer number, customer name and latest message preview.
+  Number, agent-label and lead-status filters, thread/message/audit pagination,
+  lead updates and audit history are available. Visible pages refresh every
+  30 seconds.
+- `/api/monitoring/webhook` verifies raw-body Meta HMAC signatures, stores
+  incoming messages and `smb_message_echoes` phone-app replies through the
+  existing atomic RPC, and deduplicates retries. Storage failures return 503
+  for retry. Invalid signatures are rejected before persistence.
+- Channel creation verifies Meta number/WABA membership through read-only GET
+  requests and encrypts credentials with the existing encryption key. It does
+  not register numbers, subscribe apps or alter WabaCRM authorization.
+- Unsupported/history events are retained for manager review. Media references
+  and captions are retained; media playback and durable archiving are not
+  implemented. Embedded Signup and historical-chat import are not implemented.
 
-Keep `wabacrm.com` and all existing Meta authorizations, phone apps, registration
-and subscriptions unchanged. Five agent numbers span Pakistan and UAE; previous
-reported connection states were two connected and one intentionally disconnected.
-Do not reconnect the deliberately disconnected number. WabaCRM authorization
-cannot be transferred to this app. Production Coexistence and delivery are
-unverified and must be tested without disrupting the current service.
+Monitoring-only is the default. Keep `NUMERA_MONITORING_ONLY=true` in production.
+Sending, operational inbox, broadcasts, automations, flows, AI APIs, legacy
+webhook and public operational APIs are blocked. Mutating Meta requests are
+also blocked at the transport boundary. `false` is only a deliberate legacy
+mode override, used by upstream regression tests; never deploy that override.
 
-Final domain: `https://crm.numeradigital.com`; Supabase's reported Auth Site URL
-matches it, with `https://crm.numeradigital.com/**` allowed. Domain and hosting
-are in different accounts. Do not change either existing WordPress site or
-publish this partial checkpoint to production.
+## Secure configuration
 
-## Development
+Supply these through secure environment settings, never committed `.env` files:
 
-Use the existing isolated checkout; do not create a worktree unless requested.
-From `/workspace/WACRM`, run `npm ci --cache /workspace/.npm`, `npm run typecheck`,
-`npm run lint` and `npm test -- --maxWorkers=4`. Use `npm run dev -- --hostname
-127.0.0.1` only with the original runtime configuration. Live integration
-readiness cannot be claimed from placeholder credentials or a compiled build.
+- `NEXT_PUBLIC_SUPABASE_URL` = the existing project URL above
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` = existing project anon key
+- `SUPABASE_SERVICE_ROLE_KEY` = existing server-only service key
+- `NEXT_PUBLIC_SITE_URL` = `https://crm.numeradigital.com`
+- `ENCRYPTION_KEY` = the original 64-character hexadecimal key; never replace it
+- `META_APP_SECRET` = the Numera Meta Developer app secret
+- `META_MONITORING_VERIFY_TOKEN` = the original saved verification secret, or,
+  if no original was configured, a user-chosen long random secret stored with
+  a password manager and entered identically in Numera's Meta webhook settings
+- `NUMERA_MONITORING_ONLY` = `true`
+
+The verify token is not a Meta access token or app secret. It was still missing
+from the recovery runtime at validation. GET webhook subscription verification
+returns 503 until configured. POST signature/storage behavior was tested using
+synthetic signed events without contacting Meta.
+
+`SUPABASE_ACCESS_TOKEN` is setup-only. Platform Git authentication already
+supports pushes; `WACRM_GITHUB_PUSH_TOKEN` is unnecessary here. Neither setup
+token should be deployed to the CRM. Do not print or copy secret values into
+logs, scripts, Git, deployment archives or chat.
+
+## Build and start
+
+Use the existing isolated checkout at `/workspace/WACRM`; do not create a
+worktree unless explicitly requested. Node 24 was used in this cloud environment.
+The lockfile is unchanged. Preserve TLS verification and configured proxy trust.
+
+```sh
+cd /workspace/WACRM
+npm ci --cache /workspace/.npm
+npm run typecheck
+npm run lint
+npm test -- --maxWorkers=4
+NODE_USE_ENV_PROXY=1 npm run build
+HOSTNAME=127.0.0.1 PORT=3000 NODE_USE_ENV_PROXY=1 npm start
+```
+
+`NODE_USE_ENV_PROXY=1` is needed for Node 24 requests through this cloud proxy.
+The build's postbuild step copies static assets and public files into
+`.next/standalone`. `npm start` runs that server. Restart it in each new task;
+processes do not survive environment publication. For an external Node hosting
+service, use its supplied `PORT` and `HOSTNAME=0.0.0.0`; set public environment
+values before building. Do not expose a development server to production.
+
+Required outbound hosts include the Supabase project, `api.supabase.com` for
+optional inspection, `graph.facebook.com`, and `fonts.googleapis.com` /
+`fonts.gstatic.com` during builds. Package-manager access is also needed.
+
+## Validation and production activation
+
+Validated on 2026-10-15: production build and standalone startup, TypeScript,
+1,180 tests across 102 files, and lint with zero errors (40 upstream warnings).
+Live isolated database tests passed company/agent isolation, per-number threads,
+message names/media metadata, duplicate retries, phone-app echoes, all five lead
+statuses with audit actors, unsupported-event retention and transaction rollback.
+Signed HTTP webhook delivery and retry deduplication passed against the existing
+database. Authenticated desktop/mobile browser checks passed rendering, lead
+updates, number filtering and retained-event access. All temporary synthetic
+accounts and their data were removed. Fixture echo tests do not establish
+production Meta Coexistence delivery.
+
+Production activation still requires hosting this source with the secure
+configuration, setting the Numera webhook callback to
+`https://crm.numeradigital.com/api/monitoring/webhook`, and verifying authorized
+production Coexistence delivery for each intended number. Keep the existing
+`wabacrm.com` integration, phone apps, number registrations and app subscriptions
+unchanged. Its authorization cannot be transferred to Numera. Do not reconnect
+the deliberately disconnected number. No production Meta change was performed.
+
+There are five agent numbers across Pakistan and UAE. Domain ownership and
+Hostinger hosting are in separate accounts. The reported Supabase Auth Site URL
+is `https://crm.numeradigital.com` with `https://crm.numeradigital.com/**` allowed.
+Keep both existing WordPress sites unchanged. No production deployment or domain
+change was performed during this recovery.
