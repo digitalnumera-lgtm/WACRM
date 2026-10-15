@@ -3,6 +3,10 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { blockedMonitoringPath, monitoringOnly } from '@/lib/monitoring/policy'
 
 export async function middleware(request: NextRequest) {
+  if (request.nextUrl.pathname === '/api/monitoring/webhook') {
+    // Webhooks use raw-body signatures, not a user's browser session.
+    return NextResponse.next({ request })
+  }
   // Also blocks legacy cron and webhook entrypoints before they can invoke
   // sends, automations or AI. The dedicated monitoring webhook is separate.
   if (monitoringOnly() && blockedMonitoringPath(request.nextUrl.pathname)) {
@@ -69,7 +73,7 @@ export async function middleware(request: NextRequest) {
       url.pathname = `/join/${encodeURIComponent(inviteToken)}`
       url.search = ''
     } else {
-      url.pathname = '/dashboard'
+      url.pathname = monitoringOnly() ? '/monitoring' : '/dashboard'
       url.search = ''
     }
     return withRefreshedCookies(NextResponse.redirect(url))
@@ -78,7 +82,7 @@ export async function middleware(request: NextRequest) {
   // Protected pages - redirect to login if not authenticated
   // Every top-level route under src/app/(dashboard)/ belongs here —
   // middleware.test.ts reads that directory and fails on a missing one.
-  const protectedPaths = ['/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts', '/automations', '/flows', '/agents', '/notifications', '/settings']
+  const protectedPaths = ['/monitoring', '/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts', '/automations', '/flows', '/agents', '/notifications', '/settings']
   if (!user && protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
