@@ -152,3 +152,26 @@ Hostinger hosting are in separate accounts. The reported Supabase Auth Site URL
 is `https://crm.numeradigital.com` with `https://crm.numeradigital.com/**` allowed.
 Keep both existing WordPress sites unchanged. No production deployment or domain
 change was performed during this recovery.
+
+## Webhook delivery diagnostics
+
+Hostinger runtime logs now emit `[monitoring-webhook]` JSON records for each
+POST: a `received` marker and a terminal outcome, correlated by a server-generated
+request ID (also returned in `X-Monitoring-Request-Id`). Only fixed labels and
+counts are logged, never payloads, request headers, Meta IDs, credentials,
+customer text or database exception details.
+
+`signature_rejected` means HMAC validation failed. `payload_rejected` means the
+signed envelope could not be parsed. `delivery_failed` returns 503; its outcome
+counts distinguish `channel_lookup_failed`, `channel_not_found`,
+`ambiguous_routing` and `transaction_failed`. `channel_paused` means an existing
+paused channel was intentionally skipped. `transaction_completed` includes
+idempotent retries; it does not imply a newly inserted message. `acknowledged`
+with zero batches or only paused channels does not establish message storage.
+An unexpected persistence exception remains a generic `delivery_failed`.
+
+Meta dashboard samples can use dummy WABA/phone IDs that do not match configured
+channels. Do not add these dummy IDs to a customer account or bypass routing to
+make a dashboard test pass. After deploying this version, repeat the test and
+inspect the new runtime log entries to determine its actual outcome. A Meta UI
+success notice alone does not prove storage in this database.

@@ -80,25 +80,30 @@ export function monitoringBatches(payload: unknown): ChangeBatch[] {
 /** Existing Postgres RPC atomically stores each event, messages and thread updates.
  * A failed batch is not acknowledged. Successful batches deduplicate on retries.
  */
-export async function persistMonitoringBatches(db: SupabaseClient, batches: ChangeBatch[]) {
+export type IngestDiagnostic = 'channel_lookup_failed' | 'channel_not_found' | 'ambiguous_routing' | 'channel_paused' | 'transaction_failed' | 'transaction_completed'
+
+export async function persistMonitoringBatches(db: SupabaseClient, batches: ChangeBatch[], diagnose: (event: IngestDiagnostic) => void = () => {}) {
   for (const batch of batches) {
     let lookup = db.from('monitoring_channels').select('id,account_id,active').eq('waba_id', batch.waba)
     if (batch.phone) lookup = lookup.eq('phone_number_id', batch.phone)
     // Without a phone ID, keep the opaque event for each configured channel
     // under this WABA; never guess which conversation it belongs to.
     const channels = await lookup
-    if (channels.error || !channels.data?.length) throw new Error('Channel routing unavailable')
+    if (channels.error) { diagnose('channel_lookup_failed'); throw new Error('Channel routing unavailable') }
+    if (!channels.data?.length) { diagnose('channel_not_found'); throw new Error('Channel routing unavailable') }
     if ((batch.phone && channels.data.length !== 1) || new Set(channels.data.map(c => c.account_id)).size > 1) {
+      diagnose('ambiguous_routing')
       throw new Error('Ambiguous company routing')
     }
     for (const channel of channels.data) {
-      if (!channel.active) continue // Deliberately paused numbers stay paused.
+      if (!channel.active) { diagnose('channel_paused'); continue } // Deliberately paused numbers stay paused.
       const result = await db.rpc('ingest_monitoring_event', {
         p_channel: channel.id, p_hash: batch.hash, p_field: batch.field,
         p_payload: batch.payload, p_messages: batch.phone ? batch.messages : [],
         p_review: batch.review || !batch.phone,
       })
-      if (result.error) throw new Error('Monitoring transaction failed')
+      if (result.error) { diagnose('transaction_failed'); throw new Error('Monitoring transaction failed') }
+      diagnose('transaction_completed')
     }
   }
 }

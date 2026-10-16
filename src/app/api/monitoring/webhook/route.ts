@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto'
+import { randomUUID, timingSafeEqual } from 'node:crypto'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { monitoringBatches, persistMonitoringBatches } from '@/lib/monitoring/ingest'
@@ -21,22 +21,35 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!process.env.META_APP_SECRET?.trim()) return privateJson({ error: 'Webhook signature verification is not configured.' }, 503)
+  // Only server-generated IDs and fixed outcome labels enter the logs.
+  // Never include request URLs/headers, payloads, identifiers or error objects.
+  const requestId = randomUUID()
+  const outcomes: Record<string, number> = {}
+  const finish = (event: string, status: number, data: unknown) => {
+    console.info('[monitoring-webhook]', JSON.stringify({ requestId, event, status, outcomes }))
+    const response = privateJson(data, status)
+    response.headers.set('X-Monitoring-Request-Id', requestId)
+    return response
+  }
+  console.info('[monitoring-webhook]', JSON.stringify({ requestId, event: 'received' }))
+  if (!process.env.META_APP_SECRET?.trim()) return finish('app_secret_missing', 503, { error: 'Webhook signature verification is not configured.' })
   let raw: string
   try { raw = await readLimitedBody(request, 1024 * 1024) }
-  catch { return privateJson({ error: 'Invalid or oversized payload.' }, 413) }
+  catch { return finish('body_rejected', 413, { error: 'Invalid or oversized payload.' }) }
   if (!verifyMetaWebhookSignature(raw, request.headers.get('x-hub-signature-256'))) {
-    return privateJson({ error: 'Invalid signature.' }, 401)
+    return finish('signature_rejected', 401, { error: 'Invalid signature.' })
   }
+  outcomes.signature_verified = 1
   let batches
   try { batches = monitoringBatches(JSON.parse(raw)) }
-  catch { return privateJson({ error: 'Invalid WhatsApp payload.' }, 400) }
+  catch { return finish('payload_rejected', 400, { error: 'Invalid WhatsApp payload.' }) }
   try {
-    await persistMonitoringBatches(monitoringAdmin(), batches)
-    return privateJson({ received: true })
+    outcomes.batches = batches.length
+    await persistMonitoringBatches(monitoringAdmin(), batches, event => { outcomes[event] = (outcomes[event] ?? 0) + 1 })
+    return finish('acknowledged', 200, { received: true })
   } catch {
     // Do not return 200 before durable storage: let Meta retry the delivery.
     // Do not log payloads, signatures, credentials or customer content.
-    return privateJson({ error: 'Delivery could not be stored. Please retry.' }, 503)
+    return finish('delivery_failed', 503, { error: 'Delivery could not be stored. Please retry.' })
   }
 }

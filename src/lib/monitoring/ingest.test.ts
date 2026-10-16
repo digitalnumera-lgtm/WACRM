@@ -56,3 +56,16 @@ describe('transactional monitoring batches', () => {
     expect(db.rpc).not.toHaveBeenCalled()
   })
 })
+
+it('distinguishes unknown channels, paused channels and storage failures in diagnostics', async () => {
+  const batches = monitoringBatches(envelope('messages', { messages: [inbound] }))
+  const diagnose = vi.fn()
+  await expect(persistMonitoringBatches(database([]).client, batches, diagnose)).rejects.toThrow()
+  expect(diagnose).toHaveBeenLastCalledWith('channel_not_found')
+  await persistMonitoringBatches(database([{ id: 'channel', account_id: 'company', active: false }]).client, batches, diagnose)
+  expect(diagnose).toHaveBeenLastCalledWith('channel_paused')
+  await expect(persistMonitoringBatches(database([{ id: 'channel', account_id: 'company', active: true }], true).client, batches, diagnose)).rejects.toThrow()
+  expect(diagnose).toHaveBeenLastCalledWith('transaction_failed')
+  await persistMonitoringBatches(database([{ id: 'channel', account_id: 'company', active: true }]).client, batches, diagnose)
+  expect(diagnose).toHaveBeenLastCalledWith('transaction_completed')
+})

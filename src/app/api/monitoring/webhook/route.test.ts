@@ -6,7 +6,7 @@ vi.mock('@/lib/monitoring/ingest', async importOriginal => ({ ...await importOri
 import { GET, POST } from './route'
 
 beforeEach(() => { mocks.admin.mockReturnValue({}); mocks.persist.mockResolvedValue(undefined); vi.stubEnv('META_APP_SECRET', 'test-app-secret'); vi.stubEnv('META_MONITORING_VERIFY_TOKEN', 'test-verification-token') })
-afterEach(() => { vi.clearAllMocks(); vi.unstubAllEnvs() })
+afterEach(() => { vi.restoreAllMocks(); vi.clearAllMocks(); vi.unstubAllEnvs() })
 function request(body: string, signature?: string) {
   return new Request('https://crm.test/api/monitoring/webhook', { method: 'POST', headers: signature ? { 'x-hub-signature-256': signature } : {}, body })
 }
@@ -44,6 +44,29 @@ describe('monitoring webhook', () => {
   it('bounds request size', async () => {
     const body = 'x'.repeat(1024 * 1024 + 1)
     expect((await POST(request(body, sign(body)))).status).toBe(413)
+    expect(mocks.persist).not.toHaveBeenCalled()
+  })
+})
+
+describe('safe webhook diagnostics', () => {
+  it('correlates outcomes without exposing payloads, signatures or exception contents', async () => {
+    const log = vi.spyOn(console, 'info').mockImplementation(() => {})
+    mocks.persist.mockImplementationOnce(async (_db, _batches, diagnose) => {
+      diagnose('channel_not_found')
+      throw new Error('PRIVATE_DATABASE_DETAIL')
+    })
+    const response = await POST(request(payload, sign(payload)))
+    expect(response.status).toBe(503)
+    const records = log.mock.calls.map(call => JSON.parse(call[1] as string))
+    expect(records[0]).toMatchObject({ event: 'received', requestId: response.headers.get('X-Monitoring-Request-Id') })
+    expect(records[1]).toMatchObject({ event: 'delivery_failed', status: 503, outcomes: { signature_verified: 1, batches: 1, channel_not_found: 1 } })
+    const output = JSON.stringify(log.mock.calls)
+    for (const secret of ['PRIVATE_DATABASE_DETAIL', 'test-app-secret', 'customer', sign(payload), payload]) expect(output).not.toContain(secret)
+  })
+  it('records signature rejection before invoking storage', async () => {
+    const log = vi.spyOn(console, 'info').mockImplementation(() => {})
+    expect((await POST(request(payload))).status).toBe(401)
+    expect(JSON.parse(log.mock.calls[1][1] as string)).toMatchObject({ event: 'signature_rejected', status: 401 })
     expect(mocks.persist).not.toHaveBeenCalled()
   })
 })
