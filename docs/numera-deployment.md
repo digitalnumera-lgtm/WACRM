@@ -175,3 +175,18 @@ channels. Do not add these dummy IDs to a customer account or bypass routing to
 make a dashboard test pass. After deploying this version, repeat the test and
 inspect the new runtime log entries to determine its actual outcome. A Meta UI
 success notice alone does not prove storage in this database.
+
+## Public privacy and deletion instructions
+
+`/privacy` and `/data-deletion` are public pages for Numera Digital's internal,
+management-only monitoring workspace. Both publish the owner-approved contact
+address digitalnumera@gmail.com. Deletion requests are handled manually by that
+inbox; no automated data-deletion callback or automatic retention schedule is
+implemented. Review the policy against actual operations before submitting it
+to Meta, and keep it current as integrations or retention practices change.
+
+After deployment, verify both URLs open without login. In Meta app settings,
+use `/privacy` for the privacy-policy URL and `/data-deletion` as the data-deletion
+instructions URL (not a callback URL), prefixed with the deployed HTTPS origin.
+These pages do not themselves grant Meta App Review approval, publish the Meta
+app, or authorize production Coexistence.
