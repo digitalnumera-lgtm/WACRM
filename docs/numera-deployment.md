@@ -64,9 +64,15 @@ events are service-only; event APIs verify owner/admin and scope by company.
 - Channel creation verifies Meta number/WABA membership through read-only GET
   requests and encrypts credentials with the existing encryption key. It does
   not register numbers, subscribe apps or alter WabaCRM authorization.
-- Unsupported/history events are retained for manager review. Media references
-  and captions are retained; media playback and durable archiving are not
-  implemented. Embedded Signup and historical-chat import are not implemented.
+- Unsupported/history events are retained for manager review. Images/stickers,
+  audio and video can be retrieved on demand through the authenticated
+  `/api/monitoring/messages/[id]/media` endpoint. It checks company/admin access
+  before decrypting channel credentials, restricts upstream hosts and MIME types,
+  rejects redirects, limits files to 32 MiB and supports single byte-range playback.
+  Responses are private/no-store; tokens and Meta download URLs stay server-side.
+  Browser codec support varies. Expired Meta media or channel tokens prevent playback.
+  Durable archiving, document previews, Embedded Signup and historical-chat import
+  are not implemented. No media files are persisted on Hostinger or Supabase Storage.
 
 Monitoring-only is the default. Keep `NUMERA_MONITORING_ONLY=true` in production.
 Sending, operational inbox, broadcasts, automations, flows, AI APIs, legacy

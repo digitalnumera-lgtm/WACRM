@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { MessageMedia } from './message-media'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { leadStatuses, type MonitoringChannel, type MonitoringThread, type ThreadDetail } from '@/lib/monitoring/types'
@@ -135,7 +136,7 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
               }}>{!leadStatuses.includes(detail.thread.lead_status as typeof leadStatuses[number]) && <option>{detail.thread.lead_status}</option>}{leadStatuses.map(status => <option key={status}>{status}</option>)}</select></label>
             </div>
             <div className="max-h-[500px] space-y-3 overflow-y-auto bg-muted/20 p-5">{[...detail.messages].reverse().map(message => <article key={message.id} className={`max-w-[90%] rounded-xl border border-border p-3 ${message.direction === 'outbound' ? 'ml-auto bg-primary/10' : 'bg-card'}`}>
-              <p className="mb-1 text-xs font-medium text-muted-foreground">{message.direction === 'outbound' ? `${activeChannel?.label ?? 'Agent'} · Phone-app reply` : 'Customer'}</p><p className="whitespace-pre-wrap break-words text-sm">{message.content || `[${message.kind} message]`}</p>{message.media_id && <p className="mt-1 text-xs text-muted-foreground">Media reference retained; media playback is not available.</p>}<time className="mt-2 block text-xs text-muted-foreground">{date(message.sent_at)}</time>
+              <p className="mb-1 text-xs font-medium text-muted-foreground">{message.direction === 'outbound' ? `${activeChannel?.label ?? 'Agent'} · Phone-app reply` : 'Customer'}</p><p className="whitespace-pre-wrap break-words text-sm">{message.content || `[${message.kind} message]`}</p><MessageMedia key={message.id} message={message} /><time className="mt-2 block text-xs text-muted-foreground">{date(message.sent_at)}</time>
             </article>)}{detail.messages.length === 0 && <p className="text-sm text-muted-foreground">No messages on this page.</p>}</div>
             <Pagination page={messagePage} size={50} total={detail.messageTotal} setPage={setMessagePage} disabled={detailLoading} label="message" />
             <div className="border-t border-border p-5"><h3 className="font-semibold">Lead history</h3><ul className="mt-3 space-y-2 text-sm">{detail.audit.map(item => <li key={item.id}><span className="font-medium">{item.previous_status} → {item.new_status}</span><span className="ml-2 text-xs text-muted-foreground">{date(item.changed_at)} · User {item.changed_by.slice(0, 8)}</span></li>)}</ul>{detail.audit.length === 0 && <p className="mt-2 text-sm text-muted-foreground">No lead-status changes recorded.</p>}</div>
