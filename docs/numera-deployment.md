@@ -196,3 +196,57 @@ use `/privacy` for the privacy-policy URL and `/data-deletion` as the data-delet
 instructions URL (not a callback URL), prefixed with the deployed HTTPS origin.
 These pages do not themselves grant Meta App Review approval, publish the Meta
 app, or authorize production Coexistence.
+
+## Management panel and imports
+
+The monitoring workspace now separates Dashboard, Inbox, Contacts, Business
+numbers, Import history and Events for review. Sending stays disabled. Contacts
+combine the company's existing contact directory with conversation participants;
+a customer's separate agent-number conversations remain separate. Directory
+results cap each source at 10,000 matching records and show a warning to narrow
+search if that limit is reached. Dashboard counts describe this CRM's stored data,
+not the phone's entire history.
+
+Images/stickers render without a synthetic title; genuine captions are preserved.
+Audio/video players remain private. Documents use authenticated downloads. Known
+reaction, deletion, location, contact-card and interactive-reply payloads have
+readable representations. Reactions can reference the target message when it is
+on the loaded page. Previously stored structured messages are enriched from their
+company/channel-scoped retained webhook event. Truly unsupported Meta events
+remain available for review; not every future Meta format can be rendered.
+
+Import history accepts JSON arrays or CSV files with these columns:
+`id,customer,name,direction,timestamp,kind,text,media_id`.
+
+- Choose exactly one business number before importing.
+- `customer` is an international phone number, `direction` is `inbound` or
+  `outbound`, and `timestamp` is ISO 8601 with an explicit timezone.
+- Preserve original message IDs when available, especially when combining exports
+  with live delivery. Without an ID, a deterministic content identity deduplicates
+  repeated copies of that same export, but cannot identify an independently
+  delivered live message with a different Meta ID.
+- `kind` defaults to `text`; `media_id` is optional and must be a Meta media ID.
+  Public URLs and local media paths are not accepted as media IDs. Expired Meta
+  media cannot be restored from a CSV reference.
+- Files are limited to 5 MB / 20,000 rows, processed in batches of 200. Validate
+  all batches before importing. Each batch uses the existing atomic ingestion
+  RPC. On failure, prior batches remain committed and the same file can be retried.
+- The source event records the manager-upload source and batch count. Existing
+  lead states are not deliberately overwritten and sending is never triggered.
+- Contacts imports accept `phone,name,email` CSV/JSON columns. Existing contacts
+  are preserved; duplicate normalized numbers are skipped. Importing contacts
+  alone does not fabricate chat history.
+
+A WabaCRM export must be mapped to these explicit columns. Ambiguous dates and
+unknown direction labels are rejected rather than guessed. This is a file import,
+not Embedded Signup, not a request to Meta to resend history, and not a WabaCRM
+API connector. At implementation verification the database contained zero Meta
+`history` and `smb_app_state_sync` events. Actual old data still requires an export.
+
+The portfolio picker reads `owned_whatsapp_business_accounts` and `phone_numbers`
+using Meta GET requests. It may reuse a saved credential from the signed-in
+manager's company, or accept a new token. The credential requires access to the
+portfolio and appropriate Meta permissions. Selecting Add verifies WABA/number
+membership through the existing channel endpoint. It does not register/migrate
+numbers or remove existing provider subscriptions. Webhook subscription and
+Coexistence eligibility still need to be verified for newly added numbers.

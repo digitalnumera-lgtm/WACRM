@@ -228,3 +228,16 @@ html[data-theme="rose"] {
     @apply font-sans;
   }
 }
+/* Management workspace: independent light surfaces, matching the inbox layout. */
+.monitoring-panel {
+  color-scheme: light;
+  --background: #f6f8fc;
+  --foreground: #17243b;
+  --card: #ffffff;
+  --card-foreground: #17243b;
+  --border: #e1e7ef;
+  --muted: #eef2f7;
+  --muted-foreground: #65758b;
+  --primary: #1765cc;
+  --destructive: #b42318;
+}

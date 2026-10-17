@@ -17,5 +17,6 @@ export function MessageMedia({ message }: { message: MonitoringMessage }) {
   }
   if (message.kind === 'audio') return <audio key={src} src={src} controls preload="none" onError={error} className="mt-2 max-w-full" aria-label="WhatsApp audio message" />
   if (message.kind === 'video') return <video key={src} src={src} controls playsInline preload="none" onError={error} className="mt-2 max-h-96 max-w-full rounded-lg" aria-label="WhatsApp video message" />
+  if (message.kind === 'document') return <a className="mt-2 inline-block rounded-lg border border-border p-3 text-sm underline" href={src} download>Download document</a>
   return <p className="mt-1 text-xs text-muted-foreground">Preview is not available for this attachment type.</p>
 }

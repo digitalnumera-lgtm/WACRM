@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { MessageMedia } from './message-media'
+import { ContactsPanel } from './contacts-panel'
+import { HistoryImport, PortfolioPicker } from './setup-panels'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { leadStatuses, type MonitoringChannel, type MonitoringThread, type ThreadDetail } from '@/lib/monitoring/types'
@@ -45,8 +47,7 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
   const [error, setError] = useState('')
   const [detailError, setDetailError] = useState('')
   const [saving, setSaving] = useState(false)
-  const [showChannels, setShowChannels] = useState(false)
-  const [showEvents, setShowEvents] = useState(false)
+  const [view, setView] = useState('Inbox')
 
   useEffect(() => {
     const timer = window.setInterval(() => { if (!document.hidden) setRefresh(n => n + 1) }, 30000)
@@ -84,23 +85,29 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
   }
   const activeChannel = channels.find(channel => channel.id === detail?.thread.channel_id)
 
-  return <div className="min-h-screen bg-background text-foreground">
-    <header className="border-b border-border bg-card px-5 py-4 sm:px-8">
-      <div className="mx-auto flex max-w-screen-2xl flex-wrap items-center justify-between gap-4">
-        <div><p className="text-xs font-semibold uppercase tracking-widest text-primary">Numera · Management</p><h1 className="mt-1 text-xl font-semibold">{accountName}</h1></div>
-        <div className="flex flex-wrap items-center gap-2"><span className="mr-2 rounded-full bg-primary/10 px-3 py-1 text-xs text-primary">Monitoring only</span><button className={buttonClass} onClick={() => setShowChannels(v => !v)}>Business numbers</button><button className={buttonClass} onClick={() => setShowEvents(v => !v)}>Events for review</button><MonitoringSignOut /></div>
-      </div>
-    </header>
-    <main className="mx-auto max-w-screen-2xl space-y-5 p-4 sm:p-8">
-      {showChannels && <ChannelManager channels={channels} onSaved={() => setRefresh(n => n + 1)} />}
-      {showEvents && <ReviewEvents channels={channels} />}
+  return <div className="monitoring-panel min-h-screen bg-background text-foreground lg:grid lg:grid-cols-[220px_1fr]">
+    <aside className="border-r border-border bg-card p-5 lg:sticky lg:top-0 lg:h-screen">
+      <p className="text-xs font-semibold uppercase tracking-widest text-primary">Numera Digital</p><h1 className="mt-2 break-words text-lg font-semibold">{accountName}</h1>
+      <p className="mb-6 mt-2 text-xs text-muted-foreground">Management · Monitoring only</p>
+      <nav aria-label="Workspace" className="flex flex-wrap gap-2 lg:flex-col">{['Dashboard', 'Inbox', 'Contacts', 'Business numbers', 'Import history', 'Events for review'].map(item => <button key={item} onClick={() => setView(item)} aria-current={view === item ? 'page' : undefined} className={`rounded-lg px-4 py-3 text-left text-sm font-medium ${view === item ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}>{item}</button>)}</nav><div className="mt-8"><MonitoringSignOut /></div>
+    </aside>
+    <main className="min-w-0 space-y-4 p-4 lg:p-6">
+      <header className="flex items-center justify-between border-b border-border pb-4"><h2 className="text-xl font-semibold">{view}</h2><button className={buttonClass} onClick={() => setRefresh(n => n + 1)} disabled={loading}>Refresh</button></header>
+      {view === 'Business numbers' && <><PortfolioPicker onSaved={() => setRefresh(n => n + 1)} /><details><summary className="cursor-pointer p-3 text-sm">Enter number details manually</summary><ChannelManager channels={channels} onSaved={() => setRefresh(n => n + 1)} /></details></>}
+      {view === 'Import history' && <HistoryImport channels={channels} onSaved={() => setRefresh(n => n + 1)} />}
+      {view === 'Events for review' && <ReviewEvents channels={channels} />}
+      {(view === 'Dashboard' || view === 'Business numbers') && <>
       <section aria-label="Business number activity" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {channels.map(channel => <button key={channel.id} onClick={() => filter('channel', channel.id)} className={`rounded-xl border p-4 text-left ${filters.channel === channel.id ? 'border-primary bg-primary/5' : 'border-border bg-card'}`}>
+        {channels.map(channel => <button key={channel.id} onClick={() => { filter('channel', channel.id); setView('Inbox') }} className={`rounded-xl border p-4 text-left ${filters.channel === channel.id ? 'border-primary bg-primary/5' : 'border-border bg-card'}`}>
           <p className="truncate font-semibold">{channel.label}</p><p className="mt-1 text-sm">{channel.display_number}</p><p className="mt-3 text-xs text-muted-foreground">{channel.active ? 'Monitoring enabled' : 'Monitoring paused'}</p><p className="mt-1 text-xs text-muted-foreground">Last event: {date(channel.last_event_at)}</p>
         </button>)}
       </section>
+      </>}
+      {view === 'Dashboard' && <Dashboard refresh={refresh} />}
+      {view === 'Contacts' && <ContactsPanel channels={channels} onOpen={id => { select(id); setView('Inbox') }} />}
+      {view === 'Inbox' && <>
       <section className="rounded-xl border border-border bg-card p-4">
-        <div className="mb-4 flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Management inbox</h2><p className="text-sm text-muted-foreground">Customer messages and phone-app replies across your company’s numbers.</p></div><button className={buttonClass} onClick={() => setRefresh(n => n + 1)} disabled={loading}>Refresh</button></div>
+        <p className="mb-3 text-xs text-muted-foreground">All conversations · Incoming messages and agent replies</p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <form className="flex gap-2" onSubmit={e => { e.preventDefault(); filter('q', search.trim()) }}><label className="sr-only" htmlFor="monitor-search">Search conversations</label><input id="monitor-search" className={inputClass} placeholder="Search customer or latest message" maxLength={120} value={search} onChange={e => setSearch(e.target.value)} /><button className={buttonClass}>Search</button></form>
           <label className="text-xs text-muted-foreground">Business number<select aria-label="Business number" className={inputClass} value={filters.channel} onChange={e => filter('channel', e.target.value)}><option value="">All numbers</option>{channels.map(c => <option key={c.id} value={c.id}>{c.display_number}</option>)}</select></label>
@@ -109,7 +116,7 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
         </div>
       </section>
       {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-destructive">{error}</p>}
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(280px,1fr)_2fr]">
+      <div className="grid items-start gap-0 overflow-hidden rounded-xl border border-border lg:grid-cols-[340px_minmax(0,1fr)]">
         <section aria-label="Conversations" aria-busy={loading} className="overflow-hidden rounded-xl border border-border bg-card">
           <div className="border-b border-border px-4 py-3 text-sm font-medium">{total} conversations {loading && <span className="text-muted-foreground">· Updating…</span>}</div>
           {!loading && !error && threads.length === 0 && <p className="p-6 text-sm text-muted-foreground">{channels.length ? 'No conversations match these filters.' : 'Add a business number to start monitoring. New conversations appear when verified events arrive.'}</p>}
@@ -123,7 +130,7 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
           })}</ul>
           <Pagination page={page} size={30} total={total} setPage={setPage} disabled={loading} />
         </section>
-        <section aria-label="Conversation detail" aria-busy={detailLoading} className="rounded-xl border border-border bg-card">
+        <section aria-label="Conversation detail" aria-busy={detailLoading} className="min-w-0 bg-card">
           {detailError && <p role="alert" className="p-5 text-destructive">{detailError}</p>}
           {!detail && <p className="p-10 text-center text-muted-foreground">{detailLoading ? 'Loading conversation…' : 'Select a conversation to review messages and lead history.'}</p>}
           {detail && <>
@@ -135,15 +142,16 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
                 finally { setSaving(false) }
               }}>{!leadStatuses.includes(detail.thread.lead_status as typeof leadStatuses[number]) && <option>{detail.thread.lead_status}</option>}{leadStatuses.map(status => <option key={status}>{status}</option>)}</select></label>
             </div>
-            <div className="max-h-[500px] space-y-3 overflow-y-auto bg-muted/20 p-5">{[...detail.messages].reverse().map(message => <article key={message.id} className={`max-w-[90%] rounded-xl border border-border p-3 ${message.direction === 'outbound' ? 'ml-auto bg-primary/10' : 'bg-card'}`}>
-              <p className="mb-1 text-xs font-medium text-muted-foreground">{message.direction === 'outbound' ? `${activeChannel?.label ?? 'Agent'} · Phone-app reply` : 'Customer'}</p>{(message.content || message.kind !== 'audio' || !message.media_id) && <p className="whitespace-pre-wrap break-words text-sm">{message.content || `[${message.kind} message]`}</p>}<MessageMedia key={message.id} message={message} /><time className="mt-2 block text-xs text-muted-foreground">{date(message.sent_at)}</time>
+            <div className="h-[55vh] space-y-3 overflow-y-auto bg-muted/20 p-5">{[...detail.messages].reverse().map(message => <article key={message.id} className={`max-w-[90%] rounded-xl border border-border p-3 ${message.direction === 'outbound' ? 'ml-auto bg-primary/10' : 'bg-card'}`}>
+              <p className="mb-1 text-xs font-medium text-muted-foreground">{message.direction === 'outbound' ? `${activeChannel?.label ?? 'Agent'} · Phone-app reply` : 'Customer'}</p>{message.reaction && <div className="mb-2 rounded-lg bg-muted p-2 text-xs">{message.reaction.emoji || 'Reaction removed'} · {detail.messages.find(m => m.meta_id === message.reaction?.target)?.content || 'Reaction to an earlier message'}</div>}{(!message.reaction && (message.content || !message.media_id)) && <p className="whitespace-pre-wrap break-words text-sm">{message.content || (message.kind === 'revoke' ? 'This message was deleted' : 'This message format is not available yet.')}</p>}<MessageMedia key={message.id} message={message} /><time className="mt-2 block text-xs text-muted-foreground">{date(message.sent_at)}</time>
             </article>)}{detail.messages.length === 0 && <p className="text-sm text-muted-foreground">No messages on this page.</p>}</div>
             <Pagination page={messagePage} size={50} total={detail.messageTotal} setPage={setMessagePage} disabled={detailLoading} label="message" />
-            <div className="border-t border-border p-5"><h3 className="font-semibold">Lead history</h3><ul className="mt-3 space-y-2 text-sm">{detail.audit.map(item => <li key={item.id}><span className="font-medium">{item.previous_status} → {item.new_status}</span><span className="ml-2 text-xs text-muted-foreground">{date(item.changed_at)} · User {item.changed_by.slice(0, 8)}</span></li>)}</ul>{detail.audit.length === 0 && <p className="mt-2 text-sm text-muted-foreground">No lead-status changes recorded.</p>}</div>
+            <details className="border-t border-border p-5"><summary className="cursor-pointer font-semibold">Lead history</summary><ul className="mt-3 space-y-2 text-sm">{detail.audit.map(item => <li key={item.id}><span className="font-medium">{item.previous_status} → {item.new_status}</span><span className="ml-2 text-xs text-muted-foreground">{date(item.changed_at)} · User {item.changed_by.slice(0, 8)}</span></li>)}</ul>{detail.audit.length === 0 && <p className="mt-2 text-sm text-muted-foreground">No lead-status changes recorded.</p>}</details>
             <Pagination page={auditPage} size={25} total={detail.auditTotal} setPage={setAuditPage} disabled={detailLoading} label="audit" />
           </>}
         </section>
       </div>
+      </>}
       <p className="text-xs text-muted-foreground">Messages are sent from the agents’ existing WhatsApp Business apps. This workspace monitors conversations and records lead-status changes.</p>
     </main>
   </div>
@@ -191,4 +199,11 @@ function ReviewEvents({ channels }: { channels: MonitoringChannel[] }) {
     return () => controller.abort()
   }, [selected])
   return <section className="rounded-xl border border-border bg-card p-5"><h2 className="text-lg font-semibold">Events for review</h2><p className="text-sm text-muted-foreground">Unsupported and history events are retained. They are not treated as imported conversations.</p>{error && <p role="alert">{error}</p>}<ul className="my-3 space-y-2">{data.events.map(event => <li key={event.id}><button onClick={() => { if (selected !== event.id) { setPayload(null); setSelected(event.id) } }} className="w-full rounded-lg bg-muted p-3 text-left text-sm hover:bg-primary/10">{event.field} · {channels.find(c => c.id === event.channel_id)?.display_number ?? 'Unknown number'} · {date(event.received_at)} · View event</button></li>)}</ul>{payload && <details open className="mb-3 rounded-lg border border-border p-3"><summary className="text-sm font-medium">Retained {payload.field} event</summary><pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(payload.payload, null, 2)}</pre></details>}{!error && data.events.length === 0 && <p className="my-3 text-sm text-muted-foreground">No events awaiting review.</p>}<Pagination page={page} size={25} total={data.total} setPage={setPage} label="event" /></section>
+}
+
+function Dashboard({ refresh }: { refresh: number }) {
+  const [data, setData] = useState<{ conversations: number; inbound: number; outbound: number; numbers: number } | null>(null)
+  const [error, setError] = useState('')
+  useEffect(() => { const controller = new AbortController(); api<typeof data>('/api/monitoring/summary', { signal: controller.signal }).then(setData).catch(e => { if (!controller.signal.aborted) setError(e.message) }); return () => controller.abort() }, [refresh])
+  return <section><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{data && Object.entries(data).map(([label, value]) => <div key={label} className="rounded-xl border border-border bg-card p-6"><p className="text-sm capitalize text-muted-foreground">{label}</p><p className="mt-3 text-3xl font-semibold">{value.toLocaleString()}</p></div>)}</div>{error && <p role="alert">{error}</p>}<p className="mt-5 text-sm text-muted-foreground">Counts reflect messages received or imported into this CRM. A customer contacting two numbers has two conversations.</p></section>
 }
