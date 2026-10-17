@@ -1,3 +1,4 @@
+import { existingMonitoringToken } from '@/lib/monitoring/channel-token'
 import { requireRole } from '@/lib/auth/account'
 import { encrypt } from '@/lib/whatsapp/encryption'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
@@ -11,7 +12,8 @@ export async function POST(request: Request) {
     const phone = requiredText(body, 'phone_number_id', 40)
     const waba = requiredText(body, 'waba_id', 40)
     const label = requiredText(body, 'label')
-    const accessToken = requiredText(body, 'access_token', 8192)
+    let accessToken: string
+    try { accessToken = body.reuse_saved_token === true ? await existingMonitoringToken(accountId) : requiredText(body, 'access_token', 8192) } catch { return privateJson({ error: 'A valid Meta access token is required.' }, 400) }
     if (!/^\d+$/.test(phone) || !/^\d+$/.test(waba)) throw new MonitoringInputError('Meta IDs must contain digits only')
     // These Meta calls are read-only. Never register a number or subscribe an app.
     let info

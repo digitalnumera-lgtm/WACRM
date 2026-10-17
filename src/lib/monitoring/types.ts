@@ -10,6 +10,7 @@ export interface MonitoringThread {
 export interface MonitoringMessage {
   id: string; direction: string; sent_at: string; kind: string;
   content: string | null; media_id: string | null;
+  meta_id?: string; reaction?: { emoji: string; target: string | null };
 }
 export interface LeadAudit {
   id: string; changed_by: string; previous_status: string; new_status: string; changed_at: string;

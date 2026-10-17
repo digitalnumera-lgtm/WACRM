@@ -1,3 +1,5 @@
+import { monitoringAdmin } from '@/lib/monitoring/admin'
+import { messageText } from '@/lib/monitoring/rich-message'
 import { requireRole } from '@/lib/auth/account'
 import { checkedId, monitoringError, pageNumber, privateJson, readJson, requiredText, threadColumns } from '@/lib/monitoring/http'
 
@@ -14,11 +16,21 @@ export async function GET(request: Request, context: Context) {
     if (thread.error) throw thread.error
     if (!thread.data) return privateJson({ error: 'Conversation not found.' }, 404)
     const [messages, audit] = await Promise.all([
-      supabase.from('monitoring_messages').select('id,direction,sent_at,kind,content,media_id', { count: 'exact' }).eq('account_id', accountId).eq('thread_id', id).order('sent_at', { ascending: false }).order('id').range(page * 50, page * 50 + 49),
+      supabase.from('monitoring_messages').select('id,meta_id,direction,sent_at,kind,content,media_id', { count: 'exact' }).eq('account_id', accountId).eq('thread_id', id).order('sent_at', { ascending: false }).order('id').range(page * 50, page * 50 + 49),
       supabase.from('monitoring_lead_audit').select('id,changed_by,previous_status,new_status,changed_at', { count: 'exact' }).eq('account_id', accountId).eq('thread_id', id).order('changed_at', { ascending: false }).order('id').range(auditPage * 25, auditPage * 25 + 24),
     ])
     if (messages.error || audit.error) throw messages.error ?? audit.error
-    return privateJson({ thread: thread.data, messages: messages.data, messageTotal: messages.count, audit: audit.data, auditTotal: audit.count, page, auditPage })
+    const enriched = await Promise.all((messages.data ?? []).map(async message => {
+      if (!['reaction', 'revoke', 'location', 'contacts', 'interactive', 'button', 'unsupported'].includes(message.kind) || !message.meta_id) return message
+      const key = message.direction === 'outbound' ? 'message_echoes' : 'messages'
+      const source = await monitoringAdmin().from('monitoring_events').select('payload')
+        .eq('account_id', accountId).eq('channel_id', thread.data!.channel_id)
+        .contains('payload', { value: { [key]: [{ id: message.meta_id }] } }).limit(1).maybeSingle()
+      const raw = source.data?.payload?.value?.[key]?.find((item: { id: string }) => item.id === message.meta_id)
+      return raw ? { ...message, content: messageText(raw) ?? message.content,
+        reaction: message.kind === 'reaction' ? { emoji: raw.reaction?.emoji ?? '', target: raw.reaction?.message_id ?? null } : undefined } : message
+    }))
+    return privateJson({ thread: thread.data, messages: enriched, messageTotal: messages.count, audit: audit.data, auditTotal: audit.count, page, auditPage })
   } catch (error) { return monitoringError(error) }
 }
 

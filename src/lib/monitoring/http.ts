@@ -29,7 +29,7 @@ export function monitoringError(error: unknown) {
   return privateJson({ error: 'Monitoring is temporarily unavailable. Please try again.' }, 503)
 }
 
-export async function readJson(request: Request): Promise<Record<string, unknown>> {
+export async function readJson(request: Request, limit = 16384): Promise<Record<string, unknown>> {
   const origin = request.headers.get('origin')
   // Next's standalone server can construct request.url with its internal
   // hostname. The browser's Host header identifies the actual destination;
@@ -45,7 +45,7 @@ export async function readJson(request: Request): Promise<Record<string, unknown
     throw new ForbiddenError()
   }
   if (!request.headers.get('content-type')?.startsWith('application/json')) throw new MonitoringInputError('JSON is required')
-  const text = await readLimitedBody(request, 16384)
+  const text = await readLimitedBody(request, limit)
   let value: unknown
   try { value = JSON.parse(text) } catch { throw new MonitoringInputError('Invalid JSON') }
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new MonitoringInputError('Invalid JSON object')

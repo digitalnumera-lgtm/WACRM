@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { normalizeMonitoringEvents } from './events'
+import { messageText } from './rich-message'
 
 type Json = Record<string, unknown>
 export interface StoredMessage {
@@ -62,7 +63,7 @@ export function monitoringBatches(payload: unknown): ChangeBatch[] {
           name: typeof name === 'string' ? name : null,
           direction: event.kind === 'incoming' ? 'inbound' : 'outbound',
           timestamp: new Date(timestamp * 1000).toISOString(), kind,
-          text: event.text ?? (typeof media.caption === 'string' ? media.caption : null),
+          text: messageText(event.raw),
           media_id: typeof media.id === 'string' ? media.id : null,
         })
         // Interactive, contact/location, edits and other non-text payloads are

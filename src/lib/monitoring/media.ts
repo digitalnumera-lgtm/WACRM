@@ -1,5 +1,5 @@
 const MAX_BYTES = 32 * 1024 * 1024
-const TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'audio/aac', 'audio/amr', 'audio/mpeg', 'audio/mp4', 'audio/ogg', 'video/mp4', 'video/3gpp'])
+const TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'audio/aac', 'audio/amr', 'audio/mpeg', 'audio/mp4', 'audio/ogg', 'video/mp4', 'video/3gpp', 'application/pdf', 'text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'])
 
 export function trustedMediaUrl(value: string): URL {
   const url = new URL(value)
@@ -33,7 +33,7 @@ export async function fetchMonitoringMedia(mediaId: string, token: string) {
 }
 
 export function mediaResponse(bytes: Uint8Array<ArrayBuffer>, type: string, range: string | null) {
-  const headers = new Headers({ 'Content-Type': type, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': 'inline', 'Accept-Ranges': 'bytes', 'Cross-Origin-Resource-Policy': 'same-origin' })
+  const headers = new Headers({ 'Content-Type': type, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': /^(image|audio|video)\//.test(type) ? 'inline' : 'attachment' , 'Accept-Ranges': 'bytes', 'Cross-Origin-Resource-Policy': 'same-origin' })
   let start = 0, end = bytes.length - 1
   if (range) {
     const match = /^bytes=(\d*)-(\d*)$/.exec(range)
