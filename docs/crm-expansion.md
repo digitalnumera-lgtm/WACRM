@@ -7,10 +7,11 @@ parity with every feature or subscription tier of those products.
 
 ## Access and operating model
 
-The previously approved production model remains owner/admin monitoring, with
-agents using their existing WhatsApp Business phone apps. A question about whether
-management or agents should also send from this CRM is pending. No transport guard
-has been removed and no campaign, AI reply or external message has been activated.
+The owner selected management-only sending: owners/admins can reply from this CRM,
+and agents continue using their existing WhatsApp Business phone apps. The new
+management text-reply endpoint uses the monitoring channel/thread model. Legacy
+agent sending, campaigns and AI reply transports remain blocked. No customer
+message was sent during implementation or validation.
 Connecting an existing number must preserve its working provider until a tested
 onboarding/migration procedure is available.
 
@@ -26,7 +27,7 @@ onboarding/migration procedure is available.
 | Reporting | Added: UTC daily activity, incoming/outgoing volume, per-number and format breakdown, CSV | Response-time metrics, SLA, unread/open workload, team performance; requires reliable assignment/status model |
 | Phone numbers | Portfolio discovery, manual entry, activate/pause, encrypted credentials | Eligible Meta Embedded Signup with coexistence, code exchange, subscription verification and lifecycle handling |
 | Historical import | CSV/JSON records supported; WabaCRM export was imported | Durable queue and workers for native Meta history/contact events, progress, media enrichment, resume and reconciliation |
-| Replies and templates | Upstream sending, template, reaction and media code exists; blocked in monitoring mode | Adapt to monitoring channels/threads, explicit roles, service-window rules, status reconciliation and idempotency |
+| Replies and templates | Management text composer/API implemented with admin checks, company scope, 24-hour window and durable request IDs; legacy transports blocked | Media/template composer, delivery-state reconciliation, reply context and recovery of accepted replies whose inbox write failed |
 | Quick replies | Must audit reusable upstream UI/data before exposing | Saved snippets, variables, attachment support, permission checks |
 | Teams | Upstream agents/account-role/invitation code exists | Integrate per-number and conversation access; assignment/audit; production role tests |
 | Pipelines | Upstream pipelines exist; management lead-status changes work | Unify contacts, conversations and deals; ownership, stages, custom fields, reporting |
@@ -78,8 +79,9 @@ re-onboard as a workaround before readiness and a migration plan are established
    do not reset or replay the existing production schema.
 3. Unified conversation model: status, notes, labels, assignments, contacts and
    durable media. Backfill existing messages without breaking current IDs.
-4. Optional management/agent composer and templates once the access model is
-   resolved. Test with isolated fixtures before any real message is sent.
+4. Management-only composer and templates. Text replies are implemented; media
+   and templates remain. Agents keep using their phones. Test with isolated
+   fixtures and simulated Meta transport before any real message is sent.
 5. Campaigns, workflows, AI, other channels and advanced reporting as separately
    testable integrations. Never expose a menu item that merely simulates success.
 
@@ -90,3 +92,25 @@ the UI. Reports include at most 10,000 most recent stored records for the select
 UTC period. A partial report states the included and total count and carries that
 coverage label in CSV. Delivery/read rates are not inferred from outgoing counts.
 Media is fetched on demand from Meta, not archived by this change.
+
+## Management replies
+
+`POST /api/monitoring/threads/:id/reply` accepts an explicit text reply and a UUID
+request ID after owner/admin authentication. It resolves the customer and sender
+from the company-owned thread; the browser cannot supply a recipient or token.
+The latest eligible incoming message must be less than 24 hours old. Meta remains
+authoritative, including whether an imported message opened a service window.
+
+An insert into `monitoring_events` reserves the request ID using its existing
+primary key before the transport call. Retries reuse that ID. Explicit Graph
+client errors are recorded as rejected; timeouts and ambiguous responses remain
+uncertain and do not automatically retry the transport. Accepted means accepted
+by Meta, not delivered or read. Results are recorded in the inbox through the
+existing ingest RPC. Uncertain outcomes and accepted replies with failed inbox
+writes remain in Events for review. Automatic reconciliation is not implemented.
+
+The composer retains an in-flight request ID and text in browser session storage
+so a refresh can check its status. It clears that draft on acceptance. Rate limits
+are per process (30 attempts per manager per minute); multi-instance deployments
+will need a shared rate limiter. The legacy monitoring-mode guard stays enabled;
+the dedicated management endpoint is the deliberately scoped sending path.

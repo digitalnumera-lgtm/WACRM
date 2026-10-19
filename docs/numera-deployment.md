@@ -1,5 +1,12 @@
 # Numera recovery and deployment
 
+Current management expansion is documented in [crm-expansion.md](crm-expansion.md).
+The owner subsequently authorized **management-only replies**: the dedicated
+monitoring reply endpoint permits owner/admin text replies within the customer
+reply window. Keep `NUMERA_MONITORING_ONLY=true` to continue blocking legacy
+agent, campaign and automation sending. Earlier recovery notes below describe
+the original monitoring-only implementation, before that explicit expansion.
+
 The recovery implementation is on `digitalnumera-lgtm/WACRM`, branch
 `recovery/wacrm`. It rebuilds the monitoring changes on upstream
 `ArnasDon/wacrm` commit `27c6bdf43633d1746410168431a8b0e22b4f2ba6`.

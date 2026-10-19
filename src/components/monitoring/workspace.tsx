@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { MessageMedia } from './message-media'
 import { ContactsPanel } from './contacts-panel'
 import { MessageBrowser, ReportsPanel } from './activity-panels'
+import { ReplyComposer } from './reply-composer'
 import { HistoryImport, PortfolioPicker } from './setup-panels'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -89,7 +90,7 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
   return <div className="monitoring-panel min-h-screen bg-background text-foreground lg:grid lg:grid-cols-[220px_1fr]">
     <aside className="border-r border-border bg-card p-5 lg:sticky lg:top-0 lg:h-screen">
       <p className="text-xs font-semibold uppercase tracking-widest text-primary">Numera Digital</p><h1 className="mt-2 break-words text-lg font-semibold">{accountName}</h1>
-      <p className="mb-6 mt-2 text-xs text-muted-foreground">Management · Monitoring only</p>
+      <p className="mb-6 mt-2 text-xs text-muted-foreground">Management workspace</p>
       <nav aria-label="Workspace" className="flex flex-wrap gap-2 lg:flex-col">{['Dashboard', 'Inbox', 'Contacts', 'Media', 'Message logs', 'Reports', 'Business numbers', 'Import history', 'Events for review'].map(item => <button key={item} onClick={() => setView(item)} aria-current={view === item ? 'page' : undefined} className={`rounded-lg px-4 py-3 text-left text-sm font-medium ${view === item ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}>{item}</button>)}</nav><div className="mt-8"><MonitoringSignOut /></div>
     </aside>
     <main className="min-w-0 space-y-4 p-4 lg:p-6">
@@ -146,16 +147,17 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
               }}>{!leadStatuses.includes(detail.thread.lead_status as typeof leadStatuses[number]) && <option>{detail.thread.lead_status}</option>}{leadStatuses.map(status => <option key={status}>{status}</option>)}</select></label>
             </div>
             <div className="h-[55vh] space-y-3 overflow-y-auto bg-muted/20 p-5">{[...detail.messages].reverse().map(message => <article key={message.id} className={`max-w-[90%] rounded-xl border border-border p-3 ${message.direction === 'outbound' ? 'ml-auto bg-primary/10' : 'bg-card'}`}>
-              <p className="mb-1 text-xs font-medium text-muted-foreground">{message.direction === 'outbound' ? `${activeChannel?.label ?? 'Agent'} · Phone-app reply` : 'Customer'}</p>{message.reaction && <div className="mb-2 rounded-lg bg-muted p-2 text-xs">{message.reaction.emoji || 'Reaction removed'} · {detail.messages.find(m => m.meta_id === message.reaction?.target)?.content || 'Reaction to an earlier message'}</div>}{(!message.reaction && (message.content || !message.media_id)) && <p className="whitespace-pre-wrap break-words text-sm">{message.content || (message.kind === 'revoke' ? 'This message was deleted' : 'This message format is not available yet.')}</p>}<MessageMedia key={message.id} message={message} /><time className="mt-2 block text-xs text-muted-foreground">{date(message.sent_at)}</time>
+              <p className="mb-1 text-xs font-medium text-muted-foreground">{message.direction === 'outbound' ? `${activeChannel?.label ?? 'Business'} · Outgoing` : 'Customer'}</p>{message.reaction && <div className="mb-2 rounded-lg bg-muted p-2 text-xs">{message.reaction.emoji || 'Reaction removed'} · {detail.messages.find(m => m.meta_id === message.reaction?.target)?.content || 'Reaction to an earlier message'}</div>}{(!message.reaction && (message.content || !message.media_id)) && <p className="whitespace-pre-wrap break-words text-sm">{message.content || (message.kind === 'revoke' ? 'This message was deleted' : 'This message format is not available yet.')}</p>}<MessageMedia key={message.id} message={message} /><time className="mt-2 block text-xs text-muted-foreground">{date(message.sent_at)}</time>
             </article>)}{detail.messages.length === 0 && <p className="text-sm text-muted-foreground">No messages on this page.</p>}</div>
             <Pagination page={messagePage} size={50} total={detail.messageTotal} setPage={setMessagePage} disabled={detailLoading} label="message" />
+            <ReplyComposer key={detail.thread.id} threadId={detail.thread.id} onSent={() => { setMessagePage(0); setRefresh(n => n + 1) }} />
             <details className="border-t border-border p-5"><summary className="cursor-pointer font-semibold">Lead history</summary><ul className="mt-3 space-y-2 text-sm">{detail.audit.map(item => <li key={item.id}><span className="font-medium">{item.previous_status} → {item.new_status}</span><span className="ml-2 text-xs text-muted-foreground">{date(item.changed_at)} · User {item.changed_by.slice(0, 8)}</span></li>)}</ul>{detail.audit.length === 0 && <p className="mt-2 text-sm text-muted-foreground">No lead-status changes recorded.</p>}</details>
             <Pagination page={auditPage} size={25} total={detail.auditTotal} setPage={setAuditPage} disabled={detailLoading} label="audit" />
           </>}
         </section>
       </div>
       </>}
-      <p className="text-xs text-muted-foreground">Messages are sent from the agents’ existing WhatsApp Business apps. This workspace monitors conversations and records lead-status changes.</p>
+      <p className="text-xs text-muted-foreground">Agents use their WhatsApp Business apps. Owners and admins can review conversations, update leads and send replies from this workspace.</p>
     </main>
   </div>
 }
