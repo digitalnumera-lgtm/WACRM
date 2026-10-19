@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { MessageMedia } from './message-media'
 import { ContactsPanel } from './contacts-panel'
+import { MessageBrowser, ReportsPanel } from './activity-panels'
 import { HistoryImport, PortfolioPicker } from './setup-panels'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -89,7 +90,7 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
     <aside className="border-r border-border bg-card p-5 lg:sticky lg:top-0 lg:h-screen">
       <p className="text-xs font-semibold uppercase tracking-widest text-primary">Numera Digital</p><h1 className="mt-2 break-words text-lg font-semibold">{accountName}</h1>
       <p className="mb-6 mt-2 text-xs text-muted-foreground">Management · Monitoring only</p>
-      <nav aria-label="Workspace" className="flex flex-wrap gap-2 lg:flex-col">{['Dashboard', 'Inbox', 'Contacts', 'Business numbers', 'Import history', 'Events for review'].map(item => <button key={item} onClick={() => setView(item)} aria-current={view === item ? 'page' : undefined} className={`rounded-lg px-4 py-3 text-left text-sm font-medium ${view === item ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}>{item}</button>)}</nav><div className="mt-8"><MonitoringSignOut /></div>
+      <nav aria-label="Workspace" className="flex flex-wrap gap-2 lg:flex-col">{['Dashboard', 'Inbox', 'Contacts', 'Media', 'Message logs', 'Reports', 'Business numbers', 'Import history', 'Events for review'].map(item => <button key={item} onClick={() => setView(item)} aria-current={view === item ? 'page' : undefined} className={`rounded-lg px-4 py-3 text-left text-sm font-medium ${view === item ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}>{item}</button>)}</nav><div className="mt-8"><MonitoringSignOut /></div>
     </aside>
     <main className="min-w-0 space-y-4 p-4 lg:p-6">
       <header className="flex items-center justify-between border-b border-border pb-4"><h2 className="text-xl font-semibold">{view}</h2><button className={buttonClass} onClick={() => setRefresh(n => n + 1)} disabled={loading}>Refresh</button></header>
@@ -105,6 +106,8 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
       </>}
       {view === 'Dashboard' && <Dashboard refresh={refresh} />}
       {view === 'Contacts' && <ContactsPanel channels={channels} onOpen={id => { select(id); setView('Inbox') }} />}
+      {(view === 'Media' || view === 'Message logs') && <MessageBrowser key={view} channels={channels} media={view === 'Media'} refresh={refresh} onOpen={id => { select(id); setView('Inbox') }} />}
+      {view === 'Reports' && <ReportsPanel channels={channels} refresh={refresh} />}
       {view === 'Inbox' && <>
       <section className="rounded-xl border border-border bg-card p-4">
         <p className="mb-3 text-xs text-muted-foreground">All conversations · Incoming messages and agent replies</p>
