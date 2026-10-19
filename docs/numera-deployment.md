@@ -114,6 +114,12 @@ logs, scripts, Git, deployment archives or chat.
 
 ## Build and start
 
+`npm run build` uses `scripts/build.mjs` to cap native Tokio/Rayon pools at two
+threads. Next.js page-data/static generation is also capped at two workers in
+`next.config.ts`. This avoids Hostinger's observed 63-worker thread exhaustion
+(`OS can't spawn worker thread`, `SIGABRT`). The Hostinger build command remains
+`npm run build`; no dashboard environment changes are required for these limits.
+
 Use the existing isolated checkout at `/workspace/WACRM`; do not create a
 worktree unless explicitly requested. Node 24 was used in this cloud environment.
 The lockfile is unchanged. Preserve TLS verification and configured proxy trust.
