@@ -114,3 +114,18 @@ so a refresh can check its status. It clears that draft on acceptance. Rate limi
 are per process (30 attempts per manager per minute); multi-instance deployments
 will need a shared rate limiter. The legacy monitoring-mode guard stays enabled;
 the dedicated management endpoint is the deliberately scoped sending path.
+
+### Number management and inbox navigation
+
+Business numbers now has Active and Removed tabs. Owners/admins can remove a
+number from monitoring and restore it later. Removal sets the company-scoped
+channel inactive; it retains credentials and saved conversations, skips future
+webhook ingestion for that channel, and blocks new CRM replies. It does not
+change Meta subscriptions, another provider, or the phone app. Restoring enables
+future monitoring; messages missed while inactive are not automatically imported.
+The confirmation identifies the affected number before any update.
+
+The inbox has icon navigation, conversation initials, a clear-filters action,
+mobile list/detail navigation and explicit Older/Newer messages controls. Saved
+history is paginated in groups of 50; these controls do not fetch missing history
+from Meta. Lead audit pagination is contained inside the collapsed lead history.

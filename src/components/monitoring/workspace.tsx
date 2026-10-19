@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { LayoutDashboard, Inbox, Users, ImageIcon, List, ChartNoAxesCombined, Phone, History, CircleAlert, ArrowLeft, MessageSquare } from 'lucide-react'
+import { BusinessNumbers } from './business-numbers'
 import { MessageMedia } from './message-media'
 import { ContactsPanel } from './contacts-panel'
 import { MessageBrowser, ReportsPanel } from './activity-panels'
@@ -9,6 +11,14 @@ import { HistoryImport, PortfolioPicker } from './setup-panels'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { leadStatuses, type MonitoringChannel, type MonitoringThread, type ThreadDetail } from '@/lib/monitoring/types'
+
+const navigation = [
+  { name: 'Dashboard', icon: LayoutDashboard }, { name: 'Inbox', icon: Inbox },
+  { name: 'Contacts', icon: Users }, { name: 'Media', icon: ImageIcon },
+  { name: 'Message logs', icon: List }, { name: 'Reports', icon: ChartNoAxesCombined },
+  { name: 'Business numbers', icon: Phone }, { name: 'Import history', icon: History },
+  { name: 'Events for review', icon: CircleAlert },
+]
 
 const inputClass = 'w-full rounded-lg border border-border bg-background px-3 py-2 text-sm'
 const buttonClass = 'rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40'
@@ -88,17 +98,17 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
   const activeChannel = channels.find(channel => channel.id === detail?.thread.channel_id)
 
   return <div className="monitoring-panel min-h-screen bg-background text-foreground lg:grid lg:grid-cols-[220px_1fr]">
-    <aside className="border-r border-border bg-card p-5 lg:sticky lg:top-0 lg:h-screen">
-      <p className="text-xs font-semibold uppercase tracking-widest text-primary">Numera Digital</p><h1 className="mt-2 break-words text-lg font-semibold">{accountName}</h1>
+    <aside className={`border-r border-border bg-card p-4 lg:sticky lg:top-0 lg:h-screen ${view === 'Inbox' && selected ? 'hidden lg:block' : ''}`}>
+      <p className="text-xs font-semibold uppercase tracking-widest text-primary">Numera Digital</p><h1 className="mt-2 truncate text-lg font-semibold" title={accountName}>{accountName}</h1>
       <p className="mb-6 mt-2 text-xs text-muted-foreground">Management workspace</p>
-      <nav aria-label="Workspace" className="flex flex-wrap gap-2 lg:flex-col">{['Dashboard', 'Inbox', 'Contacts', 'Media', 'Message logs', 'Reports', 'Business numbers', 'Import history', 'Events for review'].map(item => <button key={item} onClick={() => setView(item)} aria-current={view === item ? 'page' : undefined} className={`rounded-lg px-4 py-3 text-left text-sm font-medium ${view === item ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}>{item}</button>)}</nav><div className="mt-8"><MonitoringSignOut /></div>
+      <nav aria-label="Workspace" className="flex gap-1 overflow-x-auto pb-2 lg:flex-col lg:overflow-visible">{navigation.map(({ name, icon: Icon }) => <button key={name} onClick={() => setView(name)} aria-current={view === name ? 'page' : undefined} className={`flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors ${view === name ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}><Icon size={18} aria-hidden="true" />{name}</button>)}</nav><div className="mt-4 lg:mt-8"><MonitoringSignOut /></div>
     </aside>
     <main className="min-w-0 space-y-4 p-4 lg:p-6">
-      <header className="flex items-center justify-between border-b border-border pb-4"><h2 className="text-xl font-semibold">{view}</h2><button className={buttonClass} onClick={() => setRefresh(n => n + 1)} disabled={loading}>Refresh</button></header>
-      {view === 'Business numbers' && <><PortfolioPicker onSaved={() => setRefresh(n => n + 1)} /><details><summary className="cursor-pointer p-3 text-sm">Enter number details manually</summary><ChannelManager channels={channels} onSaved={() => setRefresh(n => n + 1)} /></details></>}
+      <header className={`items-center justify-between border-b border-border pb-4 ${view === 'Inbox' && selected ? 'hidden lg:flex' : 'flex'}`}><h2 className="text-xl font-semibold">{view}</h2><button className={buttonClass} onClick={() => setRefresh(n => n + 1)} disabled={loading}>Refresh</button></header>
+      {view === 'Business numbers' && <><BusinessNumbers channels={channels} onSaved={() => setRefresh(n => n + 1)} onOpen={id => { filter('channel', id); setView('Inbox') }} /><details className="rounded-xl border border-border bg-card p-3"><summary className="cursor-pointer p-2 font-medium">Add a number from Meta portfolio</summary><PortfolioPicker onSaved={() => setRefresh(n => n + 1)} /></details><details><summary className="cursor-pointer p-3 text-sm">Enter number details manually</summary><ChannelManager channels={channels} onSaved={() => setRefresh(n => n + 1)} /></details></>}
       {view === 'Import history' && <HistoryImport channels={channels} onSaved={() => setRefresh(n => n + 1)} />}
       {view === 'Events for review' && <ReviewEvents channels={channels} />}
-      {(view === 'Dashboard' || view === 'Business numbers') && <>
+      {view === 'Dashboard' && <>
       <section aria-label="Business number activity" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {channels.map(channel => <button key={channel.id} onClick={() => { filter('channel', channel.id); setView('Inbox') }} className={`rounded-xl border p-4 text-left ${filters.channel === channel.id ? 'border-primary bg-primary/5' : 'border-border bg-card'}`}>
           <p className="truncate font-semibold">{channel.label}</p><p className="mt-1 text-sm">{channel.display_number}</p><p className="mt-3 text-xs text-muted-foreground">{channel.active ? 'Monitoring enabled' : 'Monitoring paused'}</p><p className="mt-1 text-xs text-muted-foreground">Last event: {date(channel.last_event_at)}</p>
@@ -110,8 +120,8 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
       {(view === 'Media' || view === 'Message logs') && <MessageBrowser key={view} channels={channels} media={view === 'Media'} refresh={refresh} onOpen={id => { select(id); setView('Inbox') }} />}
       {view === 'Reports' && <ReportsPanel channels={channels} refresh={refresh} />}
       {view === 'Inbox' && <>
-      <section className="rounded-xl border border-border bg-card p-4">
-        <p className="mb-3 text-xs text-muted-foreground">All conversations · Incoming messages and agent replies</p>
+      <section className={`rounded-xl border border-border bg-card p-4 ${selected ? 'hidden lg:block' : ''}`}>
+        <div className="mb-3 flex items-center justify-between gap-2"><p className="text-xs text-muted-foreground">Conversations across your business numbers</p>{Object.values(filters).some(Boolean) && <button className="text-xs font-medium text-primary" onClick={() => { setFilters({ q: '', channel: '', agent: '', status: '' }); setSearch(''); setPage(0); setSelected(null); setDetail(null) }}>Clear filters</button>}</div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <form className="flex gap-2" onSubmit={e => { e.preventDefault(); filter('q', search.trim()) }}><label className="sr-only" htmlFor="monitor-search">Search conversations</label><input id="monitor-search" className={inputClass} placeholder="Search customer or latest message" maxLength={120} value={search} onChange={e => setSearch(e.target.value)} /><button className={buttonClass}>Search</button></form>
           <label className="text-xs text-muted-foreground">Business number<select aria-label="Business number" className={inputClass} value={filters.channel} onChange={e => filter('channel', e.target.value)}><option value="">All numbers</option>{channels.map(c => <option key={c.id} value={c.id}>{c.display_number}</option>)}</select></label>
@@ -120,23 +130,24 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
         </div>
       </section>
       {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-destructive">{error}</p>}
-      <div className="grid items-start gap-0 overflow-hidden rounded-xl border border-border lg:grid-cols-[340px_minmax(0,1fr)]">
-        <section aria-label="Conversations" aria-busy={loading} className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="grid items-start gap-0 overflow-hidden rounded-xl border border-border lg:grid-cols-[320px_minmax(0,1fr)]">
+        <section aria-label="Conversations" aria-busy={loading} className={`overflow-hidden border-r border-border bg-card ${selected ? 'hidden lg:block' : ''}`}>
           <div className="border-b border-border px-4 py-3 text-sm font-medium">{total} conversations {loading && <span className="text-muted-foreground">· Updating…</span>}</div>
           {!loading && !error && threads.length === 0 && <p className="p-6 text-sm text-muted-foreground">{channels.length ? 'No conversations match these filters.' : 'Add a business number to start monitoring. New conversations appear when verified events arrive.'}</p>}
-          <ul className="max-h-[650px] divide-y divide-border overflow-y-auto">{threads.map(thread => {
+          <ul className="max-h-[70vh] divide-y divide-border overflow-y-auto">{threads.map(thread => {
             const channel = channels.find(c => c.id === thread.channel_id)
             return <li key={thread.id}><button onClick={() => select(thread.id)} aria-pressed={selected === thread.id} className={`w-full p-4 text-left hover:bg-muted ${selected === thread.id ? 'bg-primary/10' : ''}`}>
-              <div className="flex justify-between gap-2"><span className="truncate font-semibold">{thread.customer_name || thread.customer}</span><span className="rounded bg-muted px-2 py-1 text-xs">{thread.lead_status}</span></div>
+              <div className="flex items-center gap-3"><span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">{(thread.customer_name || thread.customer).slice(0, 2).toUpperCase()}</span><span className="min-w-0 flex-1 truncate font-semibold">{thread.customer_name || thread.customer}</span><span className="rounded bg-muted px-2 py-1 text-xs">{thread.lead_status}</span></div>
               <p className="mt-1 text-xs text-muted-foreground">{channel?.display_number ?? 'Unknown number'} · {channel?.label ?? 'Unassigned'}</p>
               <p className="mt-3 truncate text-sm">{thread.last_preview || 'Media or non-text message'}</p><p className="mt-2 text-xs text-muted-foreground">{date(thread.last_message_at)} · {thread.message_count} {thread.message_count === 1 ? 'message' : 'messages'}</p>
             </button></li>
           })}</ul>
           <Pagination page={page} size={30} total={total} setPage={setPage} disabled={loading} />
         </section>
-        <section aria-label="Conversation detail" aria-busy={detailLoading} className="min-w-0 bg-card">
+        <section aria-label="Conversation detail" aria-busy={detailLoading} className={`min-w-0 bg-card ${selected ? '' : 'hidden lg:block'}`}>
+          <button onClick={() => { setSelected(null); setDetail(null) }} className="m-3 flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm lg:hidden"><ArrowLeft size={16} />All conversations</button>
           {detailError && <p role="alert" className="p-5 text-destructive">{detailError}</p>}
-          {!detail && <p className="p-10 text-center text-muted-foreground">{detailLoading ? 'Loading conversation…' : 'Select a conversation to review messages and lead history.'}</p>}
+          {!detail && <div className="flex min-h-[55vh] flex-col items-center justify-center gap-4 p-10 text-center text-muted-foreground"><MessageSquare size={40} className="text-primary/40" /><p>{detailLoading ? 'Loading conversation…' : 'Choose a conversation'}</p><p className="max-w-xs text-sm">Read messages, view media and reply from one place.</p></div>}
           {detail && <>
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border p-5"><div><h2 className="text-lg font-semibold">{detail.thread.customer_name || detail.thread.customer}</h2><p className="text-sm text-muted-foreground">{detail.thread.customer}</p><p className="mt-2 text-sm">Business number: {activeChannel?.display_number ?? 'Unknown'}</p><p className="text-sm">Assigned agent: {activeChannel?.label ?? 'Unassigned'}</p></div>
               <label className="text-xs text-muted-foreground">Lead status<select aria-label="Conversation lead status" className={inputClass} value={detail.thread.lead_status} disabled={saving || detailLoading} onChange={async e => {
@@ -146,13 +157,17 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
                 finally { setSaving(false) }
               }}>{!leadStatuses.includes(detail.thread.lead_status as typeof leadStatuses[number]) && <option>{detail.thread.lead_status}</option>}{leadStatuses.map(status => <option key={status}>{status}</option>)}</select></label>
             </div>
+            <nav aria-label="Message history" className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
+              <button className={buttonClass} disabled={detailLoading || (messagePage + 1) * 50 >= detail.messageTotal} onClick={() => setMessagePage(p => p + 1)}>Older messages</button>
+              <span className="text-xs text-muted-foreground">{detail.messageTotal.toLocaleString()} saved messages · {messagePage === 0 ? 'Latest' : `History page ${messagePage + 1}`}</span>
+              <button className={buttonClass} disabled={detailLoading || messagePage === 0} onClick={() => setMessagePage(p => p - 1)}>Newer messages</button>
+              {messagePage > 1 && <button className="text-xs text-primary" disabled={detailLoading} onClick={() => setMessagePage(0)}>Jump to latest</button>}
+            </nav>
             <div className="h-[55vh] space-y-3 overflow-y-auto bg-muted/20 p-5">{[...detail.messages].reverse().map(message => <article key={message.id} className={`max-w-[90%] rounded-xl border border-border p-3 ${message.direction === 'outbound' ? 'ml-auto bg-primary/10' : 'bg-card'}`}>
               <p className="mb-1 text-xs font-medium text-muted-foreground">{message.direction === 'outbound' ? `${activeChannel?.label ?? 'Business'} · Outgoing` : 'Customer'}</p>{message.reaction && <div className="mb-2 rounded-lg bg-muted p-2 text-xs">{message.reaction.emoji || 'Reaction removed'} · {detail.messages.find(m => m.meta_id === message.reaction?.target)?.content || 'Reaction to an earlier message'}</div>}{(!message.reaction && (message.content || !message.media_id)) && <p className="whitespace-pre-wrap break-words text-sm">{message.content || (message.kind === 'revoke' ? 'This message was deleted' : 'This message format is not available yet.')}</p>}<MessageMedia key={message.id} message={message} /><time className="mt-2 block text-xs text-muted-foreground">{date(message.sent_at)}</time>
             </article>)}{detail.messages.length === 0 && <p className="text-sm text-muted-foreground">No messages on this page.</p>}</div>
-            <Pagination page={messagePage} size={50} total={detail.messageTotal} setPage={setMessagePage} disabled={detailLoading} label="message" />
             <ReplyComposer key={detail.thread.id} threadId={detail.thread.id} onSent={() => { setMessagePage(0); setRefresh(n => n + 1) }} />
-            <details className="border-t border-border p-5"><summary className="cursor-pointer font-semibold">Lead history</summary><ul className="mt-3 space-y-2 text-sm">{detail.audit.map(item => <li key={item.id}><span className="font-medium">{item.previous_status} → {item.new_status}</span><span className="ml-2 text-xs text-muted-foreground">{date(item.changed_at)} · User {item.changed_by.slice(0, 8)}</span></li>)}</ul>{detail.audit.length === 0 && <p className="mt-2 text-sm text-muted-foreground">No lead-status changes recorded.</p>}</details>
-            <Pagination page={auditPage} size={25} total={detail.auditTotal} setPage={setAuditPage} disabled={detailLoading} label="audit" />
+            <details className="border-t border-border p-5"><summary className="cursor-pointer font-semibold">Lead history</summary><ul className="mt-3 space-y-2 text-sm">{detail.audit.map(item => <li key={item.id}><span className="font-medium">{item.previous_status} → {item.new_status}</span><span className="ml-2 text-xs text-muted-foreground">{date(item.changed_at)} · User {item.changed_by.slice(0, 8)}</span></li>)}</ul>{detail.audit.length === 0 && <p className="mt-2 text-sm text-muted-foreground">No lead-status changes recorded.</p>}<Pagination page={auditPage} size={25} total={detail.auditTotal} setPage={setAuditPage} disabled={detailLoading} label="audit" /></details>
           </>}
         </section>
       </div>
