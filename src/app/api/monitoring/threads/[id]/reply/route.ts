@@ -3,6 +3,7 @@ import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { checkedId, monitoringError, privateJson, readJson, requiredText } from '@/lib/monitoring/http'
 import { managementReplyTarget, managementReplyWindow, readReplyAttempt, replyAttemptResult, sendManagementReply } from '@/lib/monitoring/management-reply'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { managementRepliesEnabled } from '@/lib/monitoring/settings'
 
 type Context = { params: Promise<{ id: string }> }
 export async function GET(request: Request, context: Context) {
@@ -11,10 +12,11 @@ export async function GET(request: Request, context: Context) {
     const id = checkedId((await context.params).id)
     const target = await managementReplyTarget(supabase, accountId, id)
     if (!target) return privateJson({ error: 'Conversation not found.' }, 404)
-    const window = await managementReplyWindow(supabase, accountId, id)
+    const enabled = await managementRepliesEnabled(monitoringAdmin(), accountId)
+    const window = enabled ? await managementReplyWindow(supabase, accountId, id) : { open: false, expires_at: null }
     const requestId = new URL(request.url).searchParams.get('request_id')
     const attempt = requestId ? await readReplyAttempt(monitoringAdmin(), accountId, id, checkedId(requestId)) : null
-    return privateJson({ ...window, active: target.channel.active, attempt: attempt ? replyAttemptResult(attempt) : null })
+    return privateJson({ ...window, enabled, active: target.channel.active, attempt: attempt ? replyAttemptResult(attempt) : null })
   } catch (error) { return monitoringError(error) }
 }
 export async function POST(request: Request, context: Context) {

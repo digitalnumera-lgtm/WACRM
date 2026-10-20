@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { LayoutDashboard, Inbox, Users, ImageIcon, List, ChartNoAxesCombined, Phone, History, CircleAlert, ArrowLeft, MessageSquare } from 'lucide-react'
+import { LayoutDashboard, Inbox, Users, ImageIcon, List, ChartNoAxesCombined, Phone, History, CircleAlert, Settings, ArrowLeft, MessageSquare } from 'lucide-react'
+import { MonitoringSettings } from './settings-panel'
 import { BusinessNumbers } from './business-numbers'
 import { Conversation, type ChatSnapshot } from './conversation'
 import { ContactsPanel } from './contacts-panel'
@@ -16,7 +17,7 @@ const navigation = [
   { name: 'Contacts', icon: Users }, { name: 'Media', icon: ImageIcon },
   { name: 'Message logs', icon: List }, { name: 'Reports', icon: ChartNoAxesCombined },
   { name: 'Business numbers', icon: Phone }, { name: 'Import history', icon: History },
-  { name: 'Events for review', icon: CircleAlert },
+  { name: 'Events for review', icon: CircleAlert }, { name: 'Settings', icon: Settings },
 ]
 
 const inputClass = 'w-full rounded-lg border border-border bg-background px-3 py-2 text-sm'
@@ -54,6 +55,19 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [view, setView] = useState('Inbox')
+  const [replyEnabled, setReplyEnabled] = useState<boolean | null>(null)
+  const [settingsError, setSettingsError] = useState('')
+  const settingsRevision = useRef(0)
+  useEffect(() => {
+    const controller = new AbortController()
+    const revision = settingsRevision.current
+    const load = () => api<{ management_replies_enabled: boolean }>('/api/monitoring/settings', { signal: controller.signal })
+      .then(data => { if (!controller.signal.aborted && revision === settingsRevision.current) { setReplyEnabled(data.management_replies_enabled); setSettingsError('') } })
+      .catch(e => { if (!controller.signal.aborted && revision === settingsRevision.current) { setReplyEnabled(null); setSettingsError(e.message) } })
+    void load()
+    window.addEventListener('focus', load)
+    return () => { controller.abort(); window.removeEventListener('focus', load) }
+  }, [refresh])
 
   const chatCache = useRef(new Map<string, ChatSnapshot>())
   const listViewport = useRef<HTMLUListElement>(null)
@@ -136,6 +150,8 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
     </aside>
     <main className="min-w-0 space-y-4 p-4 lg:p-6">
       <header className={`items-center justify-between border-b border-border pb-4 ${view === 'Inbox' && selected ? 'hidden lg:flex' : 'flex'}`}><h2 className="text-xl font-semibold">{view}</h2><button className={buttonClass} onClick={() => setRefresh(n => n + 1)} disabled={loading}>Refresh</button></header>
+      {settingsError && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">Unable to check reply settings: {settingsError} <button className={buttonClass} onClick={() => setRefresh(n => n + 1)}>Retry</button></p>}
+      {view === 'Settings' && <MonitoringSettings enabled={replyEnabled} onSaved={enabled => { settingsRevision.current++; setReplyEnabled(enabled); setSettingsError(''); setRefresh(n => n + 1) }} />}
       {view === 'Business numbers' && <><BusinessNumbers channels={channels} onSaved={() => setRefresh(n => n + 1)} onOpen={id => { filter('channel', id); setView('Inbox') }} /><details className="rounded-xl border border-border bg-card p-3"><summary className="cursor-pointer p-2 font-medium">Add a number from Meta portfolio</summary><PortfolioPicker onSaved={() => setRefresh(n => n + 1)} /></details><details><summary className="cursor-pointer p-3 text-sm">Enter number details manually</summary><ChannelManager channels={channels} onSaved={() => setRefresh(n => n + 1)} /></details></>}
       {view === 'Import history' && <HistoryImport channels={channels} onSaved={() => setRefresh(n => n + 1)} />}
       {view === 'Events for review' && <ReviewEvents channels={channels} />}
@@ -176,12 +192,12 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
         </section>
         <section aria-label="Conversation detail" className={`min-w-0 bg-card ${selected ? '' : 'hidden lg:block'}`}>
           <button onClick={() => setSelected(null)} className="m-3 flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm lg:hidden"><ArrowLeft size={16} />All conversations</button>
-          {selected ? <Conversation key={selected} id={selected} preview={threads.find(t => t.id === selected)} channels={channels} cache={chatCache.current} onChanged={() => setRefresh(n => n + 1)} />
+          {selected ? <Conversation key={selected} id={selected} preview={threads.find(t => t.id === selected)} channels={channels} repliesEnabled={replyEnabled === true} cache={chatCache.current} onChanged={() => setRefresh(n => n + 1)} />
             : <div className="flex min-h-[55vh] flex-col items-center justify-center gap-4 p-10 text-center text-muted-foreground"><MessageSquare size={40} className="text-primary/40" /><p>{loading ? 'Loading conversations…' : threads.length ? 'Choose a conversation' : 'No conversations match your filters'}</p></div>}
         </section>
       </div>
       </>}
-      <p className="text-xs text-muted-foreground">Agents use their WhatsApp Business apps. Owners and admins can review conversations, update leads and send replies from this workspace.</p>
+      <p className="text-xs text-muted-foreground">Agents use their WhatsApp Business apps. Owners and admins can review conversations and update leads.{replyEnabled === true ? ' Management replies are enabled.' : replyEnabled === false ? ' Management replies are disabled.' : ''}</p>
     </main>
   </div>
 }

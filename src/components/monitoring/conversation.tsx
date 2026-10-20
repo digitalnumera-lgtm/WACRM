@@ -22,8 +22,8 @@ async function read(url: string, signal: AbortSignal): Promise<ChatSnapshot> {
   return data
 }
 
-export function Conversation({ id, preview, channels, cache, onChanged }: {
-  id: string; preview?: MonitoringThread; channels: MonitoringChannel[];
+export function Conversation({ id, preview, channels, repliesEnabled, cache, onChanged }: {
+  id: string; preview?: MonitoringThread; channels: MonitoringChannel[]; repliesEnabled: boolean;
   cache: Map<string, ChatSnapshot>; onChanged: () => void;
 }) {
   const [snapshot, setSnapshot] = useState<ChatSnapshot | null>(() => cache.get(id) ?? null)
@@ -162,7 +162,7 @@ export function Conversation({ id, preview, channels, cache, onChanged }: {
       </div>
       {newMessages && <button className="absolute bottom-3 right-3 flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm text-primary-foreground shadow-lg" onClick={() => { if (viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight; setNewMessages(false) }}>New messages<ArrowDown size={16} /></button>}
     </div>
-    <ReplyComposer threadId={id} onSent={() => { scrollUpdate.current = 'bottom'; void latest(); onChanged() }} />
+    {repliesEnabled && <ReplyComposer threadId={id} onSent={() => { scrollUpdate.current = 'bottom'; void latest(); onChanged() }} />}
     <details className="border-t border-border p-4" onToggle={e => setAuditOpen(e.currentTarget.open)}><summary className="cursor-pointer text-sm font-medium">Lead history</summary>{auditError && <p role="alert">{auditError}</p>}{auditOpen && !audit && <p className="mt-3 text-xs">Loading lead history…</p>}<ul className="mt-3 space-y-2 text-xs">{audit?.rows.map(row => <li key={row.id}>{row.previous_status} → {row.new_status} · {timestamp(row.changed_at)}</li>)}</ul>{audit?.total === 0 && <p className="text-xs text-muted-foreground">No lead changes yet.</p>}{audit && audit.total > 25 && <div className="mt-3 flex justify-between"><button className={button} disabled={!auditPage} onClick={() => setAuditPage(p => p - 1)}>Previous</button><button className={button} disabled={(auditPage + 1) * 25 >= audit.total} onClick={() => setAuditPage(p => p + 1)}>Next</button></div>}</details>
   </div>
 }

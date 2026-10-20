@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { customerMessageKinds, replyWindow } from './reply-window'
 import { submitManagementText } from './management-transport'
+import { managementRepliesEnabled } from './settings'
 
 type Target = { thread: { id: string; channel_id: string; customer: string; customer_name: string | null }; channel: { id: string; active: boolean; phone_number_id: string } }
 export async function managementReplyTarget(db: SupabaseClient, account: string, threadId: string): Promise<Target | null> {
@@ -37,6 +38,7 @@ export function replyAttemptResult(attempt: Attempt) {
  * outcomes stay reserved, including a crash between Meta acceptance and saving.
  */
 export async function sendManagementReply(db: SupabaseClient, account: string, actor: string, target: Target, requestId: string, text: string) {
+  if (!(await managementRepliesEnabled(db, account))) return { status: 403, body: { error: 'Management replies are disabled in workspace settings.' } }
   const digest = hash(JSON.stringify([target.thread.id, text]))
   const prior = await readReplyAttempt(db, account, target.thread.id, requestId)
   if (prior) {

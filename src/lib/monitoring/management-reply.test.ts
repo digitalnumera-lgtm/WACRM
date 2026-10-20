@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-const mocks = vi.hoisted(() => ({ send: vi.fn() }))
+const mocks = vi.hoisted(() => ({ send: vi.fn(), enabled: vi.fn(async () => true) }))
+vi.mock('./settings', () => ({ managementRepliesEnabled: mocks.enabled }))
 vi.mock('./management-transport', () => ({ submitManagementText: mocks.send }))
 vi.mock('@/lib/whatsapp/encryption', () => ({ decrypt: () => 'private-token' }))
 import { sendManagementReply } from './management-reply'
@@ -44,6 +45,16 @@ function database(options: { expired?: boolean; rpcError?: boolean; reserveError
   return { db: db as unknown as SupabaseClient, ledger, calls, rpc: db.rpc }
 }
 describe('durable management reply reservation', () => {
+  it('blocks disabled replies and fails closed when settings cannot be read', async () => {
+    const { db, calls, rpc } = database()
+    mocks.enabled.mockResolvedValueOnce(false)
+    expect((await sendManagementReply(db, 'company', 'admin', target, 'request', 'Hello')).status).toBe(403)
+    expect(calls).toHaveLength(0)
+    mocks.enabled.mockRejectedValueOnce(new Error('Settings unavailable'))
+    await expect(sendManagementReply(db, 'company', 'admin', target, 'request', 'Hello')).rejects.toThrow('Settings unavailable')
+    expect(mocks.send).not.toHaveBeenCalled(); expect(rpc).not.toHaveBeenCalled()
+    expect(mocks.enabled).toHaveBeenCalledWith(db, 'company')
+  })
   it('sends once across concurrent requests and accepted retries', async () => {
     mocks.send.mockResolvedValue({ state: 'accepted', meta_id: 'wamid.test' })
     const { db, ledger, rpc } = database()

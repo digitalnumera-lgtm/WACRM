@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 
 type Pending = { request_id: string; text: string }
 type SendResult = { state?: 'accepted' | 'rejected' | 'uncertain'; message?: string; error?: string }
-type WindowInfo = { open: boolean; expires_at: string | null; active: boolean; attempt?: SendResult | null }
+type WindowInfo = { enabled?: boolean; open: boolean; expires_at: string | null; active: boolean; attempt?: SendResult | null }
 
 export function ReplyComposer({ threadId, onSent }: { threadId: string; onSent: () => void }) {
   const [text, setText] = useState('')
@@ -73,6 +73,7 @@ export function ReplyComposer({ threadId, onSent }: { threadId: string; onSent: 
     finally { setBusy(false) }
   }
   const open = info?.open && info.active && (!info.expires_at || Date.parse(info.expires_at) > Date.now())
+  if (info?.enabled === false) return null
   return <section aria-label="Management reply" className="space-y-3 border-t border-border p-5">
     <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold">Reply as management</h3><span className="text-xs text-muted-foreground">Owner and admin access only</span></div>
     <p className="text-xs text-muted-foreground">{!info ? 'Checking reply availability…' : !info.active ? 'This number is paused.' : open ? `Customer reply window ends ${new Date(info.expires_at!).toLocaleString()}. WhatsApp makes the final eligibility check.` : 'The 24-hour reply window is closed. Wait for a new customer message. Template replies are not available here yet.'}</p>

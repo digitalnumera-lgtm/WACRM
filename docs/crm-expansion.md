@@ -149,3 +149,22 @@ fetched on expansion, initial thread/message reads run in parallel, and rich
 message ledger lookups are batched. Green outgoing bubbles, white incoming
 bubbles with blue labels, date separators and number-specific avatar colors
 make directions and conversations easier to distinguish.
+
+### Workspace reply switch
+
+Settings → Allow management replies lets owners/admins enable or disable CRM
+replies across the workspace. Existing workspaces default to enabled. Disabling
+removes the complete reply panel, access label and customer-window notice.
+The server checks the saved setting before reserving or submitting any new
+management reply; settings read failures block sending. Already submitted
+messages cannot be recalled. Receiving messages, phone-app replies, saved
+conversations and media are unaffected.
+
+The setting is stored as one deterministic company-owned `management_settings`
+record in the private `monitoring_events` ledger. It has `needs_review=false`
+and is anchored to the oldest existing channel to satisfy the ledger's foreign
+key. Soft removal preserves this anchor. A workspace must have a business number
+before saving the setting. This uses the recovered schema without a migration.
+Only the authenticated company can read/change its setting through the
+owner/admin endpoint. Open workspaces refresh the setting on focus and at the
+existing 30-second refresh interval; the sending endpoint always checks storage.
