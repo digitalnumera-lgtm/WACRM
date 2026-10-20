@@ -37,6 +37,7 @@ function database() {
         or(...args: unknown[]) { calls.push({ table, method: 'or', args }); return query },
         order(...args: unknown[]) { calls.push({ table, method: 'order', args }); return query },
         range(start: number, end: number) { calls.push({ table, method: 'range', args: [start, end] }); range = [start, end]; return query },
+        limit(size: number) { calls.push({ table, method: 'limit', args: [size] }); range = [0, size - 1]; return query },
         maybeSingle() { const value = result(); return Promise.resolve({ ...value, data: value.data[0] ?? null }) },
         then(resolve: (value: ReturnType<typeof result>) => unknown) { return Promise.resolve(result()).then(resolve) },
       }
@@ -89,10 +90,27 @@ describe('management monitoring APIs', () => {
     expect(calls).toEqual([]); expect(rpc).not.toHaveBeenCalled()
   })
   it('prevents cross-company thread reads and status writes', async () => {
-    expect((await detail(get(), context(foreignThread))).status).toBe(404)
+    rows.monitoring_messages.push({ id: 'private-message', account_id: foreign, thread_id: foreignThread, content: 'Private text' })
+    const response = await detail(get(), context(foreignThread))
+    expect(response.status).toBe(404)
+    expect(await response.text()).not.toContain('Private text')
     expect((await update(post({ lead_status: 'won' }, 'PATCH'), context(foreignThread))).status).toBe(404)
     expect(rpc).not.toHaveBeenCalled()
-    expect(calls.some(c => c.table === 'monitoring_messages')).toBe(false)
+    // Parallel reads must still constrain both company and requested thread.
+    for (const table of ['monitoring_messages', 'monitoring_lead_audit']) {
+      expect(calls).toContainEqual({ table, method: 'eq', args: ['account_id', company] })
+      expect(calls).toContainEqual({ table, method: 'eq', args: ['thread_id', foreignThread] })
+    }
+    expect(mocks.admin).not.toHaveBeenCalled()
+  })
+  it('bounds scroll batches and loads lead history only on demand', async () => {
+    expect((await detail(get('?scroll=1'), context())).status).toBe(200)
+    expect(calls).toContainEqual({ table: 'monitoring_messages', method: 'limit', args: [51] })
+    expect(calls.some(c => c.table === 'monitoring_lead_audit')).toBe(false)
+    calls = []
+    expect((await detail(get('?scroll=1&auditOnly=1'), context())).status).toBe(200)
+    expect(calls.some(c => c.table === 'monitoring_messages')).toBe(true) // builder only; no awaited message request
+    expect(calls).toContainEqual({ table: 'monitoring_lead_audit', method: 'eq', args: ['account_id', company] })
   })
   it('scopes messages and audit to company and thread, with bounded pagination', async () => {
     expect((await detail(get('?page=1&auditPage=2'), context())).status).toBe(200)

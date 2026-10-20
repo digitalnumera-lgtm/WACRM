@@ -129,3 +129,23 @@ The inbox has icon navigation, conversation initials, a clear-filters action,
 mobile list/detail navigation and explicit Older/Newer messages controls. Saved
 history is paginated in groups of 50; these controls do not fetch missing history
 from Meta. Lead audit pagination is contained inside the collapsed lead history.
+
+### Continuous inbox scrolling
+
+The inbox now uses timestamp + row-ID cursors rather than page buttons. Open a
+chat at the latest message and scroll up to append earlier saved history without
+losing the reading position. Scroll down the conversation list to fetch the next
+batch. There is no configured total-message or conversation limit in this flow;
+it loads the records available in this CRM, not additional history from Meta.
+Equal timestamps use a stable ID tie-breaker. Incoming messages are merged by ID,
+and polling catches up in ascending batches without replacing older loaded rows.
+A new-message button appears when the reader is away from the bottom.
+
+Number and agent selectors synchronize; number choices include labels and put
+removed numbers in a separate saved-chat group. The desktop opens the first
+matching conversation; mobile retains its list/back flow. The last eight opened
+chats are held only in workspace memory for immediate revisits. Lead audit is
+fetched on expansion, initial thread/message reads run in parallel, and rich
+message ledger lookups are batched. Green outgoing bubbles, white incoming
+bubbles with blue labels, date separators and number-specific avatar colors
+make directions and conversations easier to distinguish.

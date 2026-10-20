@@ -1,3 +1,4 @@
+import { readCursor, cursorFilter, makeCursor } from '@/lib/monitoring/scroll'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { messageText } from '@/lib/monitoring/rich-message'
 import { requireRole } from '@/lib/auth/account'
@@ -12,25 +13,50 @@ export async function GET(request: Request, context: Context) {
     const params = new URL(request.url).searchParams
     const page = pageNumber(params.get('page'))
     const auditPage = pageNumber(params.get('auditPage'))
-    const thread = await supabase.from('monitoring_threads').select(threadColumns).eq('account_id', accountId).eq('id', id).maybeSingle()
-    if (thread.error) throw thread.error
-    if (!thread.data) return privateJson({ error: 'Conversation not found.' }, 404)
-    const [messages, audit] = await Promise.all([
-      supabase.from('monitoring_messages').select('id,meta_id,direction,sent_at,kind,content,media_id', { count: 'exact' }).eq('account_id', accountId).eq('thread_id', id).order('sent_at', { ascending: false }).order('id').range(page * 50, page * 50 + 49),
-      supabase.from('monitoring_lead_audit').select('id,changed_by,previous_status,new_status,changed_at', { count: 'exact' }).eq('account_id', accountId).eq('thread_id', id).order('changed_at', { ascending: false }).order('id').range(auditPage * 25, auditPage * 25 + 24),
+    const scroll = params.get('scroll') === '1'
+    const before = readCursor(params.get('before'))
+    const after = readCursor(params.get('after'))
+    const auditOnly = params.get('auditOnly') === '1'
+    let query = supabase.from('monitoring_messages').select('id,meta_id,direction,sent_at,kind,content,media_id', { count: scroll ? undefined : 'exact' }).eq('account_id', accountId).eq('thread_id', id)
+    if (before) query = query.or(cursorFilter('sent_at', before))
+    if (after) query = query.or(cursorFilter('sent_at', after, true))
+    const [thread, messages, audit] = await Promise.all([
+      supabase.from('monitoring_threads').select(threadColumns).eq('account_id', accountId).eq('id', id).maybeSingle(),
+      auditOnly ? Promise.resolve({ data: [], count: null, error: null }) : scroll
+        ? query.order('sent_at', { ascending: !!after }).order('id', { ascending: !!after }).limit(51)
+        : query.order('sent_at', { ascending: false }).order('id').range(page * 50, page * 50 + 49),
+      !scroll || auditOnly ? supabase.from('monitoring_lead_audit').select('id,changed_by,previous_status,new_status,changed_at', { count: 'exact' }).eq('account_id', accountId).eq('thread_id', id).order('changed_at', { ascending: false }).order('id').range(auditPage * 25, auditPage * 25 + 24)
+        : Promise.resolve({ data: [], count: 0, error: null }),
     ])
-    if (messages.error || audit.error) throw messages.error ?? audit.error
-    const enriched = await Promise.all((messages.data ?? []).map(async message => {
-      if (!['reaction', 'revoke', 'location', 'contacts', 'interactive', 'button', 'unsupported'].includes(message.kind) || !message.meta_id) return message
-      const key = message.direction === 'outbound' ? 'message_echoes' : 'messages'
+    if (thread.error || messages.error || audit.error) throw thread.error ?? messages.error ?? audit.error
+    if (!thread.data) return privateJson({ error: 'Conversation not found.' }, 404)
+    const rows = scroll ? (messages.data ?? []).slice(0, 50) : messages.data ?? []
+    // Most rich text is already normalized on ingestion. Retrieve missing detail
+    // in bounded batches rather than issuing up to 50 ledger queries per chat.
+    const needsSource = rows.filter(m => m.meta_id && (m.kind === 'reaction' || (!m.content && ['revoke', 'location', 'contacts', 'interactive', 'button', 'unsupported'].includes(m.kind))))
+    const sources = new Map<string, Record<string, unknown>>()
+    await Promise.all(Array.from({ length: Math.ceil(needsSource.length / 10) }, async (_, index) => {
+      const chunk = needsSource.slice(index * 10, index * 10 + 10)
+      const predicates = chunk.map(m => {
+        const key = m.direction === 'outbound' ? 'message_echoes' : 'messages'
+        return `payload.cs.${JSON.stringify(JSON.stringify({ value: { [key]: [{ id: m.meta_id }] } }))}`
+      }).join(',')
       const source = await monitoringAdmin().from('monitoring_events').select('payload')
-        .eq('account_id', accountId).eq('channel_id', thread.data!.channel_id)
-        .contains('payload', { value: { [key]: [{ id: message.meta_id }] } }).limit(1).maybeSingle()
-      const raw = source.data?.payload?.value?.[key]?.find((item: { id: string }) => item.id === message.meta_id)
-      return raw ? { ...message, content: messageText(raw) ?? message.content,
-        reaction: message.kind === 'reaction' ? { emoji: raw.reaction?.emoji ?? '', target: raw.reaction?.message_id ?? null } : undefined } : message
+        .eq('account_id', accountId).eq('channel_id', thread.data!.channel_id).or(predicates).limit(100)
+      for (const event of source.data ?? []) {
+        for (const key of ['messages', 'message_echoes']) {
+          for (const item of event.payload?.value?.[key] ?? []) if (typeof item.id === 'string') sources.set(item.id, item)
+        }
+      }
     }))
-    return privateJson({ thread: thread.data, messages: enriched, messageTotal: messages.count, audit: audit.data, auditTotal: audit.count, page, auditPage })
+    const enriched = rows.map(message => {
+      const raw = sources.get(message.meta_id)
+      const reaction = raw?.reaction as { emoji?: string; message_id?: string } | undefined
+      return raw ? { ...message, content: messageText(raw) ?? message.content,
+        reaction: message.kind === 'reaction' ? { emoji: reaction?.emoji ?? '', target: reaction?.message_id ?? null } : undefined } : message
+    })
+    return privateJson({ thread: thread.data, messages: enriched, messageTotal: scroll ? thread.data.message_count : messages.count, audit: audit.data, auditTotal: audit.count, page, auditPage,
+      nextCursor: scroll && (messages.data?.length ?? 0) > 50 ? makeCursor(rows[rows.length - 1]) : null })
   } catch (error) { return monitoringError(error) }
 }
 

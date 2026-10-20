@@ -1,16 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { LayoutDashboard, Inbox, Users, ImageIcon, List, ChartNoAxesCombined, Phone, History, CircleAlert, ArrowLeft, MessageSquare } from 'lucide-react'
 import { BusinessNumbers } from './business-numbers'
-import { MessageMedia } from './message-media'
+import { Conversation, type ChatSnapshot } from './conversation'
 import { ContactsPanel } from './contacts-panel'
 import { MessageBrowser, ReportsPanel } from './activity-panels'
-import { ReplyComposer } from './reply-composer'
 import { HistoryImport, PortfolioPicker } from './setup-panels'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { leadStatuses, type MonitoringChannel, type MonitoringThread, type ThreadDetail } from '@/lib/monitoring/types'
+import { leadStatuses, type MonitoringChannel, type MonitoringThread } from '@/lib/monitoring/types'
 
 const navigation = [
   { name: 'Dashboard', icon: LayoutDashboard }, { name: 'Inbox', icon: Inbox },
@@ -23,6 +22,8 @@ const navigation = [
 const inputClass = 'w-full rounded-lg border border-border bg-background px-3 py-2 text-sm'
 const buttonClass = 'rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40'
 const date = (value: string | null) => value ? new Date(value).toLocaleString() : 'No events yet'
+const agentColors = ['bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300', 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300', 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300', 'bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300']
+const agentTint = (id: string) => agentColors[Array.from(id).reduce((sum, char) => sum + char.charCodeAt(0), 0) % agentColors.length]
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { cache: 'no-store', ...options })
@@ -47,55 +48,85 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
   const [threads, setThreads] = useState<MonitoringThread[]>([])
   const [filters, setFilters] = useState({ q: '', channel: '', agent: '', status: '' })
   const [search, setSearch] = useState('')
-  const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
-  const [detail, setDetail] = useState<ThreadDetail | null>(null)
-  const [messagePage, setMessagePage] = useState(0)
-  const [auditPage, setAuditPage] = useState(0)
   const [refresh, setRefresh] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [detailLoading, setDetailLoading] = useState(false)
   const [error, setError] = useState('')
-  const [detailError, setDetailError] = useState('')
-  const [saving, setSaving] = useState(false)
   const [view, setView] = useState('Inbox')
 
+  const chatCache = useRef(new Map<string, ChatSnapshot>())
+  const listViewport = useRef<HTMLUListElement>(null)
+  const listSentinel = useRef<HTMLLIElement>(null)
+  const listAbort = useRef<AbortController | null>(null)
+  const listBusy = useRef(false)
+  const listCursor = useRef<string | null>(null)
+  const previousFilter = useRef('')
+  const firstLoaded = useRef(false)
+  const [more, setMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [loadRetry, setLoadRetry] = useState(0)
+  type InboxPage = { channels: MonitoringChannel[]; threads: MonitoringThread[]; total: number | null; nextCursor: string | null }
+  const combine = (old: MonitoringThread[], incoming: MonitoringThread[]) => {
+    const rows = new Map(old.map(thread => [thread.id, thread]))
+    incoming.forEach(thread => rows.set(thread.id, thread))
+    return [...rows.values()].sort((a, b) => b.last_message_at.localeCompare(a.last_message_at) || b.id.localeCompare(a.id))
+  }
   useEffect(() => {
     const timer = window.setInterval(() => { if (!document.hidden) setRefresh(n => n + 1) }, 30000)
     return () => window.clearInterval(timer)
   }, [])
-
   useEffect(() => {
     const controller = new AbortController()
+    listAbort.current = controller; listBusy.current = true; setLoadingMore(false)
+    const key = JSON.stringify(filters)
+    const changed = previousFilter.current !== key
+    previousFilter.current = key
+    if (changed) { firstLoaded.current = false; setThreads([]); listCursor.current = null; setMore(false); if (listViewport.current) listViewport.current.scrollTop = 0 }
     setLoading(true)
-    const params = new URLSearchParams({ ...filters, page: String(page) })
-    api<{ channels: MonitoringChannel[]; threads: MonitoringThread[]; total: number }>(`/api/monitoring?${params}`, { signal: controller.signal })
-      .then(data => { setChannels(data.channels); setThreads(data.threads); setTotal(data.total); setError('') })
-      .catch(err => { if (!controller.signal.aborted) { setThreads([]); setError(err.message) } })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    const params = new URLSearchParams({ ...filters, scroll: '1' })
+    api<InboxPage>(`/api/monitoring?${params}`, { signal: controller.signal })
+      .then(data => {
+        if (controller.signal.aborted) return
+        setChannels(data.channels); setThreads(old => changed ? data.threads : combine(old, data.threads))
+        if (data.total !== null) setTotal(data.total)
+        if (!firstLoaded.current) { listCursor.current = data.nextCursor; setMore(!!data.nextCursor); firstLoaded.current = true }
+        setError('')
+        if (changed && window.matchMedia('(min-width: 1024px)').matches) setSelected(data.threads[0]?.id ?? null)
+      })
+      .catch(err => { if (!controller.signal.aborted) setError(err.message) })
+      .finally(() => { if (!controller.signal.aborted) { listBusy.current = false; setLoading(false) } })
     return () => controller.abort()
-  }, [filters, page, refresh])
-
+  }, [filters, refresh, loadRetry])
+  const loadMore = useCallback(async () => {
+    if (listBusy.current || !listCursor.current || !listAbort.current) return
+    const controller = listAbort.current
+    listBusy.current = true; setLoadingMore(true)
+    try {
+      const params = new URLSearchParams({ ...filters, scroll: '1', before: listCursor.current })
+      const data = await api<InboxPage>(`/api/monitoring?${params}`, { signal: controller.signal })
+      if (controller.signal.aborted) return
+      setThreads(old => combine(old, data.threads)); setChannels(data.channels)
+      listCursor.current = data.nextCursor; setMore(!!data.nextCursor); setError('')
+    } catch (err) { if (!controller.signal.aborted) setError((err as Error).message) }
+    finally { if (!controller.signal.aborted) { listBusy.current = false; setLoadingMore(false) } }
+  }, [filters])
   useEffect(() => {
-    if (!selected) { setDetail(null); return }
-    const controller = new AbortController()
-    setDetailLoading(true)
-    api<ThreadDetail>(`/api/monitoring/threads/${selected}?page=${messagePage}&auditPage=${auditPage}`, { signal: controller.signal })
-      .then(data => { setDetail(data); setDetailError('') })
-      .catch(err => { if (!controller.signal.aborted) { setDetail(null); setDetailError(err.message) } })
-      .finally(() => { if (!controller.signal.aborted) setDetailLoading(false) })
-    return () => controller.abort()
-  }, [selected, messagePage, auditPage, refresh])
-
+    if (!listViewport.current || !listSentinel.current || !more || loading || loadingMore || error) return
+    const observer = new IntersectionObserver(entries => { if (entries[0].isIntersecting) void loadMore() }, { root: listViewport.current, rootMargin: '0px 0px 160px' })
+    observer.observe(listSentinel.current)
+    return () => observer.disconnect()
+  }, [loadMore, more, loading, loadingMore, error, view, threads.length])
   function filter(key: keyof typeof filters, value: string) {
-    setFilters(current => ({ ...current, [key]: value })); setPage(0)
-    setSelected(null); setDetail(null)
+    setFilters(current => {
+      const next = { ...current, [key]: value }
+      if (key === 'channel') next.agent = channels.find(c => c.id === value)?.label ?? ''
+      if (key === 'agent') { const matches = channels.filter(c => c.label === value); next.channel = matches.length === 1 ? matches[0].id : '' }
+      return next
+    })
+    setSelected(null)
   }
-  function select(id: string) {
-    setSelected(id); setDetail(null); setDetailError(''); setMessagePage(0); setAuditPage(0)
-  }
-  const activeChannel = channels.find(channel => channel.id === detail?.thread.channel_id)
+  function select(id: string) { setSelected(id) }
 
   return <div className="monitoring-panel min-h-screen bg-background text-foreground lg:grid lg:grid-cols-[220px_1fr]">
     <aside className={`border-r border-border bg-card p-4 lg:sticky lg:top-0 lg:h-screen ${view === 'Inbox' && selected ? 'hidden lg:block' : ''}`}>
@@ -121,54 +152,32 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
       {view === 'Reports' && <ReportsPanel channels={channels} refresh={refresh} />}
       {view === 'Inbox' && <>
       <section className={`rounded-xl border border-border bg-card p-4 ${selected ? 'hidden lg:block' : ''}`}>
-        <div className="mb-3 flex items-center justify-between gap-2"><p className="text-xs text-muted-foreground">Conversations across your business numbers</p>{Object.values(filters).some(Boolean) && <button className="text-xs font-medium text-primary" onClick={() => { setFilters({ q: '', channel: '', agent: '', status: '' }); setSearch(''); setPage(0); setSelected(null); setDetail(null) }}>Clear filters</button>}</div>
+        <div className="mb-3 flex items-center justify-between gap-2"><p className="text-xs text-muted-foreground">Conversations across your business numbers</p>{Object.values(filters).some(Boolean) && <button className="text-xs font-medium text-primary" onClick={() => { setFilters({ q: '', channel: '', agent: '', status: '' }); setSearch(''); setSelected(null) }}>Clear filters</button>}</div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <form className="flex gap-2" onSubmit={e => { e.preventDefault(); filter('q', search.trim()) }}><label className="sr-only" htmlFor="monitor-search">Search conversations</label><input id="monitor-search" className={inputClass} placeholder="Search customer or latest message" maxLength={120} value={search} onChange={e => setSearch(e.target.value)} /><button className={buttonClass}>Search</button></form>
-          <label className="text-xs text-muted-foreground">Business number<select aria-label="Business number" className={inputClass} value={filters.channel} onChange={e => filter('channel', e.target.value)}><option value="">All numbers</option>{channels.map(c => <option key={c.id} value={c.id}>{c.display_number}</option>)}</select></label>
-          <label className="text-xs text-muted-foreground">Assigned agent label<select aria-label="Assigned agent label" className={inputClass} value={filters.agent} onChange={e => filter('agent', e.target.value)}><option value="">All agents</option>{[...new Set(channels.map(c => c.label))].map(label => <option key={label}>{label}</option>)}</select></label>
+          <label className="text-xs text-muted-foreground">Business number<select aria-label="Business number" className={inputClass} value={filters.channel} onChange={e => filter('channel', e.target.value)}><option value="">All numbers</option><optgroup label="Active numbers">{channels.filter(c => c.active).map(c => <option key={c.id} value={c.id}>{c.label} · {c.display_number}</option>)}</optgroup>{channels.some(c => !c.active) && <optgroup label="Removed · saved chats">{channels.filter(c => !c.active).map(c => <option key={c.id} value={c.id}>{c.label} · {c.display_number}</option>)}</optgroup>}</select></label>
+          <label className="text-xs text-muted-foreground">Agent<select aria-label="Assigned agent label" className={inputClass} value={filters.agent} onChange={e => filter('agent', e.target.value)}><option value="">All agents</option>{[...new Set(channels.map(c => c.label))].map(label => <option key={label}>{label}</option>)}</select></label>
           <label className="text-xs text-muted-foreground">Lead status<select aria-label="Lead status filter" className={inputClass} value={filters.status} onChange={e => filter('status', e.target.value)}><option value="">All statuses</option>{leadStatuses.map(status => <option key={status}>{status}</option>)}</select></label>
         </div>
       </section>
-      {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-destructive">{error}</p>}
+      {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-destructive">{error} <button className={buttonClass} onClick={() => setLoadRetry(n => n + 1)}>Retry</button></p>}
       <div className="grid items-start gap-0 overflow-hidden rounded-xl border border-border lg:grid-cols-[320px_minmax(0,1fr)]">
         <section aria-label="Conversations" aria-busy={loading} className={`overflow-hidden border-r border-border bg-card ${selected ? 'hidden lg:block' : ''}`}>
           <div className="border-b border-border px-4 py-3 text-sm font-medium">{total} conversations {loading && <span className="text-muted-foreground">· Updating…</span>}</div>
           {!loading && !error && threads.length === 0 && <p className="p-6 text-sm text-muted-foreground">{channels.length ? 'No conversations match these filters.' : 'Add a business number to start monitoring. New conversations appear when verified events arrive.'}</p>}
-          <ul className="max-h-[70vh] divide-y divide-border overflow-y-auto">{threads.map(thread => {
+          <ul ref={listViewport} aria-label="Conversation list" className="max-h-[70vh] divide-y divide-border overflow-y-auto overscroll-contain">{threads.map(thread => {
             const channel = channels.find(c => c.id === thread.channel_id)
-            return <li key={thread.id}><button onClick={() => select(thread.id)} aria-pressed={selected === thread.id} className={`w-full p-4 text-left hover:bg-muted ${selected === thread.id ? 'bg-primary/10' : ''}`}>
-              <div className="flex items-center gap-3"><span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">{(thread.customer_name || thread.customer).slice(0, 2).toUpperCase()}</span><span className="min-w-0 flex-1 truncate font-semibold">{thread.customer_name || thread.customer}</span><span className="rounded bg-muted px-2 py-1 text-xs">{thread.lead_status}</span></div>
+            return <li key={thread.id}><button onClick={() => select(thread.id)} aria-pressed={selected === thread.id} className={`w-full p-4 text-left hover:bg-muted ${selected === thread.id ? 'border-l-4 border-l-primary bg-sky-50 dark:bg-sky-950/40' : 'border-l-4 border-l-transparent'}`}>
+              <div className="flex items-center gap-3"><span aria-hidden="true" className={`flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${agentTint(thread.channel_id)}`}>{(thread.customer_name || thread.customer).slice(0, 2).toUpperCase()}</span><span className="min-w-0 flex-1 truncate font-semibold">{thread.customer_name || thread.customer}</span><span className="rounded bg-muted px-2 py-1 text-xs">{thread.lead_status}</span></div>
               <p className="mt-1 text-xs text-muted-foreground">{channel?.display_number ?? 'Unknown number'} · {channel?.label ?? 'Unassigned'}</p>
               <p className="mt-3 truncate text-sm">{thread.last_preview || 'Media or non-text message'}</p><p className="mt-2 text-xs text-muted-foreground">{date(thread.last_message_at)} · {thread.message_count} {thread.message_count === 1 ? 'message' : 'messages'}</p>
             </button></li>
-          })}</ul>
-          <Pagination page={page} size={30} total={total} setPage={setPage} disabled={loading} />
+          })}<li ref={listSentinel} className="p-3 text-center text-xs text-muted-foreground">{loadingMore ? 'Loading more conversations…' : loading ? 'Loading conversations…' : !more && threads.length > 0 ? 'All saved conversations loaded' : ''}</li></ul>
         </section>
-        <section aria-label="Conversation detail" aria-busy={detailLoading} className={`min-w-0 bg-card ${selected ? '' : 'hidden lg:block'}`}>
-          <button onClick={() => { setSelected(null); setDetail(null) }} className="m-3 flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm lg:hidden"><ArrowLeft size={16} />All conversations</button>
-          {detailError && <p role="alert" className="p-5 text-destructive">{detailError}</p>}
-          {!detail && <div className="flex min-h-[55vh] flex-col items-center justify-center gap-4 p-10 text-center text-muted-foreground"><MessageSquare size={40} className="text-primary/40" /><p>{detailLoading ? 'Loading conversation…' : 'Choose a conversation'}</p><p className="max-w-xs text-sm">Read messages, view media and reply from one place.</p></div>}
-          {detail && <>
-            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border p-5"><div><h2 className="text-lg font-semibold">{detail.thread.customer_name || detail.thread.customer}</h2><p className="text-sm text-muted-foreground">{detail.thread.customer}</p><p className="mt-2 text-sm">Business number: {activeChannel?.display_number ?? 'Unknown'}</p><p className="text-sm">Assigned agent: {activeChannel?.label ?? 'Unassigned'}</p></div>
-              <label className="text-xs text-muted-foreground">Lead status<select aria-label="Conversation lead status" className={inputClass} value={detail.thread.lead_status} disabled={saving || detailLoading} onChange={async e => {
-                setSaving(true)
-                try { await api(`/api/monitoring/threads/${detail.thread.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lead_status: e.target.value }) }); setRefresh(n => n + 1) }
-                catch (err) { setDetailError((err as Error).message) }
-                finally { setSaving(false) }
-              }}>{!leadStatuses.includes(detail.thread.lead_status as typeof leadStatuses[number]) && <option>{detail.thread.lead_status}</option>}{leadStatuses.map(status => <option key={status}>{status}</option>)}</select></label>
-            </div>
-            <nav aria-label="Message history" className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
-              <button className={buttonClass} disabled={detailLoading || (messagePage + 1) * 50 >= detail.messageTotal} onClick={() => setMessagePage(p => p + 1)}>Older messages</button>
-              <span className="text-xs text-muted-foreground">{detail.messageTotal.toLocaleString()} saved messages · {messagePage === 0 ? 'Latest' : `History page ${messagePage + 1}`}</span>
-              <button className={buttonClass} disabled={detailLoading || messagePage === 0} onClick={() => setMessagePage(p => p - 1)}>Newer messages</button>
-              {messagePage > 1 && <button className="text-xs text-primary" disabled={detailLoading} onClick={() => setMessagePage(0)}>Jump to latest</button>}
-            </nav>
-            <div className="h-[55vh] space-y-3 overflow-y-auto bg-muted/20 p-5">{[...detail.messages].reverse().map(message => <article key={message.id} className={`max-w-[90%] rounded-xl border border-border p-3 ${message.direction === 'outbound' ? 'ml-auto bg-primary/10' : 'bg-card'}`}>
-              <p className="mb-1 text-xs font-medium text-muted-foreground">{message.direction === 'outbound' ? `${activeChannel?.label ?? 'Business'} · Outgoing` : 'Customer'}</p>{message.reaction && <div className="mb-2 rounded-lg bg-muted p-2 text-xs">{message.reaction.emoji || 'Reaction removed'} · {detail.messages.find(m => m.meta_id === message.reaction?.target)?.content || 'Reaction to an earlier message'}</div>}{(!message.reaction && (message.content || !message.media_id)) && <p className="whitespace-pre-wrap break-words text-sm">{message.content || (message.kind === 'revoke' ? 'This message was deleted' : 'This message format is not available yet.')}</p>}<MessageMedia key={message.id} message={message} /><time className="mt-2 block text-xs text-muted-foreground">{date(message.sent_at)}</time>
-            </article>)}{detail.messages.length === 0 && <p className="text-sm text-muted-foreground">No messages on this page.</p>}</div>
-            <ReplyComposer key={detail.thread.id} threadId={detail.thread.id} onSent={() => { setMessagePage(0); setRefresh(n => n + 1) }} />
-            <details className="border-t border-border p-5"><summary className="cursor-pointer font-semibold">Lead history</summary><ul className="mt-3 space-y-2 text-sm">{detail.audit.map(item => <li key={item.id}><span className="font-medium">{item.previous_status} → {item.new_status}</span><span className="ml-2 text-xs text-muted-foreground">{date(item.changed_at)} · User {item.changed_by.slice(0, 8)}</span></li>)}</ul>{detail.audit.length === 0 && <p className="mt-2 text-sm text-muted-foreground">No lead-status changes recorded.</p>}<Pagination page={auditPage} size={25} total={detail.auditTotal} setPage={setAuditPage} disabled={detailLoading} label="audit" /></details>
-          </>}
+        <section aria-label="Conversation detail" className={`min-w-0 bg-card ${selected ? '' : 'hidden lg:block'}`}>
+          <button onClick={() => setSelected(null)} className="m-3 flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm lg:hidden"><ArrowLeft size={16} />All conversations</button>
+          {selected ? <Conversation key={selected} id={selected} preview={threads.find(t => t.id === selected)} channels={channels} cache={chatCache.current} onChanged={() => setRefresh(n => n + 1)} />
+            : <div className="flex min-h-[55vh] flex-col items-center justify-center gap-4 p-10 text-center text-muted-foreground"><MessageSquare size={40} className="text-primary/40" /><p>{loading ? 'Loading conversations…' : threads.length ? 'Choose a conversation' : 'No conversations match your filters'}</p></div>}
         </section>
       </div>
       </>}
