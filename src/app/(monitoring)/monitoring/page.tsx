@@ -4,7 +4,7 @@ import { MonitoringWorkspace, MonitoringSignOut } from '@/components/monitoring/
 
 export const dynamic = 'force-dynamic'
 
-export default async function MonitoringPage() {
+export default async function MonitoringPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   let name: string
   try {
     const context = await requireRole('admin')
@@ -16,5 +16,6 @@ export default async function MonitoringPage() {
     }
     throw error
   }
-  return <MonitoringWorkspace accountName={name} />
+  const { view } = await searchParams
+  return <MonitoringWorkspace accountName={name} initialView={view === 'settings' ? 'Settings' : 'Inbox'} />
 }

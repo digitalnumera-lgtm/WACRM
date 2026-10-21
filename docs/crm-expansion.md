@@ -1,5 +1,8 @@
 # Numera CRM expansion
 
+For the complete system handover, including which additions are still
+uncommitted, see the [Numera CRM handbook](numera-crm-handbook.md).
+
 Requested outcome: one company-owned CRM covering the inbox, contact management,
 media, reporting, number onboarding and operational workflows the owner values in
 WabaCRM, Chatwoot and respond.io. This is a capability scope, not a claim of complete
@@ -19,7 +22,7 @@ onboarding/migration procedure is available.
 
 | Area | Current evidence | Work required for the expanded CRM |
 | --- | --- | --- |
-| Individual chat inbox | Management split inbox, incoming and phone-app outgoing messages, lead statuses, pagination | Unread/read state, open/resolved/snoozed queues, saved views, private notes, tags, assignment and audit |
+| Individual chat inbox | Management split inbox, incoming and phone-app outgoing messages, lead statuses, continuous scrolling; added conversation status, shared CRM read markers and private notes | Global status queues, saved views, tags, assignment and workflow audit |
 | Contacts | Company-scoped directory, search, CSV import, related chats | Editable profiles, custom fields, segments, merge with audit, full exports and contact sync |
 | Rich messages | Images, audio, video, stickers and documents with authenticated media fetch; reaction text | Reaction attachment to original messages across pages, edits/deletions, reply context, delivery states, unavailable-format presentation |
 | Message logs | Added: full stored-body search, number/direction/type/date filters, pagination, page CSV export | Server-side large export jobs, delivery lifecycle filtering and retained source attribution |
@@ -28,7 +31,7 @@ onboarding/migration procedure is available.
 | Phone numbers | Portfolio discovery, manual entry, activate/pause, encrypted credentials | Eligible Meta Embedded Signup with coexistence, code exchange, subscription verification and lifecycle handling |
 | Historical import | CSV/JSON records supported; WabaCRM export was imported | Durable queue and workers for native Meta history/contact events, progress, media enrichment, resume and reconciliation |
 | Replies and templates | Management text composer/API implemented with admin checks, company scope, 24-hour window and durable request IDs; legacy transports blocked | Media/template composer, delivery-state reconciliation, reply context and recovery of accepted replies whose inbox write failed |
-| Quick replies | Must audit reusable upstream UI/data before exposing | Saved snippets, variables, attachment support, permission checks |
+| Quick replies | Added management-owned text library, search, create/edit/remove, variables and draft insertion | Attachment snippets, categories and keyboard shortcuts |
 | Teams | Upstream agents/account-role/invitation code exists | Integrate per-number and conversation access; assignment/audit; production role tests |
 | Pipelines | Upstream pipelines exist; management lead-status changes work | Unify contacts, conversations and deals; ownership, stages, custom fields, reporting |
 | Broadcasts | Upstream broadcasts exist; transport blocked | Verified consent and opt-outs, templates, scheduling, queue/retries, per-number throttling and campaign reports |
@@ -168,3 +171,74 @@ before saving the setting. This uses the recovered schema without a migration.
 Only the authenticated company can read/change its setting through the
 owner/admin endpoint. Open workspaces refresh the setting on focus and at the
 existing 30-second refresh interval; the sending endpoint always checks storage.
+
+### Management inbox tools (uncommitted feature work)
+
+Each conversation has Open/Resolved/Snoozed controls and Mark read/Mark unread.
+Snooze presets are one hour, four hours, one day and one week. Resolution and
+snoozing record the message count observed by the manager. Any subsequent stored
+message, including a phone-app reply or historical import, makes the effective
+status Open; snoozes also expire at their scheduled time. Status is derived when
+metadata is read, with no background scheduler required. Status badges are
+visible in the conversation list. Global status/unread queue filters are not
+implemented in this change.
+
+Read state is shared by management within the company. It includes both inbound
+and outbound messages because managers review agents' phone activity. Existing
+messages start unread until explicitly marked read. Opening a conversation does
+not mark every loaded or historical message read automatically. Mark read records
+only the message count observed in the open conversation, so a newer arrival
+cannot be silently acknowledged by a stale screen. Mark unread adds a manual
+flag. Neither operation sends WhatsApp read receipts or changes another provider.
+
+Internal notes are immutable management-only records, separate from WhatsApp
+messages and reports. Notes remain available with management replies disabled.
+The browser reuses its request ID when retrying a failed note submission, and
+the API prevents duplicate inserts or reusing an ID for different content. Notes
+load only when expanded and use timestamp/ID cursors in batches of 30.
+
+Saved replies has a searchable library with create, edit and confirmed removal.
+Supported variables are `{{name}}`, `{{phone}}` and `{{agent}}`; insertion expands
+them as plain text and appends to the draft. It never sends automatically or
+bypasses the management reply switch or WhatsApp reply window. These shortcuts
+are not approved Meta templates. The picker/library shows up to 100 title matches
+and explicitly asks the user to refine search when there are more. Version
+checks reject conflicting edits or removals instead of overwriting another
+manager's update.
+
+These additions use namespaced, company-scoped records in the existing private
+event ledger: `management_thread_status`, `management_thread_read`,
+`management_note` and `management_quick_reply`. Status and read markers have
+separate deterministic IDs, preventing one control from overwriting the other.
+Notes and quick-reply creation use idempotent request IDs. No schema migration
+or webhook/provider change is required. Service-ledger access follows owner/admin
+authentication and explicit company/thread ownership checks. Secondary metadata
+requests are batched by 100 conversation IDs and do not block message loading.
+
+### Media access recovery
+
+The media endpoint now distinguishes rejected Meta tokens, missing permissions,
+unavailable attachments, unsupported types, the 32 MB size limit, rate limits and
+network/timeouts. It returns safe error codes without Meta's raw error messages.
+The native image/audio/video error handler runs an authenticated diagnostic and
+shows the relevant recovery action. A successful server download that the browser
+cannot decode offers an attachment download. All successful and failed media
+responses remain private and uncached; role/company checks and trusted media-host
+restrictions still apply.
+
+Settings → Meta access accepts a fresh token and an explicit selection of existing
+business numbers. The server first confirms company ownership of every selected
+channel, then verifies each phone number against its stored WhatsApp Business
+Account through read-only Meta calls. It updates encrypted credentials in one
+database statement only after all numbers verify. A rejected token or partial
+account access does not change any stored credentials. Channel activation,
+messages, webhook subscriptions and other providers are not modified.
+
+Token renewal requires a newly generated token from the company's own waCRM Meta
+app. Use a system-user token with assigned WhatsApp assets where available, with
+`whatsapp_business_management` and `whatsapp_business_messaging` permissions.
+`business_management` is additionally needed for portfolio discovery. Tokens can
+still be revoked when users, apps or asset access change. Neither this UI nor the
+server can generate a replacement Meta login session automatically. Verification
+establishes access to the selected numbers; it cannot restore a media file Meta
+no longer retains. Persistent media archival remains separate work.

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { ArrowDown, LoaderCircle } from 'lucide-react'
 import { MessageMedia } from './message-media'
 import { ReplyComposer } from './reply-composer'
+import { ConversationTools, InternalNotes } from './conversation-tools'
+import type { ThreadWorkflow } from '@/lib/monitoring/workflow-types'
 import { leadStatuses, type MonitoringChannel, type MonitoringMessage, type MonitoringThread, type ThreadDetail } from '@/lib/monitoring/types'
 
 export type ChatSnapshot = ThreadDetail & { nextCursor: string | null }
@@ -22,8 +24,9 @@ async function read(url: string, signal: AbortSignal): Promise<ChatSnapshot> {
   return data
 }
 
-export function Conversation({ id, preview, channels, repliesEnabled, cache, onChanged }: {
+export function Conversation({ id, preview, channels, repliesEnabled, cache, workflow, onWorkflowChanged, onChanged }: {
   id: string; preview?: MonitoringThread; channels: MonitoringChannel[]; repliesEnabled: boolean;
+  workflow?: ThreadWorkflow; onWorkflowChanged: (value: ThreadWorkflow) => void;
   cache: Map<string, ChatSnapshot>; onChanged: () => void;
 }) {
   const [snapshot, setSnapshot] = useState<ChatSnapshot | null>(() => cache.get(id) ?? null)
@@ -142,6 +145,7 @@ export function Conversation({ id, preview, channels, repliesEnabled, cache, onC
         } catch (e) { setError((e as Error).message) } finally { setSaving(false) }
       }}>{!leadStatuses.includes(thread.lead_status as typeof leadStatuses[number]) && <option>{thread.lead_status}</option>}{leadStatuses.map(status => <option key={status}>{status}</option>)}</select></label>}
     </header>
+    {thread && <ConversationTools id={id} count={thread.message_count} workflow={workflow} onSaved={onWorkflowChanged} onRetry={onChanged} />}
     {error && <div role="alert" className="flex items-center justify-between gap-3 bg-destructive/10 p-3 text-sm text-destructive">{error}<button className={button} onClick={() => { setError(''); setRetry(n => n + 1) }}>Retry</button></div>}
     <div className="relative">
       <div ref={viewport} aria-label="Chat messages" className="h-[58vh] min-h-72 space-y-3 overflow-y-auto overscroll-contain bg-slate-100/80 p-4 dark:bg-slate-950/50 [overflow-anchor:none]" onScroll={() => { if (nearBottom()) setNewMessages(false) }}>
@@ -162,7 +166,8 @@ export function Conversation({ id, preview, channels, repliesEnabled, cache, onC
       </div>
       {newMessages && <button className="absolute bottom-3 right-3 flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm text-primary-foreground shadow-lg" onClick={() => { if (viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight; setNewMessages(false) }}>New messages<ArrowDown size={16} /></button>}
     </div>
-    {repliesEnabled && <ReplyComposer threadId={id} onSent={() => { scrollUpdate.current = 'bottom'; void latest(); onChanged() }} />}
+    {repliesEnabled && <ReplyComposer threadId={id} variables={{ name: thread?.customer_name || thread?.customer || '', phone: thread?.customer || '', agent: channel?.label || '' }} onSent={() => { scrollUpdate.current = 'bottom'; void latest(); onChanged() }} />}
+    <InternalNotes id={id} />
     <details className="border-t border-border p-4" onToggle={e => setAuditOpen(e.currentTarget.open)}><summary className="cursor-pointer text-sm font-medium">Lead history</summary>{auditError && <p role="alert">{auditError}</p>}{auditOpen && !audit && <p className="mt-3 text-xs">Loading lead history…</p>}<ul className="mt-3 space-y-2 text-xs">{audit?.rows.map(row => <li key={row.id}>{row.previous_status} → {row.new_status} · {timestamp(row.changed_at)}</li>)}</ul>{audit?.total === 0 && <p className="text-xs text-muted-foreground">No lead changes yet.</p>}{audit && audit.total > 25 && <div className="mt-3 flex justify-between"><button className={button} disabled={!auditPage} onClick={() => setAuditPage(p => p - 1)}>Previous</button><button className={button} disabled={(auditPage + 1) * 25 >= audit.total} onClick={() => setAuditPage(p => p + 1)}>Next</button></div>}</details>
   </div>
 }

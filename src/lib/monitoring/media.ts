@@ -1,3 +1,5 @@
+import { MediaFailure, metaResponseFailure } from './media-errors'
+
 const MAX_BYTES = 32 * 1024 * 1024
 const TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'audio/aac', 'audio/amr', 'audio/mpeg', 'audio/mp4', 'audio/ogg', 'video/mp4', 'video/3gpp', 'application/pdf', 'text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'])
 
@@ -9,16 +11,18 @@ export function trustedMediaUrl(value: string): URL {
 }
 
 export async function fetchMonitoringMedia(mediaId: string, token: string) {
-  if (!/^\d+$/.test(mediaId)) throw new Error('Invalid media ID')
+  if (!/^\d+$/.test(mediaId)) throw new MediaFailure('media_unavailable')
   const options: RequestInit = { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(25000) }
   const metadata = await fetch(`https://graph.facebook.com/v26.0/${mediaId}`, options)
-  if (!metadata.ok) throw new Error('Media metadata unavailable')
+  if (!metadata.ok) throw await metaResponseFailure(metadata)
   const info = await metadata.json()
-  const type = String(info.mime_type ?? '').split(';')[0].toLowerCase()
-  if (!TYPES.has(type) || Number(info.file_size) > MAX_BYTES) throw new Error('Unsupported media')
+  const type = String(info.mime_type ?? '').split(';')[0].trim().toLowerCase()
+  if (!TYPES.has(type)) throw new MediaFailure('media_unsupported')
+  if (Number(info.file_size) > MAX_BYTES) throw new MediaFailure('media_too_large')
   const upstream = await fetch(trustedMediaUrl(info.url), options)
-  if (!upstream.ok || !upstream.body) throw new Error('Media unavailable')
-  if (Number(upstream.headers.get('content-length')) > MAX_BYTES) { await upstream.body.cancel(); throw new Error('Media too large') }
+  if (!upstream.ok) throw await metaResponseFailure(upstream)
+  if (!upstream.body) throw new MediaFailure('media_network')
+  if (Number(upstream.headers.get('content-length')) > MAX_BYTES) { await upstream.body.cancel(); throw new MediaFailure('media_too_large') }
   const reader = upstream.body.getReader()
   const chunks: Uint8Array[] = []
   let size = 0
@@ -26,7 +30,7 @@ export async function fetchMonitoringMedia(mediaId: string, token: string) {
     const { done, value } = await reader.read()
     if (done) break
     size += value.byteLength
-    if (size > MAX_BYTES) { await reader.cancel(); throw new Error('Media too large') }
+    if (size > MAX_BYTES) { await reader.cancel(); throw new MediaFailure('media_too_large') }
     chunks.push(value)
   }
   return { bytes: new Uint8Array(Buffer.concat(chunks)), type }
