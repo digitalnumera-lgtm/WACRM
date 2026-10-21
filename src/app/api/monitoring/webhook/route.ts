@@ -1,4 +1,6 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto'
+import { after } from 'next/server'
+import { archiveDeliveredMedia } from '@/lib/monitoring/media-archive'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { monitoringBatches, persistMonitoringBatches } from '@/lib/monitoring/ingest'
@@ -34,7 +36,8 @@ export async function POST(request: Request) {
   console.info('[monitoring-webhook]', JSON.stringify({ requestId, event: 'received' }))
   if (!process.env.META_APP_SECRET?.trim()) return finish('app_secret_missing', 503, { error: 'Webhook signature verification is not configured.' })
   let raw: string
-  try { raw = await readLimitedBody(request, 1024 * 1024) }
+  // Coexistence history chunks can be several megabytes.
+  try { raw = await readLimitedBody(request, 8 * 1024 * 1024) }
   catch { return finish('body_rejected', 413, { error: 'Invalid or oversized payload.' }) }
   if (!verifyMetaWebhookSignature(raw, request.headers.get('x-hub-signature-256'))) {
     return finish('signature_rejected', 401, { error: 'Invalid signature.' })
@@ -45,7 +48,12 @@ export async function POST(request: Request) {
   catch { return finish('payload_rejected', 400, { error: 'Invalid WhatsApp payload.' }) }
   try {
     outcomes.batches = batches.length
-    await persistMonitoringBatches(monitoringAdmin(), batches, event => { outcomes[event] = (outcomes[event] ?? 0) + 1 })
+    const db = monitoringAdmin()
+    const archive = await persistMonitoringBatches(db, batches, event => { outcomes[event] = (outcomes[event] ?? 0) + 1 })
+    // Copy new media to permanent storage after Meta has its acknowledgement.
+    if (archive?.length) {
+      try { after(() => archiveDeliveredMedia(db, archive).catch(() => {})) } catch { /* No request scope (tests): skip archiving. */ }
+    }
     return finish('acknowledged', 200, { received: true })
   } catch {
     // Do not return 200 before durable storage: let Meta retry the delivery.

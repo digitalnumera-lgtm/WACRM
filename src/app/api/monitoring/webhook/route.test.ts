@@ -42,7 +42,7 @@ describe('monitoring webhook', () => {
     expect(mocks.persist).not.toHaveBeenCalled()
   })
   it('bounds request size', async () => {
-    const body = 'x'.repeat(1024 * 1024 + 1)
+    const body = 'x'.repeat(8 * 1024 * 1024 + 1)
     expect((await POST(request(body, sign(body)))).status).toBe(413)
     expect(mocks.persist).not.toHaveBeenCalled()
   })

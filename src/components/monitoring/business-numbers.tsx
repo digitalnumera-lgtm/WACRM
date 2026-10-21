@@ -1,10 +1,24 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Archive, MessageSquare, RotateCcw, Phone } from 'lucide-react'
 import type { MonitoringChannel } from '@/lib/monitoring/types'
+import { HistoryStatus, type ConnectStatus } from './connect-number'
 
-export function BusinessNumbers({ channels, onSaved, onOpen }: { channels: MonitoringChannel[]; onSaved: () => void; onOpen: (id: string) => void }) {
+export function BusinessNumbers({ channels, onSaved, onOpen, refresh = 0 }: { channels: MonitoringChannel[]; onSaved: () => void; onOpen: (id: string) => void; refresh?: number }) {
+  const [statuses, setStatuses] = useState<Record<string, ConnectStatus>>({})
+  const [statusRevision, setStatusRevision] = useState(0)
+  const ids = channels.map(c => c.id).slice(0, 50).join(',')
+  const reloadStatus = useCallback(() => setStatusRevision(n => n + 1), [])
+  useEffect(() => {
+    if (!ids) return
+    const controller = new AbortController()
+    const load = () => fetch(`/api/monitoring/connect/status?ids=${ids}`, { cache: 'no-store', signal: controller.signal }).then(r => r.ok ? r.json() : null).then(d => { if (d?.status) setStatuses(d.status) }).catch(() => {})
+    void load()
+    // History arrives in parts; keep progress fresh while this page is open.
+    const timer = setInterval(() => { if (!document.hidden) void load() }, 15000)
+    return () => { controller.abort(); clearInterval(timer) }
+  }, [ids, refresh, statusRevision])
   const [tab, setTab] = useState<'active' | 'removed'>('active')
   const [confirm, setConfirm] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -30,6 +44,7 @@ export function BusinessNumbers({ channels, onSaved, onOpen }: { channels: Monit
     <div className="grid gap-4 xl:grid-cols-2">{visible.map(channel => <article key={channel.id} className="rounded-xl border border-border bg-card p-5">
       <div className="flex items-start gap-3"><span className="rounded-xl bg-primary/10 p-3 text-primary"><Phone size={20} /></span><div className="min-w-0 flex-1"><h4 className="truncate font-semibold">{channel.label}</h4><p className="mt-1 text-sm text-muted-foreground">{channel.display_number}</p></div><span className={`rounded-full px-2 py-1 text-xs ${channel.active ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}>{channel.active ? 'Monitoring' : 'Removed'}</span></div>
       <p className="my-4 text-xs text-muted-foreground">Last event: {channel.last_event_at ? new Date(channel.last_event_at).toLocaleString() : 'No events yet'}</p>
+      <div className="mb-4"><HistoryStatus channelId={channel.id} status={statuses[channel.id]} onRetried={reloadStatus} /></div>
       <div className="flex flex-wrap gap-2"><button onClick={() => onOpen(channel.id)} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted"><MessageSquare size={16} />View chats</button>{channel.active ? <button disabled={busy !== null} onClick={() => setConfirm(channel.id)} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50"><Archive size={16} />Remove from monitoring</button> : <button disabled={busy !== null} onClick={() => change(channel, true)} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-primary hover:bg-primary/10 disabled:opacity-50"><RotateCcw size={16} />{busy === channel.id ? 'Restoring…' : 'Restore monitoring'}</button>}</div>
       {confirm === channel.id && <div className="mt-4 rounded-lg border border-border bg-muted/40 p-4"><p className="text-sm">Stop receiving new messages and sending CRM replies for {channel.label}? Saved chats and the agent’s WhatsApp app remain available.</p><div className="mt-3 flex flex-wrap gap-2"><button disabled={busy !== null} onClick={() => change(channel, false)} className="rounded-lg bg-destructive px-3 py-2 text-sm text-white disabled:opacity-50">{busy === channel.id ? 'Removing…' : 'Confirm removal'}</button><button disabled={busy !== null} onClick={() => setConfirm(null)} className="rounded-lg border border-border px-3 py-2 text-sm">Cancel</button></div></div>}
     </article>)}</div>
