@@ -1,5 +1,12 @@
 # Numera recovery and deployment
 
+> Historical recovery record. For the current architecture, feature status,
+> credential inventory, local VS Code setup and deployment workflow, read the
+> [Numera CRM handbook](numera-crm-handbook.md), dated 21 October 2026.
+> Statements below about earlier branches, domains, disconnected numbers,
+> missing configuration and sending restrictions describe their original stage;
+> they are not a current live-environment audit.
+
 Current management expansion is documented in [crm-expansion.md](crm-expansion.md).
 The owner subsequently authorized **management-only replies**: the dedicated
 monitoring reply endpoint permits owner/admin text replies within the customer

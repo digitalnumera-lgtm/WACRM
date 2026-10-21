@@ -1,7 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { LayoutDashboard, Inbox, Users, ImageIcon, List, ChartNoAxesCombined, Phone, History, CircleAlert, Settings, ArrowLeft, MessageSquare } from 'lucide-react'
+import { LayoutDashboard, Inbox, Users, ImageIcon, List, ChartNoAxesCombined, Phone, History, CircleAlert, Settings, ArrowLeft, MessageSquare, Zap } from 'lucide-react'
+import { QuickRepliesPanel } from './quick-replies'
+import { useThreadWorkflows } from './use-thread-workflows'
+import { RenewMetaAccess } from './renew-access'
 import { MonitoringSettings } from './settings-panel'
 import { BusinessNumbers } from './business-numbers'
 import { Conversation, type ChatSnapshot } from './conversation'
@@ -14,6 +17,7 @@ import { leadStatuses, type MonitoringChannel, type MonitoringThread } from '@/l
 
 const navigation = [
   { name: 'Dashboard', icon: LayoutDashboard }, { name: 'Inbox', icon: Inbox },
+  { name: 'Saved replies', icon: Zap },
   { name: 'Contacts', icon: Users }, { name: 'Media', icon: ImageIcon },
   { name: 'Message logs', icon: List }, { name: 'Reports', icon: ChartNoAxesCombined },
   { name: 'Business numbers', icon: Phone }, { name: 'Import history', icon: History },
@@ -44,7 +48,7 @@ export function MonitoringSignOut() {
   }}>Sign out</button>{error && <p role="alert">{error}</p>}</>
 }
 
-export function MonitoringWorkspace({ accountName }: { accountName: string }) {
+export function MonitoringWorkspace({ accountName, initialView = 'Inbox' }: { accountName: string; initialView?: 'Inbox' | 'Settings' }) {
   const [channels, setChannels] = useState<MonitoringChannel[]>([])
   const [threads, setThreads] = useState<MonitoringThread[]>([])
   const [filters, setFilters] = useState({ q: '', channel: '', agent: '', status: '' })
@@ -54,10 +58,12 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
   const [refresh, setRefresh] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [view, setView] = useState('Inbox')
+  const [view, setView] = useState<string>(initialView)
   const [replyEnabled, setReplyEnabled] = useState<boolean | null>(null)
   const [settingsError, setSettingsError] = useState('')
   const settingsRevision = useRef(0)
+  const workflowIds = [...new Set([...threads.map(t => t.id), ...(selected ? [selected] : [])])].join(',')
+  const { workflows, error: workflowError, setWorkflows } = useThreadWorkflows(workflowIds, refresh)
   useEffect(() => {
     const controller = new AbortController()
     const revision = settingsRevision.current
@@ -152,6 +158,8 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
       <header className={`items-center justify-between border-b border-border pb-4 ${view === 'Inbox' && selected ? 'hidden lg:flex' : 'flex'}`}><h2 className="text-xl font-semibold">{view}</h2><button className={buttonClass} onClick={() => setRefresh(n => n + 1)} disabled={loading}>Refresh</button></header>
       {settingsError && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">Unable to check reply settings: {settingsError} <button className={buttonClass} onClick={() => setRefresh(n => n + 1)}>Retry</button></p>}
       {view === 'Settings' && <MonitoringSettings enabled={replyEnabled} onSaved={enabled => { settingsRevision.current++; setReplyEnabled(enabled); setSettingsError(''); setRefresh(n => n + 1) }} />}
+      {view === 'Settings' && <RenewMetaAccess channels={channels} />}
+      {view === 'Saved replies' && <QuickRepliesPanel />}
       {view === 'Business numbers' && <><BusinessNumbers channels={channels} onSaved={() => setRefresh(n => n + 1)} onOpen={id => { filter('channel', id); setView('Inbox') }} /><details className="rounded-xl border border-border bg-card p-3"><summary className="cursor-pointer p-2 font-medium">Add a number from Meta portfolio</summary><PortfolioPicker onSaved={() => setRefresh(n => n + 1)} /></details><details><summary className="cursor-pointer p-3 text-sm">Enter number details manually</summary><ChannelManager channels={channels} onSaved={() => setRefresh(n => n + 1)} /></details></>}
       {view === 'Import history' && <HistoryImport channels={channels} onSaved={() => setRefresh(n => n + 1)} />}
       {view === 'Events for review' && <ReviewEvents channels={channels} />}
@@ -177,22 +185,25 @@ export function MonitoringWorkspace({ accountName }: { accountName: string }) {
         </div>
       </section>
       {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-destructive">{error} <button className={buttonClass} onClick={() => setLoadRetry(n => n + 1)}>Retry</button></p>}
+      {workflowError && <p role="alert" className="rounded-lg border border-amber-200 p-3 text-sm">Conversation status could not refresh. Messages remain available. <button className={buttonClass} onClick={() => setRefresh(n => n + 1)}>Retry status</button></p>}
       <div className="grid items-start gap-0 overflow-hidden rounded-xl border border-border lg:grid-cols-[320px_minmax(0,1fr)]">
         <section aria-label="Conversations" aria-busy={loading} className={`overflow-hidden border-r border-border bg-card ${selected ? 'hidden lg:block' : ''}`}>
           <div className="border-b border-border px-4 py-3 text-sm font-medium">{total} conversations {loading && <span className="text-muted-foreground">· Updating…</span>}</div>
           {!loading && !error && threads.length === 0 && <p className="p-6 text-sm text-muted-foreground">{channels.length ? 'No conversations match these filters.' : 'Add a business number to start monitoring. New conversations appear when verified events arrive.'}</p>}
           <ul ref={listViewport} aria-label="Conversation list" className="max-h-[70vh] divide-y divide-border overflow-y-auto overscroll-contain">{threads.map(thread => {
             const channel = channels.find(c => c.id === thread.channel_id)
+            const workflow = workflows[thread.id]
             return <li key={thread.id}><button onClick={() => select(thread.id)} aria-pressed={selected === thread.id} className={`w-full p-4 text-left hover:bg-muted ${selected === thread.id ? 'border-l-4 border-l-primary bg-sky-50 dark:bg-sky-950/40' : 'border-l-4 border-l-transparent'}`}>
               <div className="flex items-center gap-3"><span aria-hidden="true" className={`flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${agentTint(thread.channel_id)}`}>{(thread.customer_name || thread.customer).slice(0, 2).toUpperCase()}</span><span className="min-w-0 flex-1 truncate font-semibold">{thread.customer_name || thread.customer}</span><span className="rounded bg-muted px-2 py-1 text-xs">{thread.lead_status}</span></div>
               <p className="mt-1 text-xs text-muted-foreground">{channel?.display_number ?? 'Unknown number'} · {channel?.label ?? 'Unassigned'}</p>
+              {workflow && <div className="mt-2 flex flex-wrap items-center gap-2"><span className={`rounded-full px-2 py-0.5 text-[11px] ${workflow.status === 'resolved' ? 'bg-emerald-100 text-emerald-800' : workflow.status === 'snoozed' ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-800'}`}>{workflow.status}</span>{(workflow.unread_count > 0 || workflow.marked_unread) && <span title="Messages not marked read in this CRM, including phone-app replies" className="rounded-full bg-primary px-2 py-0.5 text-[11px] text-primary-foreground">{workflow.unread_count || '•'} unread</span>}</div>}
               <p className="mt-3 truncate text-sm">{thread.last_preview || 'Media or non-text message'}</p><p className="mt-2 text-xs text-muted-foreground">{date(thread.last_message_at)} · {thread.message_count} {thread.message_count === 1 ? 'message' : 'messages'}</p>
             </button></li>
           })}<li ref={listSentinel} className="p-3 text-center text-xs text-muted-foreground">{loadingMore ? 'Loading more conversations…' : loading ? 'Loading conversations…' : !more && threads.length > 0 ? 'All saved conversations loaded' : ''}</li></ul>
         </section>
         <section aria-label="Conversation detail" className={`min-w-0 bg-card ${selected ? '' : 'hidden lg:block'}`}>
           <button onClick={() => setSelected(null)} className="m-3 flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm lg:hidden"><ArrowLeft size={16} />All conversations</button>
-          {selected ? <Conversation key={selected} id={selected} preview={threads.find(t => t.id === selected)} channels={channels} repliesEnabled={replyEnabled === true} cache={chatCache.current} onChanged={() => setRefresh(n => n + 1)} />
+          {selected ? <Conversation key={selected} id={selected} preview={threads.find(t => t.id === selected)} channels={channels} repliesEnabled={replyEnabled === true} cache={chatCache.current} workflow={workflows[selected]} onWorkflowChanged={value => { setWorkflows(old => ({ ...old, [selected]: value })); setRefresh(n => n + 1) }} onChanged={() => setRefresh(n => n + 1)} />
             : <div className="flex min-h-[55vh] flex-col items-center justify-center gap-4 p-10 text-center text-muted-foreground"><MessageSquare size={40} className="text-primary/40" /><p>{loading ? 'Loading conversations…' : threads.length ? 'Choose a conversation' : 'No conversations match your filters'}</p></div>}
         </section>
       </div>

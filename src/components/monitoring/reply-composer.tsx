@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { QuickReplyPicker } from './quick-replies'
+import { expandQuickReply } from '@/lib/monitoring/workflow-types'
 
 type Pending = { request_id: string; text: string }
 type SendResult = { state?: 'accepted' | 'rejected' | 'uncertain'; message?: string; error?: string }
 type WindowInfo = { enabled?: boolean; open: boolean; expires_at: string | null; active: boolean; attempt?: SendResult | null }
 
-export function ReplyComposer({ threadId, onSent }: { threadId: string; onSent: () => void }) {
+export function ReplyComposer({ threadId, variables, onSent }: { threadId: string; variables: { name: string; phone: string; agent: string }; onSent: () => void }) {
   const [text, setText] = useState('')
   const [pending, setPending] = useState<Pending | null>(null)
   const [info, setInfo] = useState<WindowInfo | null>(null)
@@ -77,6 +79,7 @@ export function ReplyComposer({ threadId, onSent }: { threadId: string; onSent: 
   return <section aria-label="Management reply" className="space-y-3 border-t border-border p-5">
     <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold">Reply as management</h3><span className="text-xs text-muted-foreground">Owner and admin access only</span></div>
     <p className="text-xs text-muted-foreground">{!info ? 'Checking reply availability…' : !info.active ? 'This number is paused.' : open ? `Customer reply window ends ${new Date(info.expires_at!).toLocaleString()}. WhatsApp makes the final eligibility check.` : 'The 24-hour reply window is closed. Wait for a new customer message. Template replies are not available here yet.'}</p>
+    <QuickReplyPicker disabled={!ready || busy || !!pending || !open} onInsert={reply => setText(value => [value.trimEnd(), expandQuickReply(reply.body, variables)].filter(Boolean).join('\n'))} />
     <textarea aria-label="Management reply text" className="min-h-28 w-full resize-y rounded-lg border border-border bg-background p-3 text-sm disabled:opacity-60" value={text} onChange={e => setText(e.target.value)} maxLength={8192} disabled={!ready || busy || !!pending || !open} placeholder="Write a reply…" />
     <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs text-muted-foreground">{[...text].length} / 4096 characters · Text replies</span><div className="flex gap-2">{pending && <button className="rounded-lg border border-border px-3 py-2 text-sm disabled:opacity-40" disabled={busy} onClick={check}>Check send status</button>}<button className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-40" disabled={busy || !ready || (!pending && (!open || !text.trim() || [...text].length > 4096))} onClick={send}>{busy ? 'Working…' : pending ? 'Retry same request' : 'Send reply'}</button></div></div>
     {notice && <p role="status" className="text-sm">{notice}</p>}

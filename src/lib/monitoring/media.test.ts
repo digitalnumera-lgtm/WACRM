@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { fetchMonitoringMedia, mediaResponse, trustedMediaUrl } from './media'
+import { mediaFailure } from './media-errors'
 afterEach(() => vi.unstubAllGlobals())
 it('rejects untrusted hosts, credentials and insecure URLs', () => {
   for (const url of ['http://lookaside.fbsbx.com/a', 'https://evil.test/a', 'https://lookaside.fbsbx.com.evil.test/a', 'https://user:pass@lookaside.fbsbx.com/a', 'https://localhost/a']) expect(() => trustedMediaUrl(url)).toThrow()
@@ -30,4 +31,19 @@ it('does not fetch oversized or active-content media', async () => {
     await expect(fetchMonitoringMedia('123', 'token')).rejects.toThrow()
     expect(fetcher).toHaveBeenCalledTimes(1)
   }
+})
+it('distinguishes invalid Meta sessions from permissions, missing files and transient failures', async () => {
+  for (const [status, code, expected] of [[401, 190, 'meta_access_invalid'], [400, 190, 'meta_access_invalid'], [403, 200, 'meta_access_denied'], [400, 100, 'media_unavailable'], [429, 4, 'media_rate_limited'], [503, 2, 'media_network']] as const) {
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ error: { code, error_subcode: 467, message: 'private upstream detail' } }, { status }))
+    vi.stubGlobal('fetch', fetcher)
+    await expect(fetchMonitoringMedia('123', 'private-token')).rejects.toMatchObject({ code: expected })
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  }
+  expect(mediaFailure(new DOMException('private URL', 'TimeoutError')).code).toBe('media_timeout')
+  expect(mediaFailure(new Error('private token')).message).not.toContain('private token')
+})
+it('classifies CDN access failures without treating them as unsupported browser media', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(Response.json({ url: 'https://lookaside.fbsbx.com/media', mime_type: 'image/jpeg', file_size: 3 }))
+    .mockResolvedValueOnce(Response.json({ error: { code: 190 } }, { status: 401 })))
+  await expect(fetchMonitoringMedia('123', 'token')).rejects.toMatchObject({ code: 'meta_access_invalid', status: 424 })
 })

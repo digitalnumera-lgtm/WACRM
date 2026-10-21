@@ -7,7 +7,7 @@ export function readCursor(value: string | null) {
   return { time: parts[0], id: checkedId(parts[1]) }
 }
 
-export function cursorFilter(column: 'sent_at' | 'last_message_at', cursor: NonNullable<ReturnType<typeof readCursor>>, newer = false) {
+export function cursorFilter(column: 'sent_at' | 'last_message_at' | 'received_at', cursor: NonNullable<ReturnType<typeof readCursor>>, newer = false) {
   const op = newer ? 'gt' : 'lt'
   return `${column}.${op}."${cursor.time}",and(${column}.eq."${cursor.time}",id.${op}.${cursor.id})`
 }

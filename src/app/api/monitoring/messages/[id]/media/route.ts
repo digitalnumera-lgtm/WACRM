@@ -3,6 +3,7 @@ import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { checkedId, monitoringError, privateJson } from '@/lib/monitoring/http'
 import { fetchMonitoringMedia, mediaResponse } from '@/lib/monitoring/media'
 import { decrypt } from '@/lib/whatsapp/encryption'
+import { MediaFailure, mediaFailure } from '@/lib/monitoring/media-errors'
 
 export const runtime = 'nodejs'
 
@@ -17,12 +18,18 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     if (channel.error) throw channel.error
     if (!channel.data) return privateJson({ error: 'Media not found.' }, 404)
     const credentials = await monitoringAdmin().from('monitoring_credentials').select('encrypted_token').eq('channel_id', channel.data.id).maybeSingle()
-    if (credentials.error || !credentials.data) throw new Error('Credentials unavailable')
     try {
-      const { bytes, type } = await fetchMonitoringMedia(message.data.media_id, decrypt(credentials.data.encrypted_token))
+      if (credentials.error || !credentials.data) throw new MediaFailure('credential_unavailable')
+      let token: string
+      try { token = decrypt(credentials.data.encrypted_token) } catch { throw new MediaFailure('credential_unavailable') }
+      const { bytes, type } = await fetchMonitoringMedia(message.data.media_id, token)
+      // Native media elements hide error bodies. This authenticated check lets
+      // the UI distinguish an access failure from a browser decoding failure.
+      if (new URL(request.url).searchParams.get('diagnose') === '1') return privateJson({ available: true, type })
       return mediaResponse(bytes, type, request.headers.get('range'))
-    } catch {
-      return privateJson({ error: 'Media unavailable. It may have expired, exceed 32 MB, or require renewed channel access.' }, 502)
+    } catch (error) {
+      const failure = mediaFailure(error)
+      return privateJson({ error: failure.message, code: failure.code }, failure.status)
     }
   } catch (error) { return monitoringError(error) }
 }
