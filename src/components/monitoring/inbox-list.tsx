@@ -91,6 +91,13 @@ export function useInbox(filters: InboxFilters, refresh: number) {
   return { channels, threads, total, counts, workflowReady, loading, loadingMore, error, more, loadMore, patchThread, retry: () => setRetry(n => n + 1) }
 }
 
+// Messages without text are stored with a "[kind]" preview; show friendly labels.
+const kindLabels: Record<string, string> = { image: '📷 Photo', audio: '🎤 Voice message', video: '🎥 Video', document: '📄 Document', sticker: 'Sticker', media_placeholder: '📎 Media from chat history', location: '📍 Location', contacts: '👤 Contact', reaction: 'Reaction', revoke: 'Message deleted', unsupported: 'Unsupported message' }
+export function previewText(preview: string | null) {
+  const match = preview ? /^\[([a-z_]+)\]$/.exec(preview) : null
+  return match ? kindLabels[match[1]] ?? 'Message' : preview
+}
+
 function matchesTabLocally(thread: MonitoringThread, tab: InboxTab) {
   if (tab === 'all' || !thread.state) return true
   if (tab === 'waiting') return thread.last_direction === 'inbound' && thread.state !== 'resolved'
@@ -182,7 +189,7 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
               <div className="mt-1 flex items-center gap-2">
                 <p className={`min-w-0 flex-1 truncate text-[13px] ${unread ? 'text-foreground' : 'text-muted-foreground'}`}>
                   {thread.last_direction === 'outbound' && <CheckCheck size={13} className="mr-1 inline text-sky-600" aria-label="Agent replied" />}
-                  {thread.last_preview || <span className="inline-flex items-center gap-1"><ImageIcon size={12} />Media message</span>}
+                  {previewText(thread.last_preview) || <span className="inline-flex items-center gap-1"><ImageIcon size={12} />Media message</span>}
                 </p>
                 {unread && <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-white" aria-label={`${thread.unread_count || ''} unread`}>{thread.marked_unread && !thread.unread_count ? '' : (thread.unread_count ?? 0) > 99 ? '99+' : thread.unread_count}</span>}
               </div>
