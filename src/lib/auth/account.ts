@@ -106,15 +106,44 @@ export interface AccountContext {
  * Use `requireRole(min)` instead when the route also needs a
  * minimum-role check — it's a thin wrapper over this.
  */
+// ------------------------------------------------------------
+// Latency: the database can be far from the app server, so every
+// avoidable round trip matters on each API call.
+//  - Sessions are verified with getClaims(): with asymmetric JWT
+//    signing keys the signature is checked locally (no Auth request).
+//    Clients without getClaims fall back to getUser().
+//  - The caller's account context (account, role, name) is cached
+//    per user for a short time in production. A role change or
+//    removal therefore applies within CONTEXT_CACHE_MS.
+// ------------------------------------------------------------
+const CONTEXT_CACHE_MS = process.env.NODE_ENV === "production" ? 60_000 : 0;
+type CachedContext = { expires: number; accountId: string; role: AccountRole; account: { id: string; name: string } };
+const contextCache = new Map<string, CachedContext>();
+
+export async function verifiedUserId(supabase: SupabaseClient): Promise<string | null> {
+  const auth = supabase.auth as unknown as {
+    getClaims?: () => Promise<{ data: { claims?: { sub?: unknown } } | null; error: unknown }>;
+  };
+  if (typeof auth.getClaims === "function") {
+    const { data, error } = await auth.getClaims();
+    const sub = data?.claims?.sub;
+    return !error && typeof sub === "string" && sub ? sub : null;
+  }
+  const { data: { user }, error } = await supabase.auth.getUser();
+  return error || !user ? null : user.id;
+}
+
 export async function getCurrentAccount(): Promise<AccountContext> {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-    error: userErr,
-  } = await supabase.auth.getUser();
-  if (userErr || !user) {
+  const userId = await verifiedUserId(supabase);
+  if (!userId) {
     throw new UnauthorizedError();
+  }
+  const user = { id: userId };
+  const cached = CONTEXT_CACHE_MS ? contextCache.get(user.id) : undefined;
+  if (cached && cached.expires > Date.now()) {
+    return { supabase, userId: user.id, accountId: cached.accountId, role: cached.role, account: cached.account };
   }
 
   const { data, error } = await supabase
@@ -166,6 +195,10 @@ export async function getCurrentAccount(): Promise<AccountContext> {
     throw new ForbiddenError(t("notLinked"));
   }
 
+  if (CONTEXT_CACHE_MS) {
+    if (contextCache.size > 500) contextCache.clear();
+    contextCache.set(user.id, { expires: Date.now() + CONTEXT_CACHE_MS, accountId: data.account_id, role: data.account_role, account: { id: account.id, name: account.name } });
+  }
   return {
     supabase,
     userId: user.id,

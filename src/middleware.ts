@@ -33,7 +33,18 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // getClaims() verifies the session locally with the project's asymmetric
+  // signing keys (refreshing it when it is about to expire), avoiding an
+  // Auth round trip on every request. Older clients fall back to getUser().
+  const auth = supabase.auth as unknown as { getClaims?: () => Promise<{ data: { claims?: { sub?: unknown } } | null; error: unknown }> }
+  let user: { id: string } | null = null
+  if (typeof auth.getClaims === 'function') {
+    const { data, error } = await auth.getClaims()
+    const sub = data?.claims?.sub
+    user = !error && typeof sub === 'string' && sub ? { id: sub } : null
+  } else {
+    user = (await supabase.auth.getUser()).data.user
+  }
 
   // getUser() transparently refreshes an expired access token, which
   // ROTATES the refresh token and writes the new cookies onto

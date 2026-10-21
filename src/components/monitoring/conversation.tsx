@@ -15,6 +15,22 @@ export function mergeMessages(old: MonitoringMessage[], incoming: MonitoringMess
   incoming.forEach(m => rows.set(m.id, m))
   return [...rows.values()].sort((a, b) => a.sent_at.localeCompare(b.sent_at) || a.id.localeCompare(b.id))
 }
+// Hover/keyboard prefetch: warm the recent-chat cache before a click so a
+// conversation opens instantly. Bounded and deduplicated.
+const CACHE_LIMIT = 20
+const inflight = new Map<string, Promise<void>>()
+function remember(cache: Map<string, ChatSnapshot>, id: string, value: ChatSnapshot) {
+  cache.delete(id); cache.set(id, value)
+  while (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value!)
+}
+export function prefetchConversation(id: string, cache: Map<string, ChatSnapshot>) {
+  if (cache.has(id) || inflight.has(id) || inflight.size >= 3) return
+  const job = fetch(`/api/monitoring/threads/${id}?scroll=1`, { cache: 'no-store' })
+    .then(async response => { if (response.ok && !cache.has(id)) remember(cache, id, await response.json()) })
+    .catch(() => { /* Prefetch is best-effort. */ })
+    .finally(() => inflight.delete(id))
+  inflight.set(id, job)
+}
 async function read(url: string, signal: AbortSignal): Promise<ChatSnapshot> {
   const response = await fetch(url, { cache: 'no-store', signal })
   const data = await response.json()
@@ -57,9 +73,9 @@ export function Conversation({ id, thread: listThread, channels, repliesEnabled,
   const scrollUpdate = useRef<{ height: number; top: number } | 'bottom' | null>('bottom')
   const endpoint = `/api/monitoring/threads/${id}`
   const save = useCallback((value: ChatSnapshot) => {
-    snapshotRef.current = value; cache.delete(id); cache.set(id, value)
+    snapshotRef.current = value
     // Cache recent chats in this signed-in workspace only, never browser storage.
-    while (cache.size > 8) cache.delete(cache.keys().next().value!)
+    remember(cache, id, value)
     setSnapshot(value)
   }, [cache, id])
   const nearBottom = () => !viewport.current || viewport.current.scrollHeight - viewport.current.scrollTop - viewport.current.clientHeight < 100
@@ -69,6 +85,12 @@ export function Conversation({ id, thread: listThread, channels, repliesEnabled,
     polling.current = true
     const signal = abort.current.signal
     try {
+      // A hover prefetch may already be loading this chat: use it.
+      if (!snapshotRef.current && inflight.has(id)) {
+        await inflight.get(id)
+        const warmed = cache.get(id)
+        if (warmed && !signal.aborted) { scrollUpdate.current = 'bottom'; snapshotRef.current = warmed; setSnapshot(warmed) }
+      }
       const newest = snapshotRef.current?.messages.at(-1)
       let next = newest ? cursor(newest) : null
       do {
@@ -86,7 +108,7 @@ export function Conversation({ id, thread: listThread, channels, repliesEnabled,
       } while (next && !signal.aborted)
     } catch (e) { if (!signal.aborted) setError((e as Error).message) }
     finally { if (abort.current?.signal === signal) polling.current = false }
-  }, [endpoint, save])
+  }, [endpoint, save, cache, id])
 
   useEffect(() => {
     abort.current = new AbortController()

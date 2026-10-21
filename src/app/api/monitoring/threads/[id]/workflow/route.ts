@@ -1,7 +1,7 @@
 import { requireRole } from '@/lib/auth/account'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { checkedId, monitoringError, privateJson, readJson } from '@/lib/monitoring/http'
-import { readWorkflows, writeWorkflow } from '@/lib/monitoring/workflow'
+import { deriveWorkflow, writeWorkflow } from '@/lib/monitoring/workflow'
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -12,7 +12,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (thread.error) throw thread.error
     if (!thread.data) return privateJson({ error: 'Conversation not found.' }, 404)
     const db = monitoringAdmin()
-    await writeWorkflow(db, accountId, userId, thread.data, body)
-    return privateJson({ workflow: (await readWorkflows(db, accountId, [thread.data]))[id] })
+    // writeWorkflow returns the saved row, so no second read is needed.
+    const meta = await writeWorkflow(db, accountId, userId, thread.data, body)
+    return privateJson({ workflow: deriveWorkflow(thread.data.message_count, meta) })
   } catch (error) { return monitoringError(error) }
 }

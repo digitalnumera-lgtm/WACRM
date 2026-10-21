@@ -14,7 +14,7 @@ function db(rows: { id: string; media_id: string }[], archived: string[] = []) {
     q.then = (r: (v: unknown) => unknown) => Promise.resolve(table === 'monitoring_messages' ? { data: rows, error: null } : { data: [], error: null }).then(r)
     return q
   }
-  const storage = { from: () => ({ upload, download: (path: string) => Promise.resolve(archived.includes(path) ? { data: new Blob(['x']), error: null } : { data: null, error: { message: 'missing' } }) }) }
+  const storage = { from: () => ({ upload, createSignedUrl: (path: string) => Promise.resolve(archived.includes(path) ? { data: { signedUrl: 'https://signed' }, error: null } : { data: null, error: { message: 'Object not found' } }) }) }
   return { client: { from, storage }, upload }
 }
 

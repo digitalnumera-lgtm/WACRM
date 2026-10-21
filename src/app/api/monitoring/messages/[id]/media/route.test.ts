@@ -49,24 +49,34 @@ it('scopes the message lookup to the manager company and hides missing/foreign m
   expect(mocks.admin).not.toHaveBeenCalled()
 })
 
-it('serves the permanent stored copy first, without using Meta access', async () => {
+it('sends the browser to the permanent stored copy without using Meta', async () => {
   ownedMedia()
-  const download = vi.fn().mockResolvedValue({ data: new Blob([new Uint8Array([7, 8, 9])], { type: 'image/jpeg' }), error: null })
-  const storageFrom = vi.fn(() => ({ download, upload: vi.fn() }))
-  const credential = { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn() }
+  const createSignedUrl = vi.fn().mockResolvedValue({ data: { signedUrl: 'https://project.supabase.co/storage/v1/object/sign/monitoring-media/company/x?token=t' }, error: null })
+  const storageFrom = vi.fn(() => ({ createSignedUrl, download: vi.fn(), upload: vi.fn() }))
+  const credential = { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: { encrypted_token: 'ciphertext' } }) }
   mocks.admin.mockReturnValue({ from: () => credential, storage: { from: storageFrom } })
   const response = await GET(new Request('https://crm.test/media'), context)
-  expect(response.status).toBe(200); expect(response.headers.get('content-type')).toBe('image/jpeg')
-  expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array([7, 8, 9]))
-  expect(storageFrom).toHaveBeenCalledWith('monitoring-media'); expect(download).toHaveBeenCalledWith('company/11111111-1111-4111-8111-111111111111')
-  expect(mocks.fetch).not.toHaveBeenCalled(); expect(credential.maybeSingle).not.toHaveBeenCalled()
+  expect(response.status).toBe(302)
+  expect(response.headers.get('location')).toContain('/storage/v1/object/sign/')
+  expect(response.headers.get('cache-control')).toMatch(/^private, max-age=/)
+  expect(storageFrom).toHaveBeenCalledWith('monitoring-media'); expect(createSignedUrl).toHaveBeenCalledWith('company/11111111-1111-4111-8111-111111111111', 3600)
+  expect(mocks.fetch).not.toHaveBeenCalled(); expect(mocks.decrypt).not.toHaveBeenCalled()
+})
+it('serves a stored copy itself when Meta access is unavailable', async () => {
+  ownedMedia()
+  const credential = { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: null }) }
+  mocks.admin.mockReturnValue({ from: () => credential, storage: { from: () => ({ createSignedUrl: vi.fn().mockResolvedValue({ data: null, error: { message: 'signing failed' } }), download: vi.fn().mockResolvedValue({ data: new Blob([new Uint8Array([7, 8, 9])], { type: 'image/jpeg' }), error: null }) }) } })
+  const response = await GET(new Request('https://crm.test/media'), context)
+  expect(response.status).toBe(200); expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array([7, 8, 9]))
 })
 it('archives media fetched from Meta for later viewing', async () => {
   ownedMedia()
   const upload = vi.fn().mockResolvedValue({ error: null })
   const credential = { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: { encrypted_token: 'ciphertext' } }) }
-  mocks.admin.mockReturnValue({ from: () => credential, storage: { from: () => ({ download: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }), upload }) } })
+  mocks.admin.mockReturnValue({ from: () => credential, storage: { from: () => ({ createSignedUrl: vi.fn().mockResolvedValue({ data: null, error: { message: 'Object not found' } }), upload }) } })
   mocks.fetch.mockResolvedValue({ bytes: new Uint8Array([1, 2]), type: 'audio/ogg' })
-  expect((await GET(new Request('https://crm.test/media'), context)).status).toBe(200)
+  const response = await GET(new Request('https://crm.test/media'), context)
+  expect(response.status).toBe(200)
+  expect(response.headers.get('cache-control')).toBe('private, max-age=31536000, immutable')
   expect(upload).toHaveBeenCalledWith('company/11111111-1111-4111-8111-111111111111', new Uint8Array([1, 2]), expect.objectContaining({ contentType: 'audio/ogg', upsert: true }))
 })
