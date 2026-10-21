@@ -11,7 +11,7 @@ function database(results: Record<string, { data: unknown[]; count?: number; err
   const from = vi.fn((table: string) => {
     const calls: [string, unknown[]][] = []; queries.push({ table, calls })
     const query: Record<string, unknown> = {}
-    for (const method of ['select', 'eq', 'gte', 'lt', 'in', 'not', 'ilike', 'order', 'range']) query[method] = (...args: unknown[]) => { calls.push([method, args]); return query }
+    for (const method of ['select', 'eq', 'gte', 'lt', 'in', 'not', 'ilike', 'order', 'range', 'limit']) query[method] = (...args: unknown[]) => { calls.push([method, args]); return query }
     query.then = (resolve: (value: unknown) => unknown) => Promise.resolve(results[table] ?? { data: [] }).then(resolve)
     return query
   })
@@ -47,7 +47,8 @@ it('labels bounded reports as partial and paginates past the database row limit'
   const response = await reports(new Request('https://crm.test/api/monitoring/reports?days=7'))
   const result = await response.json()
   expect(result).toMatchObject({ included: 10000, total: 10001, truncated: true, inbound: 10000 })
-  expect(queries).toHaveLength(10)
-  expect(queries[9].calls).toContainEqual(['range', [9000, 9999]])
+  const messageQueries = queries.filter(q => q.table === 'monitoring_messages')
+  expect(messageQueries).toHaveLength(10)
+  expect(messageQueries[9].calls).toContainEqual(['range', [9000, 9999]])
   for (const q of queries) expect(q.calls).toContainEqual(['eq', ['account_id', 'own-company']])
 })

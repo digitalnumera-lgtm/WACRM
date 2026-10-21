@@ -20,6 +20,7 @@ let rows: Record<string, Row[]>
 let calls: { table: string; method: string; args: unknown[] }[]
 let rpc: ReturnType<typeof vi.fn>
 let failure: { code: string; message: string } | null
+let tableFailures: Record<string, { code: string; message: string }>
 
 function database() {
   return {
@@ -28,7 +29,7 @@ function database() {
       let range = [0, 999]
       const result = () => {
         const data = (rows[table] ?? []).filter(row => filters.every(([key, value]) => row[key] === value))
-        return { data: data.slice(range[0], range[1] + 1), error: failure, count: data.length }
+        return { data: data.slice(range[0], range[1] + 1), error: failure ?? tableFailures[table] ?? null, count: data.length }
       }
       const query = {
         select(...args: unknown[]) { calls.push({ table, method: 'select', args }); return query },
@@ -46,12 +47,13 @@ function database() {
   }
 }
 beforeEach(() => {
-  calls = []; failure = null
+  calls = []; failure = null; tableFailures = {}
   rpc = vi.fn(async () => ({ error: null, data: null }))
   mocks.admin.mockReturnValue(database())
   rows = {
     monitoring_channels: [{ id: 'channel', account_id: company, label: 'Agent A', phone_number_id: '123' }, { id: 'other-channel', account_id: foreign, label: 'Other company' }],
     monitoring_threads: [{ id: thread, account_id: company, customer: 'customer' }, { id: foreignThread, account_id: foreign, customer: 'private' }],
+    monitoring_inbox: [{ id: thread, account_id: company, customer: 'customer', state: 'open' }, { id: foreignThread, account_id: foreign, customer: 'private', state: 'open' }],
     monitoring_messages: [{ id: 'message', account_id: company, thread_id: thread }],
     monitoring_lead_audit: [{ id: 'audit', account_id: company, thread_id: thread }],
     monitoring_events: [],
@@ -75,10 +77,21 @@ describe('management monitoring APIs', () => {
     expect(mocks.role).toHaveBeenCalledWith('admin')
     expect(calls.filter(c => c.method === 'eq' && c.args[0] === 'account_id')).toEqual([
       { table: 'monitoring_channels', method: 'eq', args: ['account_id', company] },
-      { table: 'monitoring_threads', method: 'eq', args: ['account_id', company] },
+      { table: 'monitoring_inbox', method: 'eq', args: ['account_id', company] },
     ])
+    expect(body.workflowReady).toBe(true)
     expect(response.headers.get('cache-control')).toContain('no-store')
     expect(calls.find(c => c.table === 'monitoring_channels' && c.method === 'select')?.args[0]).not.toMatch(/token|credential/)
+  })
+  it('falls back to the original company-scoped thread list before the inbox schema is installed', async () => {
+    tableFailures.monitoring_inbox = { code: 'PGRST205', message: 'missing' }
+    const body = await (await list(get('?tab=open'))).json()
+    expect(body.workflowReady).toBe(false)
+    expect(body.threads).toEqual([{ id: thread, account_id: company, customer: 'customer' }])
+    expect(calls).toContainEqual({ table: 'monitoring_threads', method: 'eq', args: ['account_id', company] })
+  })
+  it('rejects unknown inbox tabs, priorities and sorts', async () => {
+    for (const query of ['?tab=deleted', '?priority=critical', '?sort=random', '?label=not-a-uuid']) expect((await list(get(query))).status).toBe(400)
   })
   it('denies agents/viewers and anonymous access before querying data', async () => {
     for (const error of [new ForbiddenError(), new UnauthorizedError()]) {

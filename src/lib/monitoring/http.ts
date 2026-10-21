@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server'
 import { ForbiddenError, UnauthorizedError } from '@/lib/auth/account'
 
 export class MonitoringInputError extends Error {}
+/** The optional inbox workflow schema (supabase/numera/001_inbox_workflow.sql) is not installed. */
+export class WorkflowSchemaMissing extends Error {
+  constructor() { super('This feature needs the inbox database update. Run supabase/numera/001_inbox_workflow.sql in Supabase.') }
+}
 export const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export const channelColumns = 'id,account_id,phone_number_id,waba_id,label,display_number,active,last_event_at,created_at'
 export const threadColumns = 'id,account_id,channel_id,customer,customer_name,lead_status,last_message_at,last_preview,last_direction,message_count'
@@ -25,11 +29,23 @@ export function monitoringError(error: unknown) {
   if (error instanceof UnauthorizedError) return privateJson({ error: 'Sign in to continue.' }, 401)
   if (error instanceof ForbiddenError) return privateJson({ error: 'Monitoring is available to company owners and admins only.' }, 403)
   if (error instanceof MonitoringInputError) return privateJson({ error: error.message }, 400)
+  if (error instanceof WorkflowSchemaMissing) return privateJson({ error: error.message, code: 'workflow_schema_missing' }, 409)
   // Supabase errors can contain row values. Do not log or return them.
   return privateJson({ error: 'Monitoring is temporarily unavailable. Please try again.' }, 503)
 }
 
 export async function readJson(request: Request, limit = 16384): Promise<Record<string, unknown>> {
+  assertSameOrigin(request)
+  if (!request.headers.get('content-type')?.startsWith('application/json')) throw new MonitoringInputError('JSON is required')
+  const text = await readLimitedBody(request, limit)
+  let value: unknown
+  try { value = JSON.parse(text) } catch { throw new MonitoringInputError('Invalid JSON') }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new MonitoringInputError('Invalid JSON object')
+  return value as Record<string, unknown>
+}
+
+/** Rejects cross-site state changes (also used by body-less DELETE requests). */
+export function assertSameOrigin(request: Request) {
   const origin = request.headers.get('origin')
   // Next's standalone server can construct request.url with its internal
   // hostname. The browser's Host header identifies the actual destination;
@@ -44,12 +60,6 @@ export async function readJson(request: Request, limit = 16384): Promise<Record<
   if (origin && !sameHost && origin !== new URL(request.url).origin && origin !== process.env.NEXT_PUBLIC_SITE_URL) {
     throw new ForbiddenError()
   }
-  if (!request.headers.get('content-type')?.startsWith('application/json')) throw new MonitoringInputError('JSON is required')
-  const text = await readLimitedBody(request, limit)
-  let value: unknown
-  try { value = JSON.parse(text) } catch { throw new MonitoringInputError('Invalid JSON') }
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new MonitoringInputError('Invalid JSON object')
-  return value as Record<string, unknown>
 }
 
 export async function readLimitedBody(request: Request, limit: number): Promise<string> {

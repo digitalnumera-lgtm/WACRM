@@ -6,6 +6,10 @@ export interface MonitoringThread {
   id: string; channel_id: string; customer: string; customer_name: string | null;
   lead_status: string; last_message_at: string; last_preview: string | null;
   last_direction: string; message_count: number;
+  // Present when the inbox workflow schema is installed (monitoring_inbox view).
+  state?: 'open' | 'resolved' | 'snoozed'; snoozed_until?: string | null;
+  unread_count?: number; marked_unread?: boolean; is_unread?: boolean;
+  priority?: 'none' | 'low' | 'medium' | 'high' | 'urgent'; label_ids?: string[];
 }
 export interface MonitoringMessage {
   id: string; direction: string; sent_at: string; kind: string;

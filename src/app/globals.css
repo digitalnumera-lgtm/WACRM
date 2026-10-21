@@ -228,16 +228,26 @@ html[data-theme="rose"] {
     @apply font-sans;
   }
 }
-/* Management workspace: independent light surfaces, matching the inbox layout. */
+/* Management workspace: independent light surfaces, Chatwoot-style inbox. */
 .monitoring-panel {
   color-scheme: light;
-  --background: #f6f8fc;
-  --foreground: #17243b;
+  --background: #f4f6fa;
+  --foreground: #1b2433;
   --card: #ffffff;
-  --card-foreground: #17243b;
-  --border: #e1e7ef;
-  --muted: #eef2f7;
-  --muted-foreground: #65758b;
-  --primary: #1765cc;
+  --card-foreground: #1b2433;
+  --popover: #ffffff;
+  --border: #e3e8ef;
+  --input: #e3e8ef;
+  --muted: #f1f4f8;
+  --muted-foreground: #667085;
+  --primary: #1f6feb;
+  --primary-foreground: #ffffff;
+  --ring: #1f6feb;
   --destructive: #b42318;
+}
+/* Soft WhatsApp-like chat background. */
+.monitoring-panel .chat-wallpaper {
+  background-color: #efeae2;
+  background-image: radial-gradient(rgba(0, 0, 0, 0.035) 1px, transparent 1px);
+  background-size: 18px 18px;
 }

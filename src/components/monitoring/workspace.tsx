@@ -1,228 +1,169 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { LayoutDashboard, Inbox, Users, ImageIcon, List, ChartNoAxesCombined, Phone, History, CircleAlert, Settings, ArrowLeft, MessageSquare, Zap } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { ChartNoAxesCombined, CircleAlert, History, ImageIcon, Inbox, LayoutDashboard, List, LogOut, MessageSquare, Phone, Settings, Users, Zap } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+import type { MonitoringChannel, MonitoringThread } from '@/lib/monitoring/types'
+import type { ThreadWorkflow } from '@/lib/monitoring/workflow-types'
 import { QuickRepliesPanel } from './quick-replies'
-import { useThreadWorkflows } from './use-thread-workflows'
 import { RenewMetaAccess } from './renew-access'
 import { MonitoringSettings } from './settings-panel'
 import { BusinessNumbers } from './business-numbers'
-import { Conversation, type ChatSnapshot } from './conversation'
+import { ConnectNumber } from './connect-number'
+import { Conversation, workflowPatch, type ChatSnapshot } from './conversation'
 import { ContactsPanel } from './contacts-panel'
+import { ContactPanel } from './contact-panel'
 import { MessageBrowser, ReportsPanel } from './activity-panels'
 import { HistoryImport, PortfolioPicker } from './setup-panels'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
-import { leadStatuses, type MonitoringChannel, type MonitoringThread } from '@/lib/monitoring/types'
+import { ConversationList, emptyFilters, useInbox, type InboxFilters, type InboxTab } from './inbox-list'
+import { LabelsSettings, useLabels } from './labels'
+import { api, buttonClass, inputClass } from './ui'
 
-const navigation = [
-  { name: 'Dashboard', icon: LayoutDashboard }, { name: 'Inbox', icon: Inbox },
-  { name: 'Saved replies', icon: Zap },
-  { name: 'Contacts', icon: Users }, { name: 'Media', icon: ImageIcon },
-  { name: 'Message logs', icon: List }, { name: 'Reports', icon: ChartNoAxesCombined },
-  { name: 'Business numbers', icon: Phone }, { name: 'Import history', icon: History },
+type View = 'Dashboard' | 'Inbox' | 'Contacts' | 'Reports' | 'Media' | 'Message logs' | 'Saved replies' | 'Business numbers' | 'Import history' | 'Events for review' | 'Settings'
+const primaryNav: { name: View; icon: typeof Inbox }[] = [
+  { name: 'Inbox', icon: Inbox }, { name: 'Dashboard', icon: LayoutDashboard }, { name: 'Contacts', icon: Users },
+  { name: 'Reports', icon: ChartNoAxesCombined }, { name: 'Media', icon: ImageIcon }, { name: 'Message logs', icon: List },
+]
+const secondaryNav: { name: View; icon: typeof Inbox }[] = [
+  { name: 'Saved replies', icon: Zap }, { name: 'Business numbers', icon: Phone }, { name: 'Import history', icon: History },
   { name: 'Events for review', icon: CircleAlert }, { name: 'Settings', icon: Settings },
 ]
-
-const inputClass = 'w-full rounded-lg border border-border bg-background px-3 py-2 text-sm'
-const buttonClass = 'rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40'
 const date = (value: string | null) => value ? new Date(value).toLocaleString() : 'No events yet'
-const agentColors = ['bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300', 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300', 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300', 'bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300']
-const agentTint = (id: string) => agentColors[Array.from(id).reduce((sum, char) => sum + char.charCodeAt(0), 0) % agentColors.length]
 
-async function api<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(url, { cache: 'no-store', ...options })
-  const value = await response.json()
-  if (!response.ok) throw new Error(value.error ?? 'Unable to load monitoring data.')
-  return value as T
-}
-
-export function MonitoringSignOut() {
+export function MonitoringSignOut({ compact }: { compact?: boolean }) {
   const [error, setError] = useState('')
   const router = useRouter()
-  return <><button className={buttonClass} onClick={async () => {
+  const signOut = async () => {
     const result = await createClient().auth.signOut()
     if (result.error) { setError('Unable to sign out. Please try again.'); return }
-    router.replace('/login')
-    router.refresh()
-  }}>Sign out</button>{error && <p role="alert">{error}</p>}</>
+    router.replace('/login'); router.refresh()
+  }
+  return <>{compact
+    ? <button onClick={signOut} aria-label="Sign out" title="Sign out" className="flex size-10 items-center justify-center rounded-xl text-white/60 hover:bg-white/10 hover:text-white"><LogOut size={19} /></button>
+    : <button className={buttonClass} onClick={signOut}>Sign out</button>}{error && <p role="alert" className="text-xs text-red-400">{error}</p>}</>
 }
 
 export function MonitoringWorkspace({ accountName, initialView = 'Inbox' }: { accountName: string; initialView?: 'Inbox' | 'Settings' }) {
-  const [channels, setChannels] = useState<MonitoringChannel[]>([])
-  const [threads, setThreads] = useState<MonitoringThread[]>([])
-  const [filters, setFilters] = useState({ q: '', channel: '', agent: '', status: '' })
-  const [search, setSearch] = useState('')
-  const [total, setTotal] = useState(0)
+  const [view, setView] = useState<View>(initialView)
+  const [filters, setFilters] = useState<InboxFilters>(emptyFilters)
   const [selected, setSelected] = useState<string | null>(null)
   const [refresh, setRefresh] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [view, setView] = useState<string>(initialView)
   const [replyEnabled, setReplyEnabled] = useState<boolean | null>(null)
-  const [settingsError, setSettingsError] = useState('')
+  // Contact panel opens by default on wide screens only (it renders after a chat is selected, so no hydration mismatch).
+  const [contactOpen, setContactOpen] = useState(() => typeof window === 'undefined' || window.matchMedia('(min-width: 1280px)').matches)
+  const [details, setDetails] = useState<Record<string, MonitoringThread>>({})
   const settingsRevision = useRef(0)
-  const workflowIds = [...new Set([...threads.map(t => t.id), ...(selected ? [selected] : [])])].join(',')
-  const { workflows, error: workflowError, setWorkflows } = useThreadWorkflows(workflowIds, refresh)
-  useEffect(() => {
-    const controller = new AbortController()
-    const revision = settingsRevision.current
-    const load = () => api<{ management_replies_enabled: boolean }>('/api/monitoring/settings', { signal: controller.signal })
-      .then(data => { if (!controller.signal.aborted && revision === settingsRevision.current) { setReplyEnabled(data.management_replies_enabled); setSettingsError('') } })
-      .catch(e => { if (!controller.signal.aborted && revision === settingsRevision.current) { setReplyEnabled(null); setSettingsError(e.message) } })
-    void load()
-    window.addEventListener('focus', load)
-    return () => { controller.abort(); window.removeEventListener('focus', load) }
-  }, [refresh])
+  const [chatCache] = useState(() => new Map<string, ChatSnapshot>())
+  const inbox = useInbox(filters, refresh)
+  const { labels, ready: labelsReady, reload: reloadLabels } = useLabels(refresh)
+  const workflowReady = inbox.workflowReady
+  const bump = useCallback(() => setRefresh(n => n + 1), [])
 
-  const chatCache = useRef(new Map<string, ChatSnapshot>())
-  const listViewport = useRef<HTMLUListElement>(null)
-  const listSentinel = useRef<HTMLLIElement>(null)
-  const listAbort = useRef<AbortController | null>(null)
-  const listBusy = useRef(false)
-  const listCursor = useRef<string | null>(null)
-  const previousFilter = useRef('')
-  const firstLoaded = useRef(false)
-  const [more, setMore] = useState(false)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [loadRetry, setLoadRetry] = useState(0)
-  type InboxPage = { channels: MonitoringChannel[]; threads: MonitoringThread[]; total: number | null; nextCursor: string | null }
-  const combine = (old: MonitoringThread[], incoming: MonitoringThread[]) => {
-    const rows = new Map(old.map(thread => [thread.id, thread]))
-    incoming.forEach(thread => rows.set(thread.id, thread))
-    return [...rows.values()].sort((a, b) => b.last_message_at.localeCompare(a.last_message_at) || b.id.localeCompare(a.id))
-  }
   useEffect(() => {
     const timer = window.setInterval(() => { if (!document.hidden) setRefresh(n => n + 1) }, 30000)
     return () => window.clearInterval(timer)
   }, [])
   useEffect(() => {
     const controller = new AbortController()
-    listAbort.current = controller; listBusy.current = true; setLoadingMore(false)
-    const key = JSON.stringify(filters)
-    const changed = previousFilter.current !== key
-    previousFilter.current = key
-    if (changed) { firstLoaded.current = false; setThreads([]); listCursor.current = null; setMore(false); if (listViewport.current) listViewport.current.scrollTop = 0 }
-    setLoading(true)
-    const params = new URLSearchParams({ ...filters, scroll: '1' })
-    api<InboxPage>(`/api/monitoring?${params}`, { signal: controller.signal })
-      .then(data => {
-        if (controller.signal.aborted) return
-        setChannels(data.channels); setThreads(old => changed ? data.threads : combine(old, data.threads))
-        if (data.total !== null) setTotal(data.total)
-        if (!firstLoaded.current) { listCursor.current = data.nextCursor; setMore(!!data.nextCursor); firstLoaded.current = true }
-        setError('')
-        if (changed && window.matchMedia('(min-width: 1024px)').matches) setSelected(data.threads[0]?.id ?? null)
-      })
-      .catch(err => { if (!controller.signal.aborted) setError(err.message) })
-      .finally(() => { if (!controller.signal.aborted) { listBusy.current = false; setLoading(false) } })
+    const revision = settingsRevision.current
+    const load = () => api<{ management_replies_enabled: boolean }>('/api/monitoring/settings', { signal: controller.signal })
+      .then(data => { if (revision === settingsRevision.current) setReplyEnabled(data.management_replies_enabled) })
+      .catch(() => { if (!controller.signal.aborted) setReplyEnabled(null) })
+    void load()
     return () => controller.abort()
-  }, [filters, refresh, loadRetry])
-  const loadMore = useCallback(async () => {
-    if (listBusy.current || !listCursor.current || !listAbort.current) return
-    const controller = listAbort.current
-    listBusy.current = true; setLoadingMore(true)
-    try {
-      const params = new URLSearchParams({ ...filters, scroll: '1', before: listCursor.current })
-      const data = await api<InboxPage>(`/api/monitoring?${params}`, { signal: controller.signal })
-      if (controller.signal.aborted) return
-      setThreads(old => combine(old, data.threads)); setChannels(data.channels)
-      listCursor.current = data.nextCursor; setMore(!!data.nextCursor); setError('')
-    } catch (err) { if (!controller.signal.aborted) setError((err as Error).message) }
-    finally { if (!controller.signal.aborted) { listBusy.current = false; setLoadingMore(false) } }
-  }, [filters])
-  useEffect(() => {
-    if (!listViewport.current || !listSentinel.current || !more || loading || loadingMore || error) return
-    const observer = new IntersectionObserver(entries => { if (entries[0].isIntersecting) void loadMore() }, { root: listViewport.current, rootMargin: '0px 0px 160px' })
-    observer.observe(listSentinel.current)
-    return () => observer.disconnect()
-  }, [loadMore, more, loading, loadingMore, error, view, threads.length])
-  function filter(key: keyof typeof filters, value: string) {
-    setFilters(current => {
-      const next = { ...current, [key]: value }
-      if (key === 'channel') next.agent = channels.find(c => c.id === value)?.label ?? ''
-      if (key === 'agent') { const matches = channels.filter(c => c.label === value); next.channel = matches.length === 1 ? matches[0].id : '' }
-      return next
-    })
-    setSelected(null)
-  }
-  function select(id: string) { setSelected(id) }
+  }, [refresh])
 
-  return <div className="monitoring-panel min-h-screen bg-background text-foreground lg:grid lg:grid-cols-[220px_1fr]">
-    <aside className={`border-r border-border bg-card p-4 lg:sticky lg:top-0 lg:h-screen ${view === 'Inbox' && selected ? 'hidden lg:block' : ''}`}>
-      <p className="text-xs font-semibold uppercase tracking-widest text-primary">Numera Digital</p><h1 className="mt-2 truncate text-lg font-semibold" title={accountName}>{accountName}</h1>
-      <p className="mb-6 mt-2 text-xs text-muted-foreground">Management workspace</p>
-      <nav aria-label="Workspace" className="flex gap-1 overflow-x-auto pb-2 lg:flex-col lg:overflow-visible">{navigation.map(({ name, icon: Icon }) => <button key={name} onClick={() => setView(name)} aria-current={view === name ? 'page' : undefined} className={`flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors ${view === name ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}><Icon size={18} aria-hidden="true" />{name}</button>)}</nav><div className="mt-4 lg:mt-8"><MonitoringSignOut /></div>
+  const selectedThread = selected ? inbox.threads.find(t => t.id === selected) ?? details[selected] : undefined
+  const patch = useCallback((id: string, value: Partial<MonitoringThread>) => {
+    inbox.patchThread(id, value)
+    setDetails(old => old[id] ? { ...old, [id]: { ...old[id], ...value } } : old)
+  }, [inbox])
+  // A conversation opened from Contacts/Logs may not be in the current list;
+  // load its workflow state separately.
+  const onLoaded = useCallback((thread: MonitoringThread) => {
+    if (inbox.threads.some(t => t.id === thread.id)) return
+    setDetails(old => old[thread.id]?.state !== undefined ? old : { ...old, [thread.id]: { ...old[thread.id], ...thread } })
+    if (!workflowReady) return
+    api<{ workflows: Record<string, ThreadWorkflow> }>(`/api/monitoring/workflow?ids=${thread.id}`)
+      .then(data => { const w = data.workflows[thread.id]; if (w) setDetails(old => ({ ...old, [thread.id]: { ...thread, ...old[thread.id], ...workflowPatch(w) } })) })
+      .catch(() => { /* Actions show their own errors. */ })
+  }, [inbox.threads, workflowReady])
+  const open = useCallback((id: string) => { setSelected(id); setView('Inbox') }, [])
+
+  // Keyboard: j/k next/previous conversation, "/" search, Esc back to list.
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement
+      if (view !== 'Inbox' || event.metaKey || event.ctrlKey || event.altKey || /INPUT|TEXTAREA|SELECT/.test(target.tagName) || target.isContentEditable) return
+      if (event.key === '/') { event.preventDefault(); document.getElementById('inbox-search')?.focus(); return }
+      if (event.key === 'Escape') { setSelected(null); return }
+      if (event.key !== 'j' && event.key !== 'k') return
+      const index = inbox.threads.findIndex(t => t.id === selected)
+      const next = inbox.threads[event.key === 'j' ? index + 1 : Math.max(0, index - 1)]
+      if (next) { event.preventDefault(); setSelected(next.id) }
+    }
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [view, inbox.threads, selected])
+
+  const navButton = ({ name, icon: Icon }: { name: View; icon: typeof Inbox }) => <button key={name} onClick={() => setView(name)} aria-label={name} title={name} aria-current={view === name ? 'page' : undefined}
+    className={`relative flex size-10 shrink-0 items-center justify-center rounded-xl transition-colors ${view === name ? 'bg-[#C0DD11] text-[#121316]' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>
+    <Icon size={19} />{name === 'Inbox' && (inbox.counts?.waiting ?? 0) > 0 && view !== 'Inbox' && <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-red-500 ring-2 ring-[#121316]" />}
+  </button>
+
+  return <div className="monitoring-panel flex h-dvh flex-col overflow-hidden bg-background text-foreground md:flex-row">
+    <aside aria-label="Workspace" className={`flex shrink-0 items-center gap-1 bg-[#121316] px-2 py-2 md:w-16 md:flex-col md:px-0 md:py-3 ${view === 'Inbox' && selected ? 'hidden md:flex' : 'flex'}`}>
+      <div title={accountName} className="mr-1 flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#C0DD11] text-lg font-black text-[#121316] md:mb-3 md:mr-0">N</div>
+      <nav className="flex flex-1 items-center gap-1 overflow-x-auto md:flex-col md:overflow-visible">{primaryNav.map(navButton)}<span className="mx-1 h-6 w-px shrink-0 bg-white/10 md:my-2 md:h-px md:w-6" />{secondaryNav.map(navButton)}</nav>
+      <MonitoringSignOut compact />
     </aside>
-    <main className="min-w-0 space-y-4 p-4 lg:p-6">
-      <header className={`items-center justify-between border-b border-border pb-4 ${view === 'Inbox' && selected ? 'hidden lg:flex' : 'flex'}`}><h2 className="text-xl font-semibold">{view}</h2><button className={buttonClass} onClick={() => setRefresh(n => n + 1)} disabled={loading}>Refresh</button></header>
-      {settingsError && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">Unable to check reply settings: {settingsError} <button className={buttonClass} onClick={() => setRefresh(n => n + 1)}>Retry</button></p>}
-      {view === 'Settings' && <MonitoringSettings enabled={replyEnabled} onSaved={enabled => { settingsRevision.current++; setReplyEnabled(enabled); setSettingsError(''); setRefresh(n => n + 1) }} />}
-      {view === 'Settings' && <RenewMetaAccess channels={channels} />}
-      {view === 'Saved replies' && <QuickRepliesPanel />}
-      {view === 'Business numbers' && <><BusinessNumbers channels={channels} onSaved={() => setRefresh(n => n + 1)} onOpen={id => { filter('channel', id); setView('Inbox') }} /><details className="rounded-xl border border-border bg-card p-3"><summary className="cursor-pointer p-2 font-medium">Add a number from Meta portfolio</summary><PortfolioPicker onSaved={() => setRefresh(n => n + 1)} /></details><details><summary className="cursor-pointer p-3 text-sm">Enter number details manually</summary><ChannelManager channels={channels} onSaved={() => setRefresh(n => n + 1)} /></details></>}
-      {view === 'Import history' && <HistoryImport channels={channels} onSaved={() => setRefresh(n => n + 1)} />}
-      {view === 'Events for review' && <ReviewEvents channels={channels} />}
-      {view === 'Dashboard' && <>
-      <section aria-label="Business number activity" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {channels.map(channel => <button key={channel.id} onClick={() => { filter('channel', channel.id); setView('Inbox') }} className={`rounded-xl border p-4 text-left ${filters.channel === channel.id ? 'border-primary bg-primary/5' : 'border-border bg-card'}`}>
-          <p className="truncate font-semibold">{channel.label}</p><p className="mt-1 text-sm">{channel.display_number}</p><p className="mt-3 text-xs text-muted-foreground">{channel.active ? 'Monitoring enabled' : 'Monitoring paused'}</p><p className="mt-1 text-xs text-muted-foreground">Last event: {date(channel.last_event_at)}</p>
-        </button>)}
+
+    {view === 'Inbox' ? <main className={`grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] ${contactOpen && selectedThread ? 'lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)_320px]' : 'lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]'}`}>
+      <ConversationList inbox={inbox} filters={filters} setFilters={f => { setFilters(f) }} labels={labels} selected={selected} onSelect={setSelected} hidden={!!selected} />
+      <section aria-label="Conversation" className={`min-h-0 min-w-0 ${selected ? 'flex flex-col' : 'hidden lg:flex lg:flex-col'}`}>
+        {selected ? <Conversation key={selected} id={selected} thread={selectedThread} channels={inbox.channels} repliesEnabled={replyEnabled === true} workflowReady={workflowReady}
+          cache={chatCache} contactOpen={contactOpen} onToggleContact={() => setContactOpen(v => !v)} onBack={() => setSelected(null)}
+          onPatched={value => patch(selected, value)} onLoaded={onLoaded} onChanged={bump} />
+          : <div className="chat-wallpaper flex h-full flex-col items-center justify-center gap-3 p-10 text-center text-muted-foreground"><span className="flex size-16 items-center justify-center rounded-2xl bg-card shadow-sm"><MessageSquare size={30} className="text-primary" /></span><p className="font-medium text-foreground">Select a conversation</p><p className="max-w-xs text-sm">Use <kbd className="rounded border border-border bg-card px-1">j</kbd> / <kbd className="rounded border border-border bg-card px-1">k</kbd> to move between conversations and <kbd className="rounded border border-border bg-card px-1">/</kbd> to search.</p></div>}
       </section>
-      </>}
-      {view === 'Dashboard' && <Dashboard refresh={refresh} />}
-      {view === 'Contacts' && <ContactsPanel channels={channels} onOpen={id => { select(id); setView('Inbox') }} />}
-      {(view === 'Media' || view === 'Message logs') && <MessageBrowser key={view} channels={channels} media={view === 'Media'} refresh={refresh} onOpen={id => { select(id); setView('Inbox') }} />}
-      {view === 'Reports' && <ReportsPanel channels={channels} refresh={refresh} />}
-      {view === 'Inbox' && <>
-      <section className={`rounded-xl border border-border bg-card p-4 ${selected ? 'hidden lg:block' : ''}`}>
-        <div className="mb-3 flex items-center justify-between gap-2"><p className="text-xs text-muted-foreground">Conversations across your business numbers</p>{Object.values(filters).some(Boolean) && <button className="text-xs font-medium text-primary" onClick={() => { setFilters({ q: '', channel: '', agent: '', status: '' }); setSearch(''); setSelected(null) }}>Clear filters</button>}</div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <form className="flex gap-2" onSubmit={e => { e.preventDefault(); filter('q', search.trim()) }}><label className="sr-only" htmlFor="monitor-search">Search conversations</label><input id="monitor-search" className={inputClass} placeholder="Search customer or latest message" maxLength={120} value={search} onChange={e => setSearch(e.target.value)} /><button className={buttonClass}>Search</button></form>
-          <label className="text-xs text-muted-foreground">Business number<select aria-label="Business number" className={inputClass} value={filters.channel} onChange={e => filter('channel', e.target.value)}><option value="">All numbers</option><optgroup label="Active numbers">{channels.filter(c => c.active).map(c => <option key={c.id} value={c.id}>{c.label} · {c.display_number}</option>)}</optgroup>{channels.some(c => !c.active) && <optgroup label="Removed · saved chats">{channels.filter(c => !c.active).map(c => <option key={c.id} value={c.id}>{c.label} · {c.display_number}</option>)}</optgroup>}</select></label>
-          <label className="text-xs text-muted-foreground">Agent<select aria-label="Assigned agent label" className={inputClass} value={filters.agent} onChange={e => filter('agent', e.target.value)}><option value="">All agents</option>{[...new Set(channels.map(c => c.label))].map(label => <option key={label}>{label}</option>)}</select></label>
-          <label className="text-xs text-muted-foreground">Lead status<select aria-label="Lead status filter" className={inputClass} value={filters.status} onChange={e => filter('status', e.target.value)}><option value="">All statuses</option>{leadStatuses.map(status => <option key={status}>{status}</option>)}</select></label>
-        </div>
-      </section>
-      {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-destructive">{error} <button className={buttonClass} onClick={() => setLoadRetry(n => n + 1)}>Retry</button></p>}
-      {workflowError && <p role="alert" className="rounded-lg border border-amber-200 p-3 text-sm">Conversation status could not refresh. Messages remain available. <button className={buttonClass} onClick={() => setRefresh(n => n + 1)}>Retry status</button></p>}
-      <div className="grid items-start gap-0 overflow-hidden rounded-xl border border-border lg:grid-cols-[320px_minmax(0,1fr)]">
-        <section aria-label="Conversations" aria-busy={loading} className={`overflow-hidden border-r border-border bg-card ${selected ? 'hidden lg:block' : ''}`}>
-          <div className="border-b border-border px-4 py-3 text-sm font-medium">{total} conversations {loading && <span className="text-muted-foreground">· Updating…</span>}</div>
-          {!loading && !error && threads.length === 0 && <p className="p-6 text-sm text-muted-foreground">{channels.length ? 'No conversations match these filters.' : 'Add a business number to start monitoring. New conversations appear when verified events arrive.'}</p>}
-          <ul ref={listViewport} aria-label="Conversation list" className="max-h-[70vh] divide-y divide-border overflow-y-auto overscroll-contain">{threads.map(thread => {
-            const channel = channels.find(c => c.id === thread.channel_id)
-            const workflow = workflows[thread.id]
-            return <li key={thread.id}><button onClick={() => select(thread.id)} aria-pressed={selected === thread.id} className={`w-full p-4 text-left hover:bg-muted ${selected === thread.id ? 'border-l-4 border-l-primary bg-sky-50 dark:bg-sky-950/40' : 'border-l-4 border-l-transparent'}`}>
-              <div className="flex items-center gap-3"><span aria-hidden="true" className={`flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${agentTint(thread.channel_id)}`}>{(thread.customer_name || thread.customer).slice(0, 2).toUpperCase()}</span><span className="min-w-0 flex-1 truncate font-semibold">{thread.customer_name || thread.customer}</span><span className="rounded bg-muted px-2 py-1 text-xs">{thread.lead_status}</span></div>
-              <p className="mt-1 text-xs text-muted-foreground">{channel?.display_number ?? 'Unknown number'} · {channel?.label ?? 'Unassigned'}</p>
-              {workflow && <div className="mt-2 flex flex-wrap items-center gap-2"><span className={`rounded-full px-2 py-0.5 text-[11px] ${workflow.status === 'resolved' ? 'bg-emerald-100 text-emerald-800' : workflow.status === 'snoozed' ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-800'}`}>{workflow.status}</span>{(workflow.unread_count > 0 || workflow.marked_unread) && <span title="Messages not marked read in this CRM, including phone-app replies" className="rounded-full bg-primary px-2 py-0.5 text-[11px] text-primary-foreground">{workflow.unread_count || '•'} unread</span>}</div>}
-              <p className="mt-3 truncate text-sm">{thread.last_preview || 'Media or non-text message'}</p><p className="mt-2 text-xs text-muted-foreground">{date(thread.last_message_at)} · {thread.message_count} {thread.message_count === 1 ? 'message' : 'messages'}</p>
-            </button></li>
-          })}<li ref={listSentinel} className="p-3 text-center text-xs text-muted-foreground">{loadingMore ? 'Loading more conversations…' : loading ? 'Loading conversations…' : !more && threads.length > 0 ? 'All saved conversations loaded' : ''}</li></ul>
-        </section>
-        <section aria-label="Conversation detail" className={`min-w-0 bg-card ${selected ? '' : 'hidden lg:block'}`}>
-          <button onClick={() => setSelected(null)} className="m-3 flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm lg:hidden"><ArrowLeft size={16} />All conversations</button>
-          {selected ? <Conversation key={selected} id={selected} preview={threads.find(t => t.id === selected)} channels={channels} repliesEnabled={replyEnabled === true} cache={chatCache.current} workflow={workflows[selected]} onWorkflowChanged={value => { setWorkflows(old => ({ ...old, [selected]: value })); setRefresh(n => n + 1) }} onChanged={() => setRefresh(n => n + 1)} />
-            : <div className="flex min-h-[55vh] flex-col items-center justify-center gap-4 p-10 text-center text-muted-foreground"><MessageSquare size={40} className="text-primary/40" /><p>{loading ? 'Loading conversations…' : threads.length ? 'Choose a conversation' : 'No conversations match your filters'}</p></div>}
-        </section>
-      </div>
-      </>}
-      <p className="text-xs text-muted-foreground">Agents use their WhatsApp Business apps. Owners and admins can review conversations and update leads.{replyEnabled === true ? ' Management replies are enabled.' : replyEnabled === false ? ' Management replies are disabled.' : ''}</p>
+      {contactOpen && selectedThread && <div className="fixed inset-0 z-40 bg-black/30 xl:static xl:z-auto xl:bg-transparent" onClick={e => { if (e.target === e.currentTarget) setContactOpen(false) }}>
+        <div className="ml-auto h-full w-[min(340px,92vw)] xl:w-auto"><ContactPanel key={selectedThread.id} thread={selectedThread} channels={inbox.channels} labels={labels} workflowReady={workflowReady}
+          onPatched={value => patch(selectedThread.id, value)} onOpenThread={setSelected} onClose={() => setContactOpen(false)} /></div>
+      </div>}
     </main>
+      : <main className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-6xl space-y-5 p-4 lg:p-8">
+          <header className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-widest text-primary">{accountName}</p><h1 className="text-2xl font-semibold">{view}</h1></div><button className={buttonClass} onClick={bump}>Refresh</button></header>
+          {view === 'Dashboard' && <Dashboard refresh={refresh} channels={inbox.channels} onTab={tab => { setFilters({ ...emptyFilters, tab, sort: tab === 'waiting' ? 'oldest' : 'latest' }); setView('Inbox') }} onChannel={id => { setFilters({ ...emptyFilters, tab: 'all', channel: id }); setView('Inbox') }} />}
+          {view === 'Contacts' && <ContactsPanel channels={inbox.channels} onOpen={open} />}
+          {(view === 'Media' || view === 'Message logs') && <MessageBrowser key={view} channels={inbox.channels} media={view === 'Media'} refresh={refresh} onOpen={open} />}
+          {view === 'Reports' && <ReportsPanel channels={inbox.channels} refresh={refresh} />}
+          {view === 'Saved replies' && <QuickRepliesPanel />}
+          {view === 'Business numbers' && <><ConnectNumber onConnected={bump} /><BusinessNumbers channels={inbox.channels} refresh={refresh} onSaved={bump} onOpen={id => { setFilters({ ...emptyFilters, tab: 'all', channel: id }); setView('Inbox') }} />
+            <details className="rounded-xl border border-border bg-card p-3"><summary className="cursor-pointer p-2 font-medium">Add a number from Meta portfolio (without history sharing)</summary><PortfolioPicker onSaved={bump} /></details>
+            <details className="rounded-xl border border-border bg-card p-3"><summary className="cursor-pointer p-2 font-medium">Enter number details manually</summary><ChannelManager channels={inbox.channels} onSaved={bump} /></details></>}
+          {view === 'Import history' && <HistoryImport channels={inbox.channels} onSaved={bump} />}
+          {view === 'Events for review' && <ReviewEvents channels={inbox.channels} />}
+          {view === 'Settings' && <>
+            <LabelsSettings labels={labels} ready={labelsReady} onChanged={() => { reloadLabels(); bump() }} />
+            <MonitoringSettings enabled={replyEnabled} onSaved={enabled => { settingsRevision.current++; setReplyEnabled(enabled); bump() }} />
+            <RenewMetaAccess channels={inbox.channels} />
+          </>}
+        </div>
+      </main>}
   </div>
 }
 
-function Pagination({ page, size, total, setPage, disabled, label = 'conversation' }: { page: number; size: number; total: number; setPage: (page: number) => void; disabled?: boolean; label?: string }) {
-  return <nav aria-label={`${label} pages`} className="flex items-center justify-between gap-2 border-t border-border p-3"><button className={buttonClass} disabled={disabled || page === 0} onClick={() => setPage(page - 1)}>Previous</button><span className="text-xs text-muted-foreground">Page {page + 1} of {Math.max(1, Math.ceil(total / size))}</span><button className={buttonClass} disabled={disabled || (page + 1) * size >= total} onClick={() => setPage(page + 1)}>Next</button></nav>
+function Pagination({ page, size, total, setPage, label = 'conversation' }: { page: number; size: number; total: number; setPage: (page: number) => void; label?: string }) {
+  return <nav aria-label={`${label} pages`} className="flex items-center justify-between gap-2 border-t border-border p-3"><button className={buttonClass} disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</button><span className="text-xs text-muted-foreground">Page {page + 1} of {Math.max(1, Math.ceil(total / size))}</span><button className={buttonClass} disabled={(page + 1) * size >= total} onClick={() => setPage(page + 1)}>Next</button></nav>
 }
 
 function ChannelManager({ channels, onSaved }: { channels: MonitoringChannel[]; onSaved: () => void }) {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
-  return <section className="rounded-xl border border-border bg-card p-5"><h2 className="text-lg font-semibold">Business numbers</h2><p className="mt-1 text-sm text-muted-foreground">Add a number using credentials for your Numera Meta app. Saving verifies its details and stores its encrypted credential. It does not register the number or change WabaCRM subscriptions.</p>
-    <p className="mt-2 text-xs text-muted-foreground">Use the agent’s name as the label. This label identifies their number in the inbox and agent filter.</p>
+  return <section className="p-2"><p className="text-sm text-muted-foreground">Add a number using credentials for your Numera Meta app. Saving verifies its details and stores its encrypted credential. It does not register the number or change WabaCRM subscriptions. Use the agent’s name as the label.</p>
     <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={async event => {
       event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); setSaving(true); setError(''); setSuccess(false)
       try { await api('/api/monitoring/channels', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.fromEntries(data)) }); form.reset(); setSuccess(true); onSaved() }
@@ -231,7 +172,7 @@ function ChannelManager({ channels, onSaved }: { channels: MonitoringChannel[]; 
     }}>
       <label className="text-sm">Agent label<input className={inputClass} name="label" maxLength={120} required autoComplete="off" /></label><label className="text-sm">Phone number ID<input className={inputClass} name="phone_number_id" pattern="[0-9]+" maxLength={40} required /></label><label className="text-sm">WhatsApp Business Account ID<input className={inputClass} name="waba_id" pattern="[0-9]+" maxLength={40} required /></label><label className="text-sm">Numera app access token<input className={inputClass} name="access_token" type="password" autoComplete="new-password" maxLength={8192} required /></label><div><button className={buttonClass} disabled={saving}>{saving ? 'Verifying…' : 'Verify and add number'}</button></div>
     </form>{error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}{success && <p role="status" className="mt-3 text-sm">Number saved. Webhook delivery still needs to be verified.</p>}
-    <p className="mt-3 text-xs text-muted-foreground">{channels.length} configured numbers. Paused numbers remain paused.</p>
+    <p className="mt-3 text-xs text-muted-foreground">{channels.length} configured numbers.</p>
   </section>
 }
 
@@ -254,12 +195,52 @@ function ReviewEvents({ channels }: { channels: MonitoringChannel[] }) {
       .catch(err => { if (!controller.signal.aborted) setError(err.message) })
     return () => controller.abort()
   }, [selected])
-  return <section className="rounded-xl border border-border bg-card p-5"><h2 className="text-lg font-semibold">Events for review</h2><p className="text-sm text-muted-foreground">Unsupported and history events are retained. They are not treated as imported conversations.</p>{error && <p role="alert">{error}</p>}<ul className="my-3 space-y-2">{data.events.map(event => <li key={event.id}><button onClick={() => { if (selected !== event.id) { setPayload(null); setSelected(event.id) } }} className="w-full rounded-lg bg-muted p-3 text-left text-sm hover:bg-primary/10">{event.field} · {channels.find(c => c.id === event.channel_id)?.display_number ?? 'Unknown number'} · {date(event.received_at)} · View event</button></li>)}</ul>{payload && <details open className="mb-3 rounded-lg border border-border p-3"><summary className="text-sm font-medium">Retained {payload.field} event</summary><pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(payload.payload, null, 2)}</pre></details>}{!error && data.events.length === 0 && <p className="my-3 text-sm text-muted-foreground">No events awaiting review.</p>}<Pagination page={page} size={25} total={data.total} setPage={setPage} label="event" /></section>
+  return <section className="rounded-xl border border-border bg-card p-5"><p className="text-sm text-muted-foreground">Unsupported and history events are retained. They are not treated as imported conversations.</p>{error && <p role="alert">{error}</p>}<ul className="my-3 space-y-2">{data.events.map(event => <li key={event.id}><button onClick={() => { if (selected !== event.id) { setPayload(null); setSelected(event.id) } }} className="w-full rounded-lg bg-muted p-3 text-left text-sm hover:bg-primary/10">{event.field} · {channels.find(c => c.id === event.channel_id)?.display_number ?? 'Unknown number'} · {date(event.received_at)} · View event</button></li>)}</ul>{payload && <details open className="mb-3 rounded-lg border border-border p-3"><summary className="text-sm font-medium">Retained {payload.field} event</summary><pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(payload.payload, null, 2)}</pre></details>}{!error && data.events.length === 0 && <p className="my-3 text-sm text-muted-foreground">No events awaiting review.</p>}<Pagination page={page} size={25} total={data.total} setPage={setPage} label="event" /></section>
 }
 
-function Dashboard({ refresh }: { refresh: number }) {
-  const [data, setData] = useState<{ conversations: number; inbound: number; outbound: number; numbers: number } | null>(null)
+function Stat({ label, value, hint, tone = 'default', onClick }: { label: string; value: number | null | undefined; hint?: string; tone?: 'default' | 'alert' | 'good'; onClick?: () => void }) {
+  const body: ReactNode = <><p className="text-sm text-muted-foreground">{label}</p><p className={`mt-2 text-3xl font-semibold ${tone === 'alert' && value ? 'text-red-600' : tone === 'good' ? 'text-emerald-600' : ''}`}>{value === null || value === undefined ? '—' : value.toLocaleString()}</p>{hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}</>
+  return onClick ? <button onClick={onClick} className="rounded-xl border border-border bg-card p-5 text-left hover:border-primary/50 hover:shadow-sm">{body}</button> : <div className="rounded-xl border border-border bg-card p-5">{body}</div>
+}
+
+function Dashboard({ refresh, channels, onTab, onChannel }: { refresh: number; channels: MonitoringChannel[]; onTab: (tab: InboxTab) => void; onChannel: (id: string) => void }) {
+  const [summary, setSummary] = useState<{ conversations: number; inbound: number; outbound: number; numbers: number } | null>(null)
+  const [counts, setCounts] = useState<Record<InboxTab, number> | null>(null)
+  const [perAgent, setPerAgent] = useState<Record<string, number>>({})
   const [error, setError] = useState('')
-  useEffect(() => { const controller = new AbortController(); api<typeof data>('/api/monitoring/summary', { signal: controller.signal }).then(setData).catch(e => { if (!controller.signal.aborted) setError(e.message) }); return () => controller.abort() }, [refresh])
-  return <section><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{data && Object.entries(data).map(([label, value]) => <div key={label} className="rounded-xl border border-border bg-card p-6"><p className="text-sm capitalize text-muted-foreground">{label}</p><p className="mt-3 text-3xl font-semibold">{value.toLocaleString()}</p></div>)}</div>{error && <p role="alert">{error}</p>}<p className="mt-5 text-sm text-muted-foreground">Counts reflect messages received or imported into this CRM. A customer contacting two numbers has two conversations.</p></section>
+  useEffect(() => {
+    const controller = new AbortController()
+    api<typeof summary>('/api/monitoring/summary', { signal: controller.signal }).then(setSummary).catch(e => { if (!controller.signal.aborted) setError(e.message) })
+    api<{ counts: Record<InboxTab, number> | null }>('/api/monitoring/counts', { signal: controller.signal }).then(d => setCounts(d.counts)).catch(() => {})
+    return () => controller.abort()
+  }, [refresh])
+  useEffect(() => {
+    const controller = new AbortController()
+    Promise.all(channels.filter(c => c.active).map(c => api<{ counts: Record<InboxTab, number> | null }>(`/api/monitoring/counts?channel=${c.id}`, { signal: controller.signal }).then(d => [c.id, d.counts?.waiting ?? 0] as const)))
+      .then(rows => setPerAgent(Object.fromEntries(rows))).catch(() => {})
+    return () => controller.abort()
+  }, [channels, refresh])
+  return <div className="space-y-6">
+    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    <section><h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Needs attention</h2>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat label="Waiting for agent reply" value={counts?.waiting} hint="Customer messaged last" tone="alert" onClick={() => onTab('waiting')} />
+        <Stat label="Unread in CRM" value={counts?.unread} hint="Not yet reviewed by management" onClick={() => onTab('unread')} />
+        <Stat label="Open conversations" value={counts?.open} onClick={() => onTab('open')} />
+        <Stat label="Resolved" value={counts?.resolved} tone="good" onClick={() => onTab('resolved')} />
+      </div>
+      {counts === null && <p className="mt-2 text-xs text-muted-foreground">Status counts appear after the inbox database update.</p>}
+    </section>
+    <section><h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Agents</h2>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{channels.map(channel => <button key={channel.id} onClick={() => onChannel(channel.id)} className="rounded-xl border border-border bg-card p-4 text-left hover:border-primary/50 hover:shadow-sm">
+        <div className="flex items-center justify-between gap-2"><p className="truncate font-semibold">{channel.label}</p><span className={`rounded-full px-2 py-0.5 text-[11px] ${channel.active ? 'bg-emerald-50 text-emerald-700' : 'bg-muted text-muted-foreground'}`}>{channel.active ? 'Monitoring' : 'Paused'}</span></div>
+        <p className="mt-1 text-sm text-muted-foreground">{channel.display_number}</p>
+        <div className="mt-3 flex items-center justify-between text-xs"><span className="text-muted-foreground">Last event {channel.last_event_at ? new Date(channel.last_event_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—'}</span>{perAgent[channel.id] ? <span className="rounded-md bg-red-50 px-1.5 py-0.5 font-medium text-red-700">{perAgent[channel.id]} waiting</span> : null}</div>
+      </button>)}</div>
+    </section>
+    <section><h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">All time</h2>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Stat label="Conversations" value={summary?.conversations} /><Stat label="Messages received" value={summary?.inbound} /><Stat label="Messages sent by agents" value={summary?.outbound} /><Stat label="Business numbers" value={summary?.numbers} /></div>
+      <p className="mt-3 text-xs text-muted-foreground">Counts reflect messages received or imported into this CRM. A customer contacting two numbers has two conversations.</p>
+    </section>
+  </div>
 }
