@@ -29,7 +29,6 @@ export function ContactPanel({ thread, channels, labels, workflowReady, onPatche
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [revision, setRevision] = useState(0)
-  const [audit, setAudit] = useState<LeadAudit[] | null>(null)
   const channel = channels.find(c => c.id === thread.channel_id)
   const name = profile?.name || thread.customer_name || `+${thread.customer}`
 
@@ -40,12 +39,6 @@ export function ContactPanel({ thread, channels, labels, workflowReady, onPatche
       .catch(e => { if (!controller.signal.aborted) setError(e.message) })
     return () => controller.abort()
   }, [thread.customer, revision])
-  useEffect(() => {
-    const controller = new AbortController()
-    api<{ audit: LeadAudit[] }>(`/api/monitoring/threads/${thread.id}?scroll=1&auditOnly=1&auditPage=0`, { signal: controller.signal })
-      .then(data => setAudit(data.audit)).catch(() => { if (!controller.signal.aborted) setAudit([]) })
-    return () => controller.abort()
-  }, [thread.id, thread.lead_status])
 
   async function act(action: () => Promise<void>) {
     setBusy(true); setError('')
@@ -112,10 +105,23 @@ export function ContactPanel({ thread, channels, labels, workflowReady, onPatche
     </Section>
 
     <Section title="Lead history" defaultOpen={false}>
-      {!audit ? <p className="text-xs text-muted-foreground">Loading…</p> : audit.length === 0 ? <p className="text-xs text-muted-foreground">No lead stage changes yet.</p>
-        : <ol className="space-y-2 border-l border-border pl-3">{audit.map(a => <li key={a.id} className="text-xs"><span className="capitalize">{a.previous_status}</span> → <span className="font-semibold capitalize">{a.new_status}</span><span className="block text-muted-foreground">{new Date(a.changed_at).toLocaleString()}</span></li>)}</ol>}
+      {/* Loaded only when opened, to keep switching chats fast. */}
+      <LeadHistory threadId={thread.id} leadStatus={thread.lead_status} />
     </Section>
   </aside>
+}
+
+function LeadHistory({ threadId, leadStatus }: { threadId: string; leadStatus: string }) {
+  const [audit, setAudit] = useState<LeadAudit[] | null>(null)
+  useEffect(() => {
+    const controller = new AbortController()
+    api<{ audit: LeadAudit[] }>(`/api/monitoring/threads/${threadId}?scroll=1&auditOnly=1&auditPage=0`, { signal: controller.signal })
+      .then(data => setAudit(data.audit)).catch(() => { if (!controller.signal.aborted) setAudit([]) })
+    return () => controller.abort()
+  }, [threadId, leadStatus])
+  if (!audit) return <p className="text-xs text-muted-foreground">Loading…</p>
+  if (!audit.length) return <p className="text-xs text-muted-foreground">No lead stage changes yet.</p>
+  return <ol className="space-y-2 border-l border-border pl-3">{audit.map(a => <li key={a.id} className="text-xs"><span className="capitalize">{a.previous_status}</span> → <span className="font-semibold capitalize">{a.new_status}</span><span className="block text-muted-foreground">{new Date(a.changed_at).toLocaleString()}</span></li>)}</ol>
 }
 
 function ContactForm({ profile, fallbackName, busy, onSave, onCancel }: { profile: ContactProfile | null; fallbackName: string | null; busy: boolean; onSave: (v: Record<string, string>) => void; onCancel: () => void }) {

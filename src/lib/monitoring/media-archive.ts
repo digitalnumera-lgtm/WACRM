@@ -19,9 +19,17 @@ export async function readArchivedMedia(db: SupabaseClient, accountId: string, m
   } catch { return null }
 }
 
+/** Short-lived signed URL for a stored copy, or null when none exists. */
+export async function signedArchiveUrl(db: SupabaseClient, accountId: string, messageId: string, seconds: number): Promise<string | null> {
+  try {
+    const result = await db.storage.from(MEDIA_BUCKET).createSignedUrl(archivePath(accountId, messageId), seconds)
+    return result.error || !result.data?.signedUrl ? null : result.data.signedUrl
+  } catch { return null }
+}
+
 export async function archiveMedia(db: SupabaseClient, accountId: string, messageId: string, bytes: Uint8Array, type: string) {
   try {
-    await db.storage.from(MEDIA_BUCKET).upload(archivePath(accountId, messageId), bytes, { contentType: type, upsert: true, cacheControl: '0' })
+    await db.storage.from(MEDIA_BUCKET).upload(archivePath(accountId, messageId), bytes, { contentType: type, upsert: true, cacheControl: '31536000' })
   } catch { /* Best-effort: the file can still be fetched from Meta while it exists. */ }
 }
 
@@ -43,7 +51,7 @@ export async function archiveDeliveredMedia(db: SupabaseClient, jobs: ArchiveJob
         if (done >= limit) return
         done++
         try {
-          if (await readArchivedMedia(db, job.accountId, row.id)) continue
+          if (await signedArchiveUrl(db, job.accountId, row.id, 60)) continue
           const { bytes, type } = await fetchMonitoringMedia(row.media_id, token)
           await archiveMedia(db, job.accountId, row.id, bytes, type)
         } catch { /* Expired, unsupported or inaccessible media stays as-is. */ }

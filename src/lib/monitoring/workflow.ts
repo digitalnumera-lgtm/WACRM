@@ -63,7 +63,8 @@ export async function writeWorkflow(db: SupabaseClient, account: string, actor: 
   const change = workflowChange(body, thread.message_count)
   const result = await db.from('monitoring_thread_meta').upsert({
     thread_id: thread.id, account_id: account, ...change, updated_by: actor, updated_at: new Date().toISOString(),
-  }, { onConflict: 'thread_id' })
+  }, { onConflict: 'thread_id' }).select('status,status_at_count,snoozed_until,seen_count,marked_unread,priority').single()
   if (result.error && missingWorkflowSchema(result.error)) throw new WorkflowSchemaMissing()
   if (result.error) throw result.error
+  return result.data as MetaRow
 }

@@ -174,3 +174,27 @@ describe("getCurrentAccount", () => {
     );
   });
 });
+
+describe("local session verification", () => {
+  const byTable = {
+    profiles: { data: { account_id: "acct-1", account_role: "admin" }, error: null },
+    accounts: { data: { id: "acct-1", name: "Acme" }, error: null },
+  };
+  it("uses getClaims (local JWT check) instead of an Auth server round trip", async () => {
+    const { client } = makeClient({ user: { id: "should-not-be-used" }, byTable });
+    const getUser = vi.fn();
+    const getClaims = vi.fn(async () => ({ data: { claims: { sub: "user-9" } }, error: null }));
+    createClient.mockReturnValue({ ...client, auth: { getUser, getClaims } });
+    const ctx = await getCurrentAccount();
+    expect(ctx.userId).toBe("user-9");
+    expect(getClaims).toHaveBeenCalledOnce();
+    expect(getUser).not.toHaveBeenCalled();
+  });
+  it("rejects invalid or missing claims", async () => {
+    for (const result of [{ data: null, error: new Error("bad signature") }, { data: { claims: {} }, error: null }]) {
+      const { client } = makeClient({ user: null, byTable });
+      createClient.mockReturnValue({ ...client, auth: { getUser: vi.fn(), getClaims: vi.fn(async () => result) } });
+      await expect(getCurrentAccount()).rejects.toBeInstanceOf(UnauthorizedError);
+    }
+  });
+});

@@ -105,10 +105,13 @@ function matchesTabLocally(thread: MonitoringThread, tab: InboxTab) {
   return thread.state === tab
 }
 
-export function ConversationList({ inbox, filters, setFilters, labels, selected, onSelect, hidden }: {
+export function ConversationList({ inbox, filters, setFilters, labels, selected, onSelect, onPrefetch, hidden }: {
   inbox: ReturnType<typeof useInbox>; filters: InboxFilters; setFilters: (f: InboxFilters) => void; labels: MonitoringLabel[];
-  selected: string | null; onSelect: (id: string) => void; hidden?: boolean
+  selected: string | null; onSelect: (id: string) => void; onPrefetch?: (id: string) => void; hidden?: boolean
 }) {
+  const hoverTimer = useRef<number | null>(null)
+  const hover = (id: string) => { if (!onPrefetch) return; if (hoverTimer.current) window.clearTimeout(hoverTimer.current); hoverTimer.current = window.setTimeout(() => onPrefetch(id), 120) }
+  const leave = () => { if (hoverTimer.current) window.clearTimeout(hoverTimer.current) }
   const { channels, threads, total, counts, workflowReady, loading, loadingMore, error, more, loadMore } = inbox
   const [search, setSearch] = useState(filters.q)
   const [showFilters, setShowFilters] = useState(false)
@@ -176,7 +179,7 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
         const waitMinutes = (now - Date.parse(thread.last_message_at)) / 60000
         const threadLabels = (thread.label_ids ?? []).map(id => labelMap.get(id)).filter((l): l is MonitoringLabel => !!l)
         return <li key={thread.id}>
-          <button type="button" onClick={() => onSelect(thread.id)} aria-current={selected === thread.id ? 'true' : undefined}
+          <button type="button" onClick={() => onSelect(thread.id)} onMouseEnter={() => hover(thread.id)} onMouseLeave={leave} onFocus={() => onPrefetch?.(thread.id)} aria-current={selected === thread.id ? 'true' : undefined}
             className={`flex w-full gap-3 border-b border-border/70 px-4 py-3 text-left transition-colors ${selected === thread.id ? 'bg-primary/[0.07] shadow-[inset_3px_0_0_var(--primary)]' : 'hover:bg-muted/60'}`}>
             <Avatar name={name} seed={thread.customer} />
             <div className="min-w-0 flex-1">

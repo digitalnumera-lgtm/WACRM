@@ -11,7 +11,7 @@ import { RenewMetaAccess } from './renew-access'
 import { MonitoringSettings } from './settings-panel'
 import { BusinessNumbers } from './business-numbers'
 import { ConnectNumber } from './connect-number'
-import { Conversation, workflowPatch, type ChatSnapshot } from './conversation'
+import { Conversation, prefetchConversation, workflowPatch, type ChatSnapshot } from './conversation'
 import { ContactsPanel } from './contacts-panel'
 import { ContactPanel } from './contact-panel'
 import { MessageBrowser, ReportsPanel } from './activity-panels'
@@ -101,11 +101,16 @@ export function MonitoringWorkspace({ accountName, initialView = 'Inbox' }: { ac
       if (event.key !== 'j' && event.key !== 'k') return
       const index = inbox.threads.findIndex(t => t.id === selected)
       const next = inbox.threads[event.key === 'j' ? index + 1 : Math.max(0, index - 1)]
-      if (next) { event.preventDefault(); setSelected(next.id) }
+      if (next) {
+        event.preventDefault(); setSelected(next.id)
+        // Warm the following chat so the next j/k is instant too.
+        const after = inbox.threads[inbox.threads.indexOf(next) + (event.key === 'j' ? 1 : -1)]
+        if (after) prefetchConversation(after.id, chatCache)
+      }
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
-  }, [view, inbox.threads, selected])
+  }, [view, inbox.threads, selected, chatCache])
 
   const navButton = ({ name, icon: Icon }: { name: View; icon: typeof Inbox }) => <button key={name} onClick={() => setView(name)} aria-label={name} title={name} aria-current={view === name ? 'page' : undefined}
     className={`relative flex size-10 shrink-0 items-center justify-center rounded-xl transition-colors ${view === name ? 'bg-[#C0DD11] text-[#121316]' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>
@@ -120,7 +125,7 @@ export function MonitoringWorkspace({ accountName, initialView = 'Inbox' }: { ac
     </aside>
 
     {view === 'Inbox' ? <main className={`grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] ${contactOpen && selectedThread ? 'lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)_320px]' : 'lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]'}`}>
-      <ConversationList inbox={inbox} filters={filters} setFilters={f => { setFilters(f) }} labels={labels} selected={selected} onSelect={setSelected} hidden={!!selected} />
+      <ConversationList inbox={inbox} filters={filters} setFilters={f => { setFilters(f) }} labels={labels} selected={selected} onSelect={setSelected} onPrefetch={id => prefetchConversation(id, chatCache)} hidden={!!selected} />
       <section aria-label="Conversation" className={`min-h-0 min-w-0 ${selected ? 'flex flex-col' : 'hidden lg:flex lg:flex-col'}`}>
         {selected ? <Conversation key={selected} id={selected} thread={selectedThread} channels={inbox.channels} repliesEnabled={replyEnabled === true} workflowReady={workflowReady}
           cache={chatCache} contactOpen={contactOpen} onToggleContact={() => setContactOpen(v => !v)} onBack={() => setSelected(null)}

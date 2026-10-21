@@ -36,8 +36,9 @@ export async function fetchMonitoringMedia(mediaId: string, token: string) {
   return { bytes: new Uint8Array(Buffer.concat(chunks)), type }
 }
 
-export function mediaResponse(bytes: Uint8Array<ArrayBuffer>, type: string, range: string | null) {
-  const headers = new Headers({ 'Content-Type': type, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': /^(image|audio|video)\//.test(type) ? 'inline' : 'attachment' , 'Accept-Ranges': 'bytes', 'Cross-Origin-Resource-Policy': 'same-origin' })
+export function mediaResponse(bytes: Uint8Array<ArrayBuffer>, type: string, range: string | null, cacheable = false) {
+  // Media for a message never changes; cacheable responses stay in the manager's browser only.
+  const headers = new Headers({ 'Content-Type': type, 'Cache-Control': cacheable ? 'private, max-age=31536000, immutable' : 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': /^(image|audio|video)\//.test(type) ? 'inline' : 'attachment' , 'Accept-Ranges': 'bytes', 'Cross-Origin-Resource-Policy': 'same-origin' })
   let start = 0, end = bytes.length - 1
   if (range) {
     const match = /^bytes=(\d*)-(\d*)$/.exec(range)
