@@ -79,7 +79,7 @@ function Connection({ data, onSaved, onConnected }: { data: SettingsData; onSave
   return <section className="crm-card space-y-5 p-5">
     <div><h2 className="flex items-center gap-2 font-semibold"><PlugZap size={17} />Google Sheet connection</h2>
       <p className="text-sm text-muted-foreground">{connected ? 'Connected to the Numera Client Tracker Sheet through Apps Script.' : 'Connect the Numera Client Tracker Sheet in four steps.'} Changes made here (by you or people with Full access) run your main script&apos;s own functions, so ClickUp, Drive, balances, commission and emails work exactly as with the forms.</p></div>
-    <ol className="space-y-5 text-sm">
+    <ol className="list-none space-y-5 text-sm">
       <li className="space-y-2"><p className="font-medium">1. Create a private key</p>
         {key ? <div className="space-y-2 rounded-2xl bg-muted/60 p-3"><p className="text-xs text-muted-foreground">Shown only now. Paste it into the script in step 2, in place of PASTE-KEY-HERE.</p><div className="flex flex-wrap items-center gap-2"><code className="select-all break-all rounded-lg bg-background px-2 py-1 text-xs">{key}</code><CopyButton text={key} label="Copy key" /></div></div>
           : <div className="flex flex-wrap items-center gap-2"><button className={buttonClass} disabled={!!busy} onClick={() => void newKey()}><KeyRound size={14} />{data.connection.hasKey ? 'Create a new key' : 'Create key'}</button>{data.connection.hasKey && <span className="text-xs text-muted-foreground">A key exists. A new key stops the old one working until the script has the new one.</span>}</div>}
