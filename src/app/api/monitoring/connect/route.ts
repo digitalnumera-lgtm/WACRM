@@ -1,4 +1,4 @@
-import { assertAllNumbers, requireMonitoring } from '@/lib/monitoring/team-access'
+import { assertAllNumbers, forgetHiddenNumbers, requireMonitoring } from '@/lib/monitoring/team-access'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { MonitoringInputError, monitoringError, privateJson, readJson, requiredText } from '@/lib/monitoring/http'
 import { ConnectError, exchangeSignupCode, readConnection, requestSync, sharedWhatsAppAccounts, SYNC_TYPES, writeConnection, type ConnectionRecord } from '@/lib/monitoring/connect'
@@ -86,6 +86,7 @@ export async function POST(request: Request) {
       }
       const update = await db.from('monitoring_channels').update({ active: true, label, waba_id: waba, ...(display ? { display_number: display } : {}) }).eq('account_id', accountId).eq('id', channelId)
       if (update.error) throw update.error
+      forgetHiddenNumbers(accountId)
     } else {
       const created = await db.rpc('create_monitoring_channel', { p_account: accountId, p_phone: phone, p_waba: waba, p_label: label, p_display: display ?? phone, p_token: encrypt(token) })
       if (created.error) throw created.error

@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     const ids = [...new Set((new URL(request.url).searchParams.get('ids') ?? '').split(',').filter(Boolean))]
     if (!ids.length || ids.length > 50) throw new MonitoringInputError('Choose between 1 and 50 numbers.')
     ids.forEach(checkedId)
-    const channels = await scopeChannels(access, supabase.from('monitoring_channels').select('id').eq('account_id', accountId).in('id', ids), 'id')
+    const channels = await scopeChannels(access, supabase.from('monitoring_channels').select('id').eq('account_id', accountId).in('id', ids), 'id', { includeHidden: true })
     if (channels.error) throw channels.error
     const owned = (channels.data ?? []).map(c => c.id as string)
     const db = monitoringAdmin()

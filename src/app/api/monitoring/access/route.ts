@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     const ids = [...new Set((body.channel_ids as string[]).map(checkedId))]
     const channels = await supabase.from('monitoring_channels').select('id,phone_number_id,waba_id').eq('account_id', accountId).in('id', ids)
     if (channels.error) throw channels.error
-    if (channels.data.length !== ids.length || !ids.every(id => canSeeChannel(access, id))) return privateJson({ error: 'One or more business numbers are unavailable.' }, 404)
+    if (channels.data.length !== ids.length || !ids.every(id => canSeeChannel(access, id, { includeHidden: true }))) return privateJson({ error: 'One or more business numbers are unavailable.' }, 404)
     try { await verifyRenewedAccess(channels.data, token) }
     catch (error) {
       const failure = mediaFailure(error)

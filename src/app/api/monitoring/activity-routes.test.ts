@@ -30,9 +30,10 @@ it('scopes messages and customer lookups to the same company and constrains medi
   const response = await messages(new Request('https://crm.test/api/monitoring/messages?media=true&direction=inbound&page=2&q=50%25'))
   expect(response.status).toBe(200)
   for (const q of queries) expect(q.calls).toContainEqual(['eq', ['account_id', 'own-company']])
-  expect(queries[0].calls).toContainEqual(['range', [100, 149]])
-  expect(queries[0].calls).toContainEqual(['not', ['media_id', 'is', null]])
-  expect(queries[0].calls).toContainEqual(['ilike', ['content', '%50\\%%']])
+  const list = queries.find(q => q.table === 'monitoring_messages')!
+  expect(list.calls).toContainEqual(['range', [100, 149]])
+  expect(list.calls).toContainEqual(['not', ['media_id', 'is', null]])
+  expect(list.calls).toContainEqual(['ilike', ['content', '%50\\%%']])
   expect((await response.json()).messages[0].customer_name).toBe('Preview')
 })
 it('returns database errors rather than displaying an empty successful report', async () => {

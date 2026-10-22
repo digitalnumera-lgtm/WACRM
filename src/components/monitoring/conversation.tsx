@@ -209,7 +209,7 @@ export function Conversation({ id, thread: listThread, channels, repliesEnabled,
       {thread && <span className="hidden sm:block"><Avatar name={name} seed={thread.customer} /></span>}
       <div className="min-w-0 flex-1">
         <h3 className="font-display flex items-center gap-2 truncate text-lg font-semibold tracking-tight">{name}<PriorityIcon priority={priority} /></h3>
-        <p className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"><span className="truncate">{thread && `+${thread.customer}`}</span>{channel && <span title={`Agent number ${channel.display_number}`} className="hidden shrink-0 rounded-full bg-[#C0DD11]/25 px-2 py-0.5 font-medium text-foreground sm:inline">{channel.label}{!channel.active && ' (paused)'}</span>}</p>
+        <p className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"><span className="truncate">{thread && `+${thread.customer}`}</span>{channel && <span title={`Agent number ${channel.display_number}`} className="hidden shrink-0 rounded-full bg-[#C0DD11]/25 px-2 py-0.5 font-medium text-foreground sm:inline">{channel.label}</span>}</p>
       </div>
       {canManage && workflowReady && thread?.state && <div className="flex items-center gap-1.5">
         <div className="flex">

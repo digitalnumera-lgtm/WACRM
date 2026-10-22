@@ -170,7 +170,8 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
   // Snoozed only shows when something is snoozed.
   const visibleTabs = workflowReady === false ? tabs.filter(t => t.id === 'all') : tabs.filter(t => t.id !== 'snoozed' || filters.tab === 'snoozed' || (counts?.snoozed ?? 0) > 0)
   const labelMap = new Map(labels.map(l => [l.id, l]))
-  const agents = [...new Set(channels.map(c => c.label))]
+  const live = channels.filter(c => c.active)
+  const agents = [...new Set(live.map(c => c.label))]
   const hour12 = prefs.timeFormat === '12h'
 
   const row = (thread: MonitoringThread) => {
@@ -229,7 +230,7 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
         {filters.q && <button type="button" aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => { setSearch(''); set({ q: '' }) }}><X size={16} /></button>}
       </form>
       {showFilters && <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted/60 p-3">
-        <label className="text-xs font-medium text-muted-foreground">Business number<select className={inputClass} value={filters.channel} onChange={e => set({ channel: e.target.value })}><option value="">All numbers</option>{channels.map(c => <option key={c.id} value={c.id}>{c.label} · {c.display_number}{c.active ? '' : ' (removed)'}</option>)}</select></label>
+        <label className="text-xs font-medium text-muted-foreground">Business number<select className={inputClass} value={filters.channel} onChange={e => set({ channel: e.target.value })}><option value="">All numbers</option>{live.map(c => <option key={c.id} value={c.id}>{c.label} · {c.display_number}</option>)}</select></label>
         <label className="text-xs font-medium text-muted-foreground">Lead stage<select className={inputClass} value={filters.status} onChange={e => set({ status: e.target.value })}><option value="">All stages</option>{leadStatuses.map(s => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}</select></label>
         <label className="text-xs font-medium text-muted-foreground">Priority<select className={inputClass} value={filters.priority} disabled={!workflowReady} onChange={e => set({ priority: e.target.value })}><option value="">Any priority</option>{(['urgent', 'high', 'medium', 'low', 'none'] as const).map(p => <option key={p} value={p}>{priorityMeta[p].label}</option>)}</select></label>
         <label className="text-xs font-medium text-muted-foreground">Label<select className={inputClass} value={filters.label} disabled={!workflowReady} onChange={e => set({ label: e.target.value })}><option value="">Any label</option>{labels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
@@ -253,7 +254,7 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
       </>}
       {!pinnedThreads.length && <li className="flex justify-between px-5 pb-1 text-xs text-muted-foreground"><span>{total.toLocaleString()} conversation{total === 1 ? '' : 's'}</span>{loading && <span>Updating…</span>}</li>}
       {rest.map(row)}
-      {!loading && !error && threads.length === 0 && <li className="p-8 text-center text-sm text-muted-foreground">{channels.length ? filters.tab === 'waiting' ? 'Nobody is waiting for a reply.' : 'No chats here.' : 'Add an agent’s number in Settings to start.'}</li>}
+      {!loading && !error && threads.length === 0 && <li className="p-8 text-center text-sm text-muted-foreground">{live.length ? filters.tab === 'waiting' ? 'Nobody is waiting for a reply.' : 'No chats here.' : 'Add an agent’s number in Settings to start.'}</li>}
       {loading && threads.length === 0 && [0, 1, 2, 3, 4].map(i => <li key={i} className="flex gap-3 px-5 py-3"><span className="size-10 animate-pulse rounded-full bg-muted" /><span className="flex-1 space-y-2"><span className="block h-3 w-2/3 animate-pulse rounded bg-muted" /><span className="block h-3 w-full animate-pulse rounded bg-muted" /></span></li>)}
       <li ref={sentinel} className="p-3 text-center text-xs text-muted-foreground">{loadingMore ? 'Loading more…' : !more && threads.length > 0 ? 'End of list' : ''}</li>
     </ul>

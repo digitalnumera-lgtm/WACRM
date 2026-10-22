@@ -97,7 +97,7 @@ export function ContactPanel({ thread, channels, labels, workflowReady, onPatche
     <Section title="Details">
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
         <dt className="text-muted-foreground">Agent</dt><dd className="truncate font-medium">{channel?.label ?? '—'}</dd>
-        <dt className="text-muted-foreground">Number</dt><dd className="truncate">{channel?.display_number ?? '—'}{channel && !channel.active && <span className="ml-1 text-xs text-amber-700">(removed)</span>}</dd>
+        <dt className="text-muted-foreground">Number</dt><dd className="truncate">{channel?.display_number ?? '—'}</dd>
         <dt className="text-muted-foreground">Status</dt><dd className="capitalize">{thread.state === 'resolved' ? 'Done' : thread.state ?? '—'}{thread.snoozed_until && <span className="block text-xs text-muted-foreground">until {new Date(thread.snoozed_until).toLocaleString()}</span>}</dd>
         <dt className="text-muted-foreground">Messages</dt><dd>{thread.message_count.toLocaleString()}</dd>
         <dt className="text-muted-foreground">Last activity</dt><dd title={new Date(thread.last_message_at).toLocaleString()}>{new Date(thread.last_message_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</dd>
