@@ -8,7 +8,7 @@ import { atLeast, type TrackerLevel, type TrackerView } from '@/lib/tracker/mode
 import { MonitoringSignOut } from '@/components/monitoring/workspace'
 import { ActivePill, MotionRoot } from '@/components/monitoring/motion'
 import { PreferencesProvider, useDarkMode, usePreferences } from '@/components/monitoring/preferences'
-import { api, buttonClass, timeAgo } from '@/components/monitoring/ui'
+import { api, buttonClass, Icon3D, timeAgo } from '@/components/monitoring/ui'
 import { rememberPanel } from './panel'
 
 const loading = () => <div className="crm-card h-48 animate-pulse" />
@@ -81,9 +81,10 @@ function Workspace({ accountName, level, crm }: { accountName: string; level: Tr
     </aside>
     <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:rounded-3xl md:px-6">
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-medium text-muted-foreground">Client Tracker</p>
-          <h1 className="font-display text-2xl font-semibold tracking-tight">{title}</h1>
+        <div className="flex items-center gap-4">
+          <Icon3D name={({ Overview: 'combo-chart', Deals: 'handshake', Payments: 'cash-in-hand', Commission: 'coins', Settings: 'gear' } as const)[page]} size={56} />
+          <div><p className="text-xs font-medium text-muted-foreground">Client Tracker</p>
+          <h1 className="font-display text-2xl font-semibold tracking-tight">{title}</h1></div>
         </div>
         {page !== 'Settings' && <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {d && <span title={new Date(d.fetchedAt).toLocaleString()}>Updated {timeAgo(d.fetchedAt) === 'now' ? 'just now' : `${timeAgo(d.fetchedAt)} ago`}</span>}

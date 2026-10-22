@@ -20,7 +20,7 @@ import { lastPanel, rememberPanel } from '@/components/tracker/panel'
 import { ActivePill, MotionRoot } from './motion'
 import { playChime, PreferencesProvider, PreferencesSettings, useDarkMode, usePreferences } from './preferences'
 import { MonitoringSettings } from './settings-panel'
-import { api, buttonClass } from './ui'
+import { api, buttonClass, Icon3D } from './ui'
 
 const loading = () => <div className="crm-card h-48 animate-pulse" />
 const Dashboard = dynamic(() => import('./dashboard').then(m => m.Dashboard), { loading })
@@ -53,20 +53,20 @@ const nav: { name: View; label: string; icon: typeof Inbox; need: Permission }[]
   { name: 'Media', label: 'Media', icon: ImageIcon, need: 'view_media' },
   { name: 'Reports', label: 'Reports', icon: ChartNoAxesCombined, need: 'view_inbox' },
 ]
-type Section = { id: SettingsSection; label: string; group: 'You' | 'Workspace' | 'Advanced'; allowed: (me: MonitoringMe, replies: boolean, tracker?: boolean) => boolean }
+type Section = { id: SettingsSection; label: string; icon: string; hint: string; group: 'You' | 'Workspace' | 'Advanced'; allowed: (me: MonitoringMe, replies: boolean, tracker?: boolean) => boolean }
 const sections: Section[] = [
-  { id: 'panel', label: 'Client Tracker', group: 'You', allowed: (_me, _replies, tracker) => !!tracker },
-  { id: 'preferences', label: 'Preferences', group: 'You', allowed: () => true },
-  { id: 'security', label: 'Security', group: 'You', allowed: () => true },
-  { id: 'team', label: 'Team & roles', group: 'Workspace', allowed: me => me.full },
-  { id: 'numbers', label: 'Business numbers', group: 'Workspace', allowed: me => can(me, 'manage_numbers') },
-  { id: 'labels', label: 'Labels', group: 'Workspace', allowed: me => can(me, 'manage_labels') },
-  { id: 'storage', label: 'Media storage', group: 'Workspace', allowed: me => can(me, 'manage_settings') },
-  { id: 'access', label: 'Meta access', group: 'Advanced', allowed: me => can(me, 'manage_numbers') },
-  { id: 'import', label: 'Import history', group: 'Advanced', allowed: me => can(me, 'manage_numbers') },
-  { id: 'events', label: 'Events for review', group: 'Advanced', allowed: me => can(me, 'manage_numbers') },
-  { id: 'general', label: 'Replying from the CRM', group: 'Advanced', allowed: me => me.full },
-  { id: 'replies', label: 'Saved replies', group: 'Advanced', allowed: (me, replies) => me.full && replies },
+  { id: 'panel', label: 'Client Tracker', icon: 'accounting', hint: 'Deals, clients, payments and commission from the Google Sheet', group: 'You', allowed: (_me, _replies, tracker) => !!tracker },
+  { id: 'preferences', label: 'Preferences', icon: 'gear', hint: 'Theme, style, sounds and how the inbox opens', group: 'You', allowed: () => true },
+  { id: 'security', label: 'Security', icon: 'security-checked', hint: 'Two-step sign-in and signed-in devices', group: 'You', allowed: () => true },
+  { id: 'team', label: 'Team & roles', icon: 'conference-call', hint: 'Invite people, roles and which numbers they see', group: 'Workspace', allowed: me => me.full },
+  { id: 'numbers', label: 'Business numbers', icon: 'phone', hint: 'Connected WhatsApp numbers', group: 'Workspace', allowed: me => can(me, 'manage_numbers') },
+  { id: 'labels', label: 'Labels', icon: 'price-tag', hint: 'Labels for sorting conversations', group: 'Workspace', allowed: me => can(me, 'manage_labels') },
+  { id: 'storage', label: 'Media storage', icon: 'cloud-storage', hint: 'Saved media, limits and cleanup', group: 'Workspace', allowed: me => can(me, 'manage_settings') },
+  { id: 'access', label: 'Meta access', icon: 'meta', hint: 'Meta access for each business number', group: 'Advanced', allowed: me => can(me, 'manage_numbers') },
+  { id: 'import', label: 'Import history', icon: 'archive', hint: 'Older chats from Meta', group: 'Advanced', allowed: me => can(me, 'manage_numbers') },
+  { id: 'events', label: 'Events for review', icon: 'bell', hint: 'Deliveries the CRM kept for a look', group: 'Advanced', allowed: me => can(me, 'manage_numbers') },
+  { id: 'general', label: 'Replying from the CRM', icon: 'whatsapp', hint: 'Whether managers can reply from the CRM', group: 'Advanced', allowed: me => me.full },
+  { id: 'replies', label: 'Saved replies', icon: 'document', hint: 'Saved replies for managers', group: 'Advanced', allowed: (me, replies) => me.full && replies },
 ]
 type Latest = { id: string; channel_id: string; customer: string; customer_name: string | null; last_message_at: string; last_preview: string | null }
 
@@ -262,6 +262,7 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection, tra
               </div> : null })}
             </nav>
             <div className="min-w-0 space-y-5">
+              {(() => { const current = sections.find(s => s.id === section); return current ? <div className="flex items-center gap-4 px-1"><Icon3D name={current.icon} size={56} /><div><h1 className="font-display text-2xl font-semibold tracking-tight">{current.label}</h1><p className="text-sm text-muted-foreground">{current.hint}</p></div></div> : null })()}
               {section === 'panel' && tracker && <PanelSwitch target="tracker" available />}
               {section === 'preferences' && <PreferencesSettings />}
               {section === 'security' && <SecuritySettings />}

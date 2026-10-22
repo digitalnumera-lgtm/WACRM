@@ -1,9 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeftRight, Check, Copy, KeyRound, PlugZap } from 'lucide-react'
+import { ArrowLeftRight, Check, Copy, KeyRound } from 'lucide-react'
 import type { TrackerLevel } from '@/lib/tracker/model'
-import { api, buttonClass, inputClass, primaryButton, sendJson } from '@/components/monitoring/ui'
+import { api, buttonClass, Icon3D, inputClass, primaryButton, sendJson } from '@/components/monitoring/ui'
 import { rememberPanel } from './panel'
 
 type Person = { user_id: string; name: string; email: string | null; account_role: string; you: boolean; level: TrackerLevel | null }
@@ -27,8 +27,8 @@ export function TrackerSettings({ level, crm, onConnected }: { level: TrackerLev
 export function PanelSwitch({ target, available }: { target: 'crm' | 'tracker'; available: boolean }) {
   if (!available) return null
   const toTracker = target === 'tracker'
-  return <section className="crm-card flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
-    <div><h2 className="font-semibold">Panel</h2><p className="text-sm text-muted-foreground">{toTracker ? 'You are in the WhatsApp CRM. The Client Tracker shows deals, clients, payments and commission from the Google Sheet.' : 'You are in the Client Tracker. The WhatsApp CRM shows chats, leads and agents.'}</p></div>
+  return <section className="crm-card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex items-center gap-4"><Icon3D name={toTracker ? 'accounting' : 'whatsapp'} size={52} /><div><h2 className="font-semibold">{toTracker ? 'Client Tracker' : 'WhatsApp CRM'}</h2><p className="text-sm text-muted-foreground">{toTracker ? 'You are in the WhatsApp CRM. The Client Tracker shows deals, clients, payments and commission from the Google Sheet.' : 'You are in the Client Tracker. The WhatsApp CRM shows chats, leads and agents.'}</p></div></div>
     <a className={primaryButton} href={toTracker ? '/tracker' : '/monitoring'} onClick={() => rememberPanel(toTracker ? 'tracker' : 'crm')}><ArrowLeftRight size={15} />{toTracker ? 'Switch to Client Tracker' : 'Switch to WhatsApp CRM'}</a>
   </section>
 }
@@ -77,10 +77,10 @@ function Connection({ data, onSaved, onConnected }: { data: SettingsData; onSave
   })
   const connected = !!data.connection.url && data.connection.hasKey
   return <section className="crm-card space-y-5 p-5">
-    <div><h2 className="flex items-center gap-2 font-semibold"><PlugZap size={17} />Google Sheet connection</h2>
-      <p className="text-sm text-muted-foreground">{connected ? 'Connected to the Numera Client Tracker Sheet through Apps Script.' : 'Connect the Numera Client Tracker Sheet in four steps.'} Changes made here (by you or people with Full access) run your main script&apos;s own functions, so ClickUp, Drive, balances, commission and emails work exactly as with the forms.</p></div>
+    <div className="flex items-start gap-4"><Icon3D name="plug" size={52} /><div><h2 className="font-semibold">Google Sheet connection</h2>
+      <p className="text-sm text-muted-foreground">{connected ? 'Connected to the Numera Client Tracker Sheet through Apps Script.' : 'Connect the Numera Client Tracker Sheet in four steps.'} Changes made here (by you or people with Full access) run your main script&apos;s own functions, so ClickUp, Drive, balances, commission and emails work exactly as with the forms.</p></div></div>
     <ol className="list-none space-y-5 text-sm">
-      <li className="space-y-2"><p className="font-medium">1. Create a private key</p>
+      <li className="space-y-2"><p className="flex items-center gap-2 font-medium"><Icon3D name="key" size={32} />1. Create a private key</p>
         {key ? <div className="space-y-2 rounded-2xl bg-muted/60 p-3"><p className="text-xs text-muted-foreground">Shown only now. Paste it into the script in step 2, in place of PASTE-KEY-HERE.</p><div className="flex flex-wrap items-center gap-2"><code className="select-all break-all rounded-lg bg-background px-2 py-1 text-xs">{key}</code><CopyButton text={key} label="Copy key" /></div></div>
           : <div className="flex flex-wrap items-center gap-2"><button className={buttonClass} disabled={!!busy} onClick={() => void newKey()}><KeyRound size={14} />{data.connection.hasKey ? 'Create a new key' : 'Create key'}</button>{data.connection.hasKey && <span className="text-xs text-muted-foreground">A key exists. A new key stops the old one working until the script has the new one.</span>}</div>}
       </li>
@@ -110,8 +110,8 @@ function People({ people, onSaved }: { people: Person[]; onSaved: () => void }) 
     catch (e) { setError((e as Error).message) } finally { setBusy(null) }
   }
   return <section className="crm-card p-5">
-    <h2 className="font-semibold">Who can open the Client Tracker</h2>
-    <p className="text-sm text-muted-foreground">Separate from WhatsApp CRM roles. Everyone starts with no access. Changes apply on the person&apos;s next click. To remove someone from the whole CRM, use WhatsApp CRM → Settings → Team &amp; roles.</p>
+    <div className="flex items-start gap-4"><Icon3D name="conference-call" size={52} /><div><h2 className="font-semibold">Who can open the Client Tracker</h2>
+    <p className="text-sm text-muted-foreground">Separate from WhatsApp CRM roles. Everyone starts with no access. Changes apply on the person&apos;s next click. To remove someone from the whole CRM, use WhatsApp CRM → Settings → Team &amp; roles.</p></div></div>
     <ul className="mt-4 divide-y divide-border">{people.map(p => <li key={p.user_id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0"><p className="truncate text-sm font-medium">{p.name}{p.you && <span className="text-muted-foreground"> (you)</span>}</p><p className="truncate text-xs text-muted-foreground">{p.email}{p.account_role === 'admin' ? ' · CRM admin' : ''}</p></div>
       {p.level === 'owner' ? <span className="text-sm text-muted-foreground">Owner · always full access</span>

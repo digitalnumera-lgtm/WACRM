@@ -5,7 +5,7 @@ import { ExternalLink, FolderOpen, Pencil, Plus, Search, X } from 'lucide-react'
 import { dayKey, signed, type SheetTable, type TrackerDeal, type TrackerView } from '@/lib/tracker/model'
 import { AddDealDialog, DealActions, PayoutDialog, type Changed } from './tracker-edit'
 import { CountUp } from '@/components/monitoring/motion'
-import { Avatar, buttonClass, inputClass, primaryButton } from '@/components/monitoring/ui'
+import { Avatar, buttonClass, Icon3D, inputClass, primaryButton } from '@/components/monitoring/ui'
 
 export const pkr = (n: number | null | undefined) => n == null ? '—' : `Rs ${Math.round(n).toLocaleString()}`
 const clientKey = (d: Pick<TrackerDeal, 'clientId' | 'client'>) => d.clientId || d.client
@@ -28,9 +28,10 @@ function PaymentBadge({ status }: { status: string }) {
   return <span className={`text-xs font-medium ${tone}`}>{status}</span>
 }
 
-function Kpi({ label, value, money, dark, hint }: { label: string; value: number; money?: boolean; dark?: boolean; hint?: ReactNode }) {
-  return <div className={`rounded-3xl p-5 ${dark ? 'bg-[var(--ink)] text-[var(--ink-fg)] dark:bg-[var(--hl)] dark:text-[var(--hl-fg)]' : 'crm-card'}`}>
-    <p className={`text-sm ${dark ? 'opacity-70' : 'text-muted-foreground'}`}>{label}</p>
+function Kpi({ label, value, money, dark, hint, icon }: { label: string; value: number; money?: boolean; dark?: boolean; hint?: ReactNode; icon: string }) {
+  return <div className={`relative overflow-hidden rounded-3xl p-5 ${dark ? 'bg-[var(--ink)] text-[var(--ink-fg)] dark:bg-[var(--hl)] dark:text-[var(--hl-fg)]' : 'crm-card'}`}>
+    <Icon3D name={icon} size={52} className="absolute right-4 top-4" />
+    <p className={`pr-14 text-sm ${dark ? 'opacity-70' : 'text-muted-foreground'}`}>{label}</p>
     <p className="font-display mt-2 text-3xl font-semibold tracking-tight">{money && <span className="mr-1 text-lg opacity-60">Rs</span>}<CountUp value={value} /></p>
     {hint && <p className={`mt-1 text-xs ${dark ? 'opacity-70' : 'text-muted-foreground'}`}>{hint}</p>}
   </div>
@@ -63,14 +64,14 @@ export function TrackerOverview({ data, onClient, onDeals }: { data: TrackerView
   const owed = data.deals.filter(d => (d.money?.remaining ?? 0) > 0).sort((a, b) => (b.money?.remaining ?? 0) - (a.money?.remaining ?? 0))
   return <div className="space-y-5">
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Kpi dark label={`Deals closed · ${monthLabel(s.month)}`} value={s.dealsThisMonth} hint={`${s.deals} deals all time`} />
+      <Kpi dark icon="handshake" label={`Deals closed · ${monthLabel(s.month)}`} value={s.dealsThisMonth} hint={`${s.deals} deals all time`} />
       {s.money ? <>
-        <Kpi money label={`Collected · ${monthLabel(s.month)}`} value={s.money.collectedThisMonth} hint={`Rs ${s.money.collectedAllTime.toLocaleString()} all time`} />
-        <Kpi money label="Still owed" value={s.money.outstanding} hint={`${s.money.unpaidDeals} deal${s.money.unpaidDeals === 1 ? '' : 's'} not fully paid`} />
-        <Kpi money label={`Sales · ${monthLabel(s.month)}`} value={s.money.salesThisMonth} />
+        <Kpi money icon="money-bag" label={`Collected · ${monthLabel(s.month)}`} value={s.money.collectedThisMonth} hint={`Rs ${s.money.collectedAllTime.toLocaleString()} all time`} />
+        <Kpi money icon="wallet" label="Still owed" value={s.money.outstanding} hint={`${s.money.unpaidDeals} deal${s.money.unpaidDeals === 1 ? '' : 's'} not fully paid`} />
+        <Kpi money icon="positive-dynamic" label={`Sales · ${monthLabel(s.month)}`} value={s.money.salesThisMonth} />
       </> : <>
-        <Kpi label="Clients" value={s.clients} />
-        <Kpi label="Active or onboarding" value={live} />
+        <Kpi icon="people" label="Clients" value={s.clients} />
+        <Kpi icon="verified-account" label="Active or onboarding" value={live} />
       </>}
     </section>
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">

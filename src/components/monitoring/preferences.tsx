@@ -171,6 +171,7 @@ export function PreferencesSettings() {
     <Row title="Sound for new messages"><div className="flex items-center gap-3"><button type="button" className="text-xs font-medium underline" onClick={playChime}>Play sound</button><Switch label="Sound for new messages" checked={prefs.sound} onChange={sound => { update({ sound }); if (sound) playChime() }} /></div></Row>
     <Row title="Desktop notifications"><DesktopNotifications enabled={prefs.notify} onChange={notify => update({ notify })} /></Row>
     <Row title="Show contact panel"><Switch label="Show contact panel" checked={prefs.contactPanel} onChange={contactPanel => update({ contactPanel })} /></Row>
+    <p className="pt-4 text-xs text-muted-foreground">3D icons by <a className="underline" href="https://icons8.com" target="_blank" rel="noopener noreferrer">Icons8</a></p>
   </section>
 }
 
