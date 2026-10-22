@@ -46,14 +46,24 @@ export async function POST(request: Request) {
       contacts.push({ account_id: accountId, user_id: userId, phone, name: String(row.name ?? phone).slice(0, 200), email: row.email ? String(row.email).slice(0, 254) : null })
     }
     if (body.preview) return privateJson({ count: contacts.length })
-    let added = 0, skipped = 0
-    for (const contact of contacts) {
-      const existing = await supabase.from('contacts').select('id').eq('account_id', accountId).eq('phone_normalized', contact.phone).limit(1)
-      if (existing.error) throw existing.error
-      if (existing.data?.length) { skipped++; continue }
-      const result = await supabase.from('contacts').insert(contact)
-      if (result.error && result.error.code !== '23505') throw result.error
-      if (result.error) skipped++; else added++
+    // One lookup and one insert for the whole batch (not two queries per contact).
+    const unique = [...new Map(contacts.map(c => [c.phone, c])).values()]
+    const existing = await supabase.from('contacts').select('phone_normalized').eq('account_id', accountId).in('phone_normalized', unique.map(c => c.phone))
+    if (existing.error) throw existing.error
+    const known = new Set((existing.data ?? []).map(r => String(r.phone_normalized)))
+    const fresh = unique.filter(c => !known.has(c.phone))
+    let added = 0, skipped = contacts.length - fresh.length
+    if (fresh.length) {
+      const result = await supabase.from('contacts').insert(fresh)
+      if (!result.error) added = fresh.length
+      else if (result.error.code === '23505') {
+        // Someone added one of them meanwhile: fall back to one at a time for this rare case.
+        for (const contact of fresh) {
+          const one = await supabase.from('contacts').insert(contact)
+          if (one.error && one.error.code !== '23505') throw one.error
+          if (one.error) skipped++; else added++
+        }
+      } else throw result.error
     }
     return privateJson({ added, skipped })
   } catch (error) { return monitoringError(error) }
