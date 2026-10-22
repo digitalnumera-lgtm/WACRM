@@ -2,6 +2,7 @@ import { cursorFilter, makeCursor } from '@/lib/monitoring/scroll'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { allowedChannels, hideNumbers, requireMonitoring, scopeChannels } from '@/lib/monitoring/team-access'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
+import { withWaitingCounts } from '@/lib/monitoring/waiting'
 import { channelColumns, checkedId, MonitoringInputError, monitoringError, pageNumber, privateJson, threadColumns } from '@/lib/monitoring/http'
 import { applyInboxCursor, applyInboxFilters, applyInboxTab, inboxColumns, missingWorkflowSchema, pageSize, readInboxFilters, searchLiteral } from '@/lib/monitoring/inbox'
 
@@ -40,7 +41,8 @@ export async function GET(request: Request) {
     if (result.error && missingWorkflowSchema(result.error)) return legacyList(supabase, accountId, channels.data ?? [], channelIds, filters, page, scroll, access.hiddenIds)
     if (result.error) throw result.error
     const rows = scroll ? result.data.slice(0, pageSize) : result.data
-    return privateJson({ channels: channels.data, threads: rows, total: result.count, page, workflowReady: true,
+    const threads = await withWaitingCounts(monitoringAdmin(), accountId, rows as unknown as { id: string; last_direction: string; state?: string }[])
+    return privateJson({ channels: channels.data, threads, total: result.count, page, workflowReady: true,
       nextCursor: scroll && result.data.length > pageSize ? makeCursor(rows[rows.length - 1] as { id: string; last_message_at: string }) : null })
   } catch (error) { return monitoringError(error) }
 }

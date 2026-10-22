@@ -10,6 +10,8 @@ export interface MonitoringThread {
   state?: 'open' | 'resolved' | 'snoozed'; snoozed_until?: string | null;
   unread_count?: number; marked_unread?: boolean; is_unread?: boolean;
   priority?: 'none' | 'low' | 'medium' | 'high' | 'urgent'; label_ids?: string[];
+  /** Customer messages since the agent last replied (only when the customer spoke last). */
+  waiting_count?: number;
 }
 export interface MonitoringMessage {
   id: string; direction: string; sent_at: string; kind: string;
