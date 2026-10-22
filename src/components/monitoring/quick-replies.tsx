@@ -77,7 +77,7 @@ export function QuickRepliesPanel() {
     } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }
   return <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(300px,420px)]">
-    <section aria-label="Saved reply library" className="space-y-4 rounded-xl border border-border bg-card p-5">
+    <section aria-label="Saved reply library" className="space-y-4 crm-card p-6">
       <div><h3 className="font-semibold">Saved replies</h3><p className="mt-1 text-sm text-muted-foreground">Reusable text for management. Insert a reply into a conversation, personalize it, then send.</p></div>
       <label className="flex items-center gap-2"><Search size={18} /><input aria-label="Search saved replies" className={input} placeholder="Search by title" maxLength={120} value={search} onChange={e => setSearch(e.target.value)} /></label>
       {loadError && <p role="alert" className="text-sm text-destructive">{loadError} <button className={button} onClick={() => setRevision(n => n + 1)}>Refresh replies</button></p>}
@@ -85,7 +85,7 @@ export function QuickRepliesPanel() {
       {data?.total === 0 && <p className="py-6 text-center text-sm text-muted-foreground">No saved replies found.</p>}
       {data && data.total > 100 && <p className="text-xs text-muted-foreground">Showing 100 of {data.total}. Search to find another reply.</p>}
     </section>
-    <form className="space-y-4 rounded-xl border border-border bg-card p-5" onSubmit={e => { e.preventDefault(); void save() }}>
+    <form className="space-y-4 crm-card p-6" onSubmit={e => { e.preventDefault(); void save() }}>
       <h3 className="font-semibold">{editing ? 'Edit saved reply' : 'New saved reply'}</h3>
       <label className="block text-sm">Title<input aria-label="Saved reply title" className={input + ' mt-1'} maxLength={80} required disabled={busy} value={title} onChange={e => setTitle(e.target.value)} placeholder="Welcome message" /></label>
       <label className="block text-sm">Message<textarea aria-label="Saved reply message" className={input + ' mt-1 min-h-40'} maxLength={4096} required disabled={busy} value={body} onChange={e => setBody(e.target.value)} placeholder="Hello {{name}}, how can we help?" /></label>

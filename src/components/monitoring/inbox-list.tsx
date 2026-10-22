@@ -1,10 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowDownUp, CheckCheck, Clock, Image as ImageIcon, Search, SlidersHorizontal, X } from 'lucide-react'
+import { ArrowDownUp, CheckCheck, Clock, Image as ImageIcon, Pin, PinOff, Search, SlidersHorizontal, X } from 'lucide-react'
 import { leadStatuses, type MonitoringChannel, type MonitoringThread } from '@/lib/monitoring/types'
 import type { MonitoringLabel } from '@/lib/monitoring/workflow-types'
-import { api, Avatar, buttonClass, inputClass, LabelChip, PriorityIcon, priorityMeta, timeAgo, waitingFor } from './ui'
+import { api, Avatar, buttonClass, inputClass, LabelChip, PriorityIcon, priorityMeta, waitingFor } from './ui'
+import { togglePinned, usePreferences } from './preferences'
 
 export type InboxTab = 'open' | 'waiting' | 'unread' | 'snoozed' | 'resolved' | 'all'
 export type InboxFilters = { tab: InboxTab; q: string; channel: string; agent: string; status: string; label: string; priority: string; sort: 'latest' | 'oldest' }
@@ -105,24 +106,33 @@ function matchesTabLocally(thread: MonitoringThread, tab: InboxTab) {
   return thread.state === tab
 }
 
-export function ConversationList({ inbox, filters, setFilters, labels, selected, onSelect, onPrefetch, hidden }: {
+/** Today: clock time; this week: weekday; older: date. */
+function listTime(value: string, now: number, hour12: boolean) {
+  const date = new Date(value), today = new Date(now)
+  if (date.toDateString() === today.toDateString()) return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12 })
+  if (date.toDateString() === new Date(now - 86400000).toDateString()) return 'Yesterday'
+  if (now - date.getTime() < 6 * 86400000) return date.toLocaleDateString(undefined, { weekday: 'short' })
+  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+}
+
+export function ConversationList({ inbox, filters, setFilters, labels, selected, onSelect, onPrefetch, hidden, pinned = [], onPin, refresh = 0 }: {
   inbox: ReturnType<typeof useInbox>; filters: InboxFilters; setFilters: (f: InboxFilters) => void; labels: MonitoringLabel[];
   selected: string | null; onSelect: (id: string) => void; onPrefetch?: (id: string) => void; hidden?: boolean
+  pinned?: string[]; onPin?: (pinned: string[]) => void; refresh?: number
 }) {
+  const { prefs } = usePreferences()
   const hoverTimer = useRef<number | null>(null)
   const hover = (id: string) => { if (!onPrefetch) return; if (hoverTimer.current) window.clearTimeout(hoverTimer.current); hoverTimer.current = window.setTimeout(() => onPrefetch(id), 120) }
   const leave = () => { if (hoverTimer.current) window.clearTimeout(hoverTimer.current) }
   const { channels, threads, total, counts, workflowReady, loading, loadingMore, error, more, loadMore } = inbox
   const [search, setSearch] = useState(filters.q)
   const [showFilters, setShowFilters] = useState(false)
-  // Re-render relative times ("5m", "Waiting 2h") every minute.
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(timer) }, [])
   const viewport = useRef<HTMLUListElement>(null)
   const sentinel = useRef<HTMLLIElement>(null)
   const set = (patch: Partial<InboxFilters>) => {
     const next = { ...filters, ...patch }
-    // Number and agent filters are alternatives; choosing one clears the other.
     if (patch.channel) next.agent = ''
     if (patch.agent) next.channel = ''
     setFilters(next)
@@ -134,79 +144,112 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
     observer.observe(sentinel.current)
     return () => observer.disconnect()
   }, [loadMore, more, loading, loadingMore, error, threads.length])
-  const activeFilters = [filters.channel, filters.agent, filters.status, filters.label, filters.priority].filter(Boolean).length
+
+  // Pinned chats are loaded by ID so they stay on top whatever the tab.
+  const pinnedKey = pinned.join(',')
+  const [pinnedRows, setPinnedRows] = useState<MonitoringThread[]>([])
+  useEffect(() => {
+    if (!pinnedKey) return
+    const controller = new AbortController()
+    api<{ threads: MonitoringThread[] }>(`/api/monitoring?scroll=1&tab=all&ids=${pinnedKey}`, { signal: controller.signal })
+      .then(d => setPinnedRows(pinnedKey.split(',').map(id => d.threads.find(t => t.id === id)).filter((t): t is MonitoringThread => !!t)))
+      .catch(() => {})
+    return () => controller.abort()
+  }, [pinnedKey, refresh])
+  const pinnedThreads = pinnedKey ? pinnedRows.map(p => threads.find(t => t.id === p.id) ?? p).filter(t => pinned.includes(t.id)) : []
+  const rest = threads.filter(t => !pinned.includes(t.id))
+
+  const activeFilters = [filters.channel, filters.status, filters.label, filters.priority].filter(Boolean).length
   const visibleTabs = workflowReady === false ? tabs.filter(t => t.id === 'all') : tabs
   const labelMap = new Map(labels.map(l => [l.id, l]))
+  const agents = [...new Set(channels.map(c => c.label))]
+  const hour12 = prefs.timeFormat === '12h'
 
-  return <section aria-label="Conversations" className={`flex h-full min-h-0 flex-col border-r border-border bg-card ${hidden ? 'hidden lg:flex' : 'flex'}`}>
-    <div className="space-y-3 border-b border-border px-4 pb-0 pt-4">
-      <div className="flex items-center justify-between gap-2"><h2 className="text-lg font-semibold">Conversations</h2>
+  const row = (thread: MonitoringThread) => {
+    const channel = channels.find(c => c.id === thread.channel_id)
+    const name = thread.customer_name || `+${thread.customer}`
+    const unread = (thread.unread_count ?? 0) > 0 || thread.marked_unread
+    const waiting = thread.last_direction === 'inbound' && thread.state !== 'resolved'
+    const waitMinutes = (now - Date.parse(thread.last_message_at)) / 60000
+    const threadLabels = (thread.label_ids ?? []).map(id => labelMap.get(id)).filter((l): l is MonitoringLabel => !!l)
+    const isPinned = pinned.includes(thread.id)
+    return <li key={thread.id} className="group relative px-2">
+      <button type="button" onClick={() => onSelect(thread.id)} onMouseEnter={() => hover(thread.id)} onMouseLeave={leave} onFocus={() => onPrefetch?.(thread.id)} aria-current={selected === thread.id ? 'true' : undefined}
+        className={`density-row flex w-full gap-3 rounded-2xl px-3 py-3 text-left transition-colors ${selected === thread.id ? 'bg-muted' : 'hover:bg-muted/60'}`}>
+        <span className="relative shrink-0 self-start"><Avatar name={name} seed={thread.customer} />{waiting && <span title="Waiting for a reply" className={`absolute -bottom-0.5 -right-0.5 size-3 rounded-full ring-2 ring-card ${waitMinutes > 60 ? 'bg-red-500' : 'bg-amber-400'}`} />}</span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            {isPinned && <Pin size={12} className="shrink-0 rotate-45 text-muted-foreground" aria-label="Pinned" />}
+            <span className={`min-w-0 flex-1 truncate text-sm ${unread ? 'font-bold' : 'font-medium'}`}>{name}</span>
+            <PriorityIcon priority={thread.priority} />
+            <time className={`shrink-0 text-[11px] ${unread ? 'font-semibold text-foreground' : 'text-muted-foreground'}`} dateTime={thread.last_message_at} title={new Date(thread.last_message_at).toLocaleString([], { hour12 })}>{listTime(thread.last_message_at, now, hour12)}</time>
+          </div>
+          <div className="mt-0.5 flex items-center gap-2">
+            <p className={`min-w-0 flex-1 truncate text-[13px] ${unread ? 'text-foreground' : 'text-muted-foreground'}`}>
+              {thread.last_direction === 'outbound' && <CheckCheck size={13} className="mr-1 inline text-emerald-600" aria-label="Agent replied" />}
+              {previewText(thread.last_preview) || <span className="inline-flex items-center gap-1"><ImageIcon size={12} />Media message</span>}
+            </p>
+            {unread && <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#C0DD11] px-1.5 text-[11px] font-bold text-[#121316]" aria-label={`${thread.unread_count || ''} unread`}>{thread.marked_unread && !thread.unread_count ? '' : (thread.unread_count ?? 0) > 99 ? '99+' : thread.unread_count}</span>}
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+            <span className="truncate font-medium">{channel?.label ?? 'Unknown number'}</span>
+            {waiting && <span className={`rounded-full px-1.5 py-0.5 font-medium ${waitMinutes > 60 ? 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400' : 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300'}`}>Waiting {waitingFor(thread.last_message_at, now)}</span>}
+            {thread.state === 'snoozed' && <span className="flex items-center gap-0.5 text-amber-700"><Clock size={11} />Snoozed</span>}
+            {thread.state === 'resolved' && <span className="flex items-center gap-0.5 text-emerald-700"><CheckCheck size={11} />Resolved</span>}
+            {thread.lead_status !== 'new' && <span className="rounded-full bg-muted px-1.5 py-0.5 capitalize">{thread.lead_status}</span>}
+            {threadLabels.slice(0, 2).map(l => <LabelChip key={l.id} label={l} />)}{threadLabels.length > 2 && <span>+{threadLabels.length - 2}</span>}
+          </div>
+        </div>
+      </button>
+      {onPin && <button type="button" aria-label={isPinned ? `Unpin ${name}` : `Pin ${name}`} title={isPinned ? 'Unpin' : 'Pin to top'} onClick={() => onPin(togglePinned(pinned, thread.id))}
+        className="absolute bottom-2 right-4 hidden size-7 items-center justify-center rounded-full bg-card text-muted-foreground shadow-sm hover:text-foreground focus:flex group-hover:flex">{isPinned ? <PinOff size={13} /> : <Pin size={13} />}</button>}
+    </li>
+  }
+
+  return <section aria-label="Conversations" className={`flex h-full min-h-0 flex-col bg-card md:rounded-3xl md:border md:border-border md:shadow-sm ${hidden ? 'hidden lg:flex' : 'flex'}`}>
+    <div className="space-y-3 px-4 pb-2 pt-4">
+      <div className="flex items-center justify-between gap-2"><h2 className="text-2xl font-semibold tracking-tight">Messages</h2>
         <div className="flex items-center gap-1">
-          <button type="button" className={`${buttonClass} relative px-2`} aria-label="Filters" aria-expanded={showFilters} onClick={() => setShowFilters(v => !v)}><SlidersHorizontal size={16} />{activeFilters > 0 && <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] text-white">{activeFilters}</span>}</button>
-          <button type="button" className={`${buttonClass} px-2`} aria-label={filters.sort === 'latest' ? 'Newest first. Switch to oldest first' : 'Oldest first. Switch to newest first'} title={filters.sort === 'latest' ? 'Newest first' : 'Oldest first'} onClick={() => set({ sort: filters.sort === 'latest' ? 'oldest' : 'latest' })}><ArrowDownUp size={16} /><span className="text-xs">{filters.sort === 'latest' ? 'Newest' : 'Oldest'}</span></button>
+          <button type="button" className="relative flex size-9 items-center justify-center rounded-full hover:bg-muted" aria-label="Filters" aria-expanded={showFilters} onClick={() => setShowFilters(v => !v)}><SlidersHorizontal size={17} />{activeFilters > 0 && <span className="absolute right-0 top-0 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">{activeFilters}</span>}</button>
+          <button type="button" className="flex h-9 items-center gap-1 rounded-full px-2 text-xs font-medium hover:bg-muted" aria-label={filters.sort === 'latest' ? 'Newest first. Switch to oldest first' : 'Oldest first. Switch to newest first'} onClick={() => set({ sort: filters.sort === 'latest' ? 'oldest' : 'latest' })}><ArrowDownUp size={15} />{filters.sort === 'latest' ? 'Newest' : 'Oldest'}</button>
         </div>
       </div>
       <form role="search" onSubmit={e => { e.preventDefault(); set({ q: search.trim() }) }} className="relative">
-        <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input id="inbox-search" aria-label="Search conversations" className={`${inputClass} pl-9 pr-8`} placeholder="Search name, number or message  ( / )" maxLength={120} value={search} onChange={e => setSearch(e.target.value)} />
-        {filters.q && <button type="button" aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => { setSearch(''); set({ q: '' }) }}><X size={16} /></button>}
+        <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <input id="inbox-search" aria-label="Search conversations" className="w-full rounded-full bg-muted py-2.5 pl-10 pr-9 text-sm outline-none focus:ring-2 focus:ring-[#C0DD11]" placeholder="Search" maxLength={120} value={search} onChange={e => setSearch(e.target.value)} />
+        {filters.q && <button type="button" aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => { setSearch(''); set({ q: '' }) }}><X size={16} /></button>}
       </form>
-      {showFilters && <div className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-muted/40 p-3">
+      {showFilters && <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted/60 p-3">
         <label className="text-[11px] font-medium text-muted-foreground">Business number<select className={inputClass} value={filters.channel} onChange={e => set({ channel: e.target.value })}><option value="">All numbers</option>{channels.map(c => <option key={c.id} value={c.id}>{c.label} · {c.display_number}{c.active ? '' : ' (removed)'}</option>)}</select></label>
-        <label className="text-[11px] font-medium text-muted-foreground">Agent<select className={inputClass} value={filters.agent} onChange={e => set({ agent: e.target.value })}><option value="">All agents</option>{[...new Set(channels.map(c => c.label))].map(l => <option key={l}>{l}</option>)}</select></label>
         <label className="text-[11px] font-medium text-muted-foreground">Lead stage<select className={inputClass} value={filters.status} onChange={e => set({ status: e.target.value })}><option value="">All stages</option>{leadStatuses.map(s => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}</select></label>
         <label className="text-[11px] font-medium text-muted-foreground">Priority<select className={inputClass} value={filters.priority} disabled={!workflowReady} onChange={e => set({ priority: e.target.value })}><option value="">Any priority</option>{(['urgent', 'high', 'medium', 'low', 'none'] as const).map(p => <option key={p} value={p}>{priorityMeta[p].label}</option>)}</select></label>
-        <label className="col-span-2 text-[11px] font-medium text-muted-foreground">Label<select className={inputClass} value={filters.label} disabled={!workflowReady} onChange={e => set({ label: e.target.value })}><option value="">Any label</option>{labels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
-        {activeFilters > 0 && <button type="button" className="col-span-2 text-left text-xs font-medium text-primary" onClick={() => setFilters({ ...emptyFilters, tab: filters.tab, q: filters.q, sort: filters.sort })}>Clear filters</button>}
+        <label className="text-[11px] font-medium text-muted-foreground">Label<select className={inputClass} value={filters.label} disabled={!workflowReady} onChange={e => set({ label: e.target.value })}><option value="">Any label</option>{labels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
+        {activeFilters > 0 && <button type="button" className="col-span-2 text-left text-xs font-medium underline" onClick={() => setFilters({ ...emptyFilters, tab: filters.tab, q: filters.q, sort: filters.sort, agent: filters.agent })}>Clear filters</button>}
+      </div>}
+      {agents.length > 1 && <div aria-label="Agents" className="-mx-4 flex gap-1.5 overflow-x-auto px-4">
+        {['', ...agents].map(a => { const on = filters.agent === a && (!!a || !filters.channel); return <button key={a || 'all'} type="button" onClick={() => set(a ? { agent: a } : { agent: '', channel: '' })} aria-pressed={on}
+          className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium ${on ? 'border-transparent bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:text-foreground'}`}>{a || 'All agents'}</button> })}
       </div>}
       <nav aria-label="Conversation status" className="-mx-4 flex gap-1 overflow-x-auto px-4">{visibleTabs.map(tab => {
         const active = (workflowReady === false ? 'all' : filters.tab) === tab.id
-        return <button key={tab.id} type="button" title={tab.hint} aria-current={active ? 'page' : undefined} onClick={() => set({ tab: tab.id, sort: tab.id === 'waiting' && filters.tab !== 'waiting' ? 'oldest' : tab.id !== 'waiting' && filters.tab === 'waiting' ? 'latest' : filters.sort })}
-          className={`flex shrink-0 items-center gap-1.5 border-b-2 px-2 pb-2.5 pt-1 text-sm font-medium ${active ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
-          {tab.name}{counts && <span className={`rounded-full px-1.5 text-[11px] ${active ? 'bg-primary/10' : 'bg-muted'} ${tab.id === 'waiting' && counts.waiting > 0 ? 'text-red-700' : ''}`}>{counts[tab.id] > 999 ? '999+' : counts[tab.id]}</span>}
+        return <button key={tab.id} type="button" title={tab.hint} aria-current={active ? 'page' : undefined} onClick={() => set({ tab: tab.id, sort: tab.id === 'waiting' && filters.tab !== 'waiting' ? 'oldest' : tab.id !== 'waiting' && filters.tab === 'waiting' ? prefs.defaultSort : filters.sort })}
+          className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium ${active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+          {tab.name}{counts && <span className={`text-[11px] ${tab.id === 'waiting' && counts.waiting > 0 ? 'font-semibold text-red-600' : 'text-muted-foreground'}`}>{counts[tab.id] > 999 ? '999+' : counts[tab.id]}</span>}
         </button>
       })}</nav>
     </div>
-    {workflowReady === false && <p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900">Open / Waiting / Unread tabs, labels and priority switch on after the inbox database update (<code>supabase/numera/001_inbox_workflow.sql</code>).</p>}
-    {error && <p role="alert" className="flex items-center justify-between gap-2 bg-red-50 px-4 py-2 text-sm text-red-700">{error}<button className={buttonClass} onClick={inbox.retry}>Retry</button></p>}
-    <div className="flex items-center justify-between px-4 py-2 text-xs text-muted-foreground"><span>{total.toLocaleString()} conversation{total === 1 ? '' : 's'}</span>{loading && <span>Updating…</span>}</div>
-    <ul ref={viewport} aria-label="Conversation list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-      {threads.map(thread => {
-        const channel = channels.find(c => c.id === thread.channel_id)
-        const name = thread.customer_name || `+${thread.customer}`
-        const unread = (thread.unread_count ?? 0) > 0 || thread.marked_unread
-        const waiting = thread.last_direction === 'inbound' && thread.state !== 'resolved'
-        const waitMinutes = (now - Date.parse(thread.last_message_at)) / 60000
-        const threadLabels = (thread.label_ids ?? []).map(id => labelMap.get(id)).filter((l): l is MonitoringLabel => !!l)
-        return <li key={thread.id}>
-          <button type="button" onClick={() => onSelect(thread.id)} onMouseEnter={() => hover(thread.id)} onMouseLeave={leave} onFocus={() => onPrefetch?.(thread.id)} aria-current={selected === thread.id ? 'true' : undefined}
-            className={`flex w-full gap-3 border-b border-border/70 px-4 py-3 text-left transition-colors ${selected === thread.id ? 'bg-primary/[0.07] shadow-[inset_3px_0_0_var(--primary)]' : 'hover:bg-muted/60'}`}>
-            <Avatar name={name} seed={thread.customer} />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className={`min-w-0 flex-1 truncate text-sm ${unread ? 'font-bold' : 'font-semibold'}`}>{name}</span>
-                <PriorityIcon priority={thread.priority} />
-                <time className={`shrink-0 text-[11px] ${unread ? 'font-semibold text-primary' : 'text-muted-foreground'}`} dateTime={thread.last_message_at} title={new Date(thread.last_message_at).toLocaleString()}>{timeAgo(thread.last_message_at, now)}</time>
-              </div>
-              <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground"><span className="truncate">{channel?.label ?? 'Unknown number'}</span><span aria-hidden="true">·</span><span className="truncate">{channel?.display_number}</span>{thread.state === 'snoozed' && <span className="flex items-center gap-0.5 text-amber-700"><Clock size={11} />Snoozed</span>}{thread.state === 'resolved' && <span className="flex items-center gap-0.5 text-emerald-700"><CheckCheck size={11} />Resolved</span>}</div>
-              <div className="mt-1 flex items-center gap-2">
-                <p className={`min-w-0 flex-1 truncate text-[13px] ${unread ? 'text-foreground' : 'text-muted-foreground'}`}>
-                  {thread.last_direction === 'outbound' && <CheckCheck size={13} className="mr-1 inline text-sky-600" aria-label="Agent replied" />}
-                  {previewText(thread.last_preview) || <span className="inline-flex items-center gap-1"><ImageIcon size={12} />Media message</span>}
-                </p>
-                {unread && <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-white" aria-label={`${thread.unread_count || ''} unread`}>{thread.marked_unread && !thread.unread_count ? '' : (thread.unread_count ?? 0) > 99 ? '99+' : thread.unread_count}</span>}
-              </div>
-              {(threadLabels.length > 0 || waiting || thread.lead_status !== 'new') && <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                {waiting && <span title="The customer is waiting for the agent's reply" className={`rounded-md px-1.5 py-0.5 text-[11px] font-medium ${waitMinutes > 60 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-800'}`}>Waiting {waitingFor(thread.last_message_at, now)}</span>}
-                {thread.lead_status !== 'new' && <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] capitalize text-muted-foreground">{thread.lead_status}</span>}
-                {threadLabels.slice(0, 3).map(l => <LabelChip key={l.id} label={l} />)}{threadLabels.length > 3 && <span className="text-[11px] text-muted-foreground">+{threadLabels.length - 3}</span>}
-              </div>}
-            </div>
-          </button>
-        </li>
-      })}
+    {workflowReady === false && <p className="mx-4 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">Tabs, labels and priority need the inbox database update.</p>}
+    {error && <p role="alert" className="mx-4 flex items-center justify-between gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}<button className={buttonClass} onClick={inbox.retry}>Retry</button></p>}
+    <ul ref={viewport} aria-label="Conversation list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2">
+      {pinnedThreads.length > 0 && <>
+        <li className="px-5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Pinned</li>
+        {pinnedThreads.map(row)}
+        <li className="px-5 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">All conversations · {total.toLocaleString()}</li>
+      </>}
+      {!pinnedThreads.length && <li className="flex justify-between px-5 pb-1 text-[11px] text-muted-foreground"><span>{total.toLocaleString()} conversation{total === 1 ? '' : 's'}</span>{loading && <span>Updating…</span>}</li>}
+      {rest.map(row)}
       {!loading && !error && threads.length === 0 && <li className="p-8 text-center text-sm text-muted-foreground">{channels.length ? filters.tab === 'waiting' ? 'Nobody is waiting for a reply. 🎉' : 'No conversations here.' : 'Add a business number to start monitoring.'}</li>}
-      {loading && threads.length === 0 && [0, 1, 2, 3, 4].map(i => <li key={i} className="flex gap-3 border-b border-border/70 px-4 py-3"><span className="size-10 animate-pulse rounded-full bg-muted" /><span className="flex-1 space-y-2"><span className="block h-3 w-2/3 animate-pulse rounded bg-muted" /><span className="block h-3 w-full animate-pulse rounded bg-muted" /></span></li>)}
+      {loading && threads.length === 0 && [0, 1, 2, 3, 4].map(i => <li key={i} className="flex gap-3 px-5 py-3"><span className="size-10 animate-pulse rounded-full bg-muted" /><span className="flex-1 space-y-2"><span className="block h-3 w-2/3 animate-pulse rounded bg-muted" /><span className="block h-3 w-full animate-pulse rounded bg-muted" /></span></li>)}
       <li ref={sentinel} className="p-3 text-center text-xs text-muted-foreground">{loadingMore ? 'Loading more…' : !more && threads.length > 0 ? 'End of list' : ''}</li>
     </ul>
   </section>

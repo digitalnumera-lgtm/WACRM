@@ -2,7 +2,7 @@ import { cursorFilter, makeCursor } from '@/lib/monitoring/scroll'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { allowedChannels, requireMonitoring, scopeChannels } from '@/lib/monitoring/team-access'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
-import { channelColumns, monitoringError, pageNumber, privateJson, threadColumns } from '@/lib/monitoring/http'
+import { channelColumns, checkedId, MonitoringInputError, monitoringError, pageNumber, privateJson, threadColumns } from '@/lib/monitoring/http'
 import { applyInboxCursor, applyInboxFilters, applyInboxTab, inboxColumns, missingWorkflowSchema, pageSize, readInboxFilters, searchLiteral } from '@/lib/monitoring/inbox'
 
 export async function GET(request: Request) {
@@ -29,6 +29,10 @@ export async function GET(request: Request) {
     // after the access check above; the view itself is not exposed to browsers.
     let query = monitoringAdmin().from('monitoring_inbox').select(inboxColumns, { count: filters.cursor ? undefined : 'exact' }).eq('account_id', accountId)
     query = applyInboxTab(applyInboxFilters(query, { ...filters, channelIds }), filters.tab)
+    // Pinned conversations: fetch exactly these (still company and number scoped).
+    const ids = [...new Set((params.get('ids') ?? '').split(',').filter(Boolean))]
+    if (ids.length > 30) throw new MonitoringInputError('Choose up to 30 conversations.')
+    if (ids.length) query = query.in('id', ids.map(checkedId))
     query = applyInboxCursor(query, filters)
     const ordered = query.order('last_message_at', { ascending }).order('id', { ascending })
     const result = await (scroll ? ordered.limit(pageSize + 1) : ordered.range(page * pageSize, page * pageSize + pageSize - 1))

@@ -1,51 +1,65 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ChartNoAxesCombined, CircleAlert, History, ImageIcon, Inbox, LayoutDashboard, List, LogOut, MessageSquare, Phone, Settings, Users, Zap } from 'lucide-react'
+import dynamic from 'next/dynamic'
+import { ChartNoAxesCombined, ChevronRight, Columns3, Image as ImageIcon, Inbox, LayoutDashboard, List, LogOut, MessageSquare, Settings, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { MonitoringChannel, MonitoringThread } from '@/lib/monitoring/types'
+import type { MonitoringThread } from '@/lib/monitoring/types'
 import type { ThreadWorkflow } from '@/lib/monitoring/workflow-types'
-import { QuickRepliesPanel } from './quick-replies'
-import { RenewMetaAccess } from './renew-access'
-import { MonitoringSettings } from './settings-panel'
-import { BusinessNumbers } from './business-numbers'
-import { ConnectNumber } from './connect-number'
-import { Conversation, prefetchConversation, workflowPatch, type ChatSnapshot } from './conversation'
-import { ContactsPanel } from './contacts-panel'
-import { ContactPanel } from './contact-panel'
-import { MessageBrowser, ReportsPanel } from './activity-panels'
-import { AccessProvider } from './access'
-import { MediaLibrary } from './media-library'
-import { StorageSettings } from './storage-settings'
-import { TeamSettings } from './team-settings'
 import { can, type MonitoringMe, type Permission } from '@/lib/monitoring/permissions'
-import { HistoryImport, PortfolioPicker } from './setup-panels'
-import { ConversationList, emptyFilters, useInbox, type InboxFilters, type InboxTab } from './inbox-list'
+import type { Preferences } from '@/lib/monitoring/preferences'
+import { Conversation, prefetchConversation, workflowPatch, type ChatSnapshot } from './conversation'
+import { ContactPanel } from './contact-panel'
+import { ConversationList, emptyFilters, useInbox, type InboxFilters } from './inbox-list'
 import { LabelsSettings, useLabels } from './labels'
-import { api, buttonClass, inputClass } from './ui'
+import { AccessProvider } from './access'
+import { playChime, PreferencesProvider, PreferencesSettings, useDarkMode, usePreferences } from './preferences'
+import { MonitoringSettings } from './settings-panel'
+import { api, buttonClass } from './ui'
 
-type View = 'Dashboard' | 'Inbox' | 'Contacts' | 'Reports' | 'Media' | 'Message logs' | 'Saved replies' | 'Business numbers' | 'Import history' | 'Events for review' | 'Settings'
-const primaryNav: { name: View; icon: typeof Inbox }[] = [
-  { name: 'Inbox', icon: Inbox }, { name: 'Dashboard', icon: LayoutDashboard }, { name: 'Contacts', icon: Users },
-  { name: 'Reports', icon: ChartNoAxesCombined }, { name: 'Media', icon: ImageIcon }, { name: 'Message logs', icon: List },
+const loading = () => <div className="crm-card h-48 animate-pulse" />
+const Dashboard = dynamic(() => import('./dashboard').then(m => m.Dashboard), { loading })
+const LeadsBoard = dynamic(() => import('./leads-board').then(m => m.LeadsBoard), { loading })
+const ContactsPanel = dynamic(() => import('./contacts-panel').then(m => m.ContactsPanel), { loading })
+const MediaLibrary = dynamic(() => import('./media-library').then(m => m.MediaLibrary), { loading })
+const ReportsPanel = dynamic(() => import('./activity-panels').then(m => m.ReportsPanel), { loading })
+const MessageBrowser = dynamic(() => import('./activity-panels').then(m => m.MessageBrowser), { loading })
+const TeamSettings = dynamic(() => import('./team-settings').then(m => m.TeamSettings), { loading })
+const StorageSettings = dynamic(() => import('./storage-settings').then(m => m.StorageSettings), { loading })
+const QuickRepliesPanel = dynamic(() => import('./quick-replies').then(m => m.QuickRepliesPanel), { loading })
+const BusinessNumbers = dynamic(() => import('./business-numbers').then(m => m.BusinessNumbers), { loading })
+const ConnectNumber = dynamic(() => import('./connect-number').then(m => m.ConnectNumber), { loading })
+const HistoryImport = dynamic(() => import('./setup-panels').then(m => m.HistoryImport), { loading })
+const PortfolioPicker = dynamic(() => import('./setup-panels').then(m => m.PortfolioPicker), { loading })
+const RenewMetaAccess = dynamic(() => import('./renew-access').then(m => m.RenewMetaAccess), { loading })
+const ChannelManager = dynamic(() => import('./admin-panels').then(m => m.ChannelManager), { loading })
+const ReviewEvents = dynamic(() => import('./admin-panels').then(m => m.ReviewEvents), { loading })
+
+type View = 'Inbox' | 'Dashboard' | 'Leads' | 'Contacts' | 'Media' | 'Reports' | 'Logs' | 'Settings'
+export type SettingsSection = 'preferences' | 'team' | 'numbers' | 'storage' | 'labels' | 'replies' | 'import' | 'events' | 'access' | 'general'
+
+const nav: { name: View; label: string; icon: typeof Inbox; need: Permission }[] = [
+  { name: 'Inbox', label: 'Inbox', icon: Inbox, need: 'view_inbox' },
+  { name: 'Dashboard', label: 'Dashboard', icon: LayoutDashboard, need: 'view_reports' },
+  { name: 'Leads', label: 'Leads board', icon: Columns3, need: 'view_inbox' },
+  { name: 'Contacts', label: 'Contacts', icon: Users, need: 'view_contacts' },
+  { name: 'Media', label: 'Media', icon: ImageIcon, need: 'view_media' },
+  { name: 'Reports', label: 'Reports', icon: ChartNoAxesCombined, need: 'view_reports' },
+  { name: 'Logs', label: 'Message logs', icon: List, need: 'view_inbox' },
 ]
-const secondaryNav: { name: View; icon: typeof Inbox }[] = [
-  { name: 'Saved replies', icon: Zap }, { name: 'Business numbers', icon: Phone }, { name: 'Import history', icon: History },
-  { name: 'Events for review', icon: CircleAlert }, { name: 'Settings', icon: Settings },
+const sections: { id: SettingsSection; label: string; allowed: (me: MonitoringMe) => boolean }[] = [
+  { id: 'preferences', label: 'Preferences', allowed: () => true },
+  { id: 'team', label: 'Team & roles', allowed: me => me.full },
+  { id: 'numbers', label: 'Business numbers', allowed: me => can(me, 'manage_numbers') },
+  { id: 'storage', label: 'Media storage', allowed: me => can(me, 'manage_settings') },
+  { id: 'labels', label: 'Labels', allowed: me => can(me, 'manage_labels') },
+  { id: 'replies', label: 'Saved replies', allowed: me => me.full },
+  { id: 'access', label: 'Meta access', allowed: me => can(me, 'manage_numbers') },
+  { id: 'import', label: 'Import history', allowed: me => can(me, 'manage_numbers') },
+  { id: 'events', label: 'Events for review', allowed: me => can(me, 'manage_numbers') },
+  { id: 'general', label: 'Management replies', allowed: me => me.full },
 ]
-// What each view needs. Settings shows when any of its sections is allowed.
-const viewNeeds: Record<View, Permission | 'full'> = {
-  Inbox: 'view_inbox', Dashboard: 'view_reports', Contacts: 'view_contacts', Reports: 'view_reports', Media: 'view_media',
-  'Message logs': 'view_inbox', 'Saved replies': 'full', 'Business numbers': 'manage_numbers', 'Import history': 'manage_numbers',
-  'Events for review': 'manage_numbers', Settings: 'full',
-}
-function allowedView(me: MonitoringMe, view: View) {
-  if (view === 'Settings') return me.full || ['manage_labels', 'manage_settings', 'manage_numbers'].some(p => can(me, p as Permission))
-  const need = viewNeeds[view]
-  return need === 'full' ? me.full : can(me, need)
-}
-const date = (value: string | null) => value ? new Date(value).toLocaleString() : 'No events yet'
 
 export function MonitoringSignOut({ compact }: { compact?: boolean }) {
   const [error, setError] = useState('')
@@ -56,23 +70,30 @@ export function MonitoringSignOut({ compact }: { compact?: boolean }) {
     router.replace('/login'); router.refresh()
   }
   return <>{compact
-    ? <button onClick={signOut} aria-label="Sign out" title="Sign out" className="flex size-10 items-center justify-center rounded-xl text-white/60 hover:bg-white/10 hover:text-white"><LogOut size={19} /></button>
-    : <button className={buttonClass} onClick={signOut}>Sign out</button>}{error && <p role="alert" className="text-xs text-red-400">{error}</p>}</>
+    ? <button onClick={signOut} aria-label="Sign out" title="Sign out" className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-card hover:text-foreground"><LogOut size={18} /></button>
+    : <button className={buttonClass} onClick={signOut}>Sign out</button>}{error && <p role="alert" className="text-xs text-destructive">{error}</p>}</>
 }
 
-export function MonitoringWorkspace({ accountName, me, initialView = 'Inbox' }: { accountName: string; me: MonitoringMe; initialView?: 'Inbox' | 'Settings' }) {
-  const [view, setView] = useState<View>(() => allowedView(me, initialView) ? initialView : 'Inbox')
-  const [filters, setFilters] = useState<InboxFilters>(emptyFilters)
+export function MonitoringWorkspace(props: { accountName: string; me: MonitoringMe; preferences: Preferences; initialView?: 'Inbox' | 'Settings'; initialSection?: SettingsSection }) {
+  return <PreferencesProvider initial={props.preferences}><AccessProvider me={props.me}><Workspace {...props} /></AccessProvider></PreferencesProvider>
+}
+
+function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: { accountName: string; me: MonitoringMe; initialView?: 'Inbox' | 'Settings'; initialSection?: SettingsSection }) {
+  const { prefs, update } = usePreferences()
+  const dark = useDarkMode(prefs.theme)
+  const [view, setView] = useState<View>(initialView)
+  const [section, setSection] = useState<SettingsSection>(() => initialSection && sections.some(s => s.id === initialSection && s.allowed(me)) ? initialSection : 'preferences')
+  const [filters, setFilters] = useState<InboxFilters>(() => ({ ...emptyFilters, tab: prefs.defaultTab, sort: prefs.defaultSort }))
   const [selected, setSelected] = useState<string | null>(null)
   const [refresh, setRefresh] = useState(0)
   const [replyEnabled, setReplyEnabled] = useState<boolean | null>(null)
-  // Contact panel opens by default on wide screens only (it renders after a chat is selected, so no hydration mismatch).
-  const [contactOpen, setContactOpen] = useState(() => typeof window === 'undefined' || window.matchMedia('(min-width: 1280px)').matches)
+  const [contactOpen, setContactOpen] = useState(() => prefs.contactPanel && (typeof window === 'undefined' || window.matchMedia('(min-width: 1280px)').matches))
   const [details, setDetails] = useState<Record<string, MonitoringThread>>({})
   const settingsRevision = useRef(0)
   const [chatCache] = useState(() => new Map<string, ChatSnapshot>())
   const inbox = useInbox(filters, refresh)
-  const { labels, ready: labelsReady, reload: reloadLabels } = useLabels(refresh)
+  // Labels and settings load once; changes made here reload them explicitly.
+  const { labels, ready: labelsReady, reload: reloadLabels } = useLabels(0)
   const workflowReady = inbox.workflowReady
   const bump = useCallback(() => setRefresh(n => n + 1), [])
 
@@ -81,31 +102,39 @@ export function MonitoringWorkspace({ accountName, me, initialView = 'Inbox' }: 
     return () => window.clearInterval(timer)
   }, [])
   useEffect(() => {
+    if (!me.full) return
     const controller = new AbortController()
     const revision = settingsRevision.current
-    const load = () => api<{ management_replies_enabled: boolean }>('/api/monitoring/settings', { signal: controller.signal })
+    api<{ management_replies_enabled: boolean }>('/api/monitoring/settings', { signal: controller.signal })
       .then(data => { if (revision === settingsRevision.current) setReplyEnabled(data.management_replies_enabled) })
       .catch(() => { if (!controller.signal.aborted) setReplyEnabled(null) })
-    void load()
     return () => controller.abort()
-  }, [refresh])
+  }, [me.full])
+
+  // Chime when more customers start waiting for a reply.
+  const waitingCount = inbox.counts?.waiting
+  const lastWaiting = useRef<number | undefined>(undefined)
+  useEffect(() => {
+    if (waitingCount === undefined) return
+    if (prefs.sound && lastWaiting.current !== undefined && waitingCount > lastWaiting.current) playChime()
+    lastWaiting.current = waitingCount
+  }, [waitingCount, prefs.sound])
 
   const selectedThread = selected ? inbox.threads.find(t => t.id === selected) ?? details[selected] : undefined
   const patch = useCallback((id: string, value: Partial<MonitoringThread>) => {
     inbox.patchThread(id, value)
     setDetails(old => old[id] ? { ...old, [id]: { ...old[id], ...value } } : old)
   }, [inbox])
-  // A conversation opened from Contacts/Logs may not be in the current list;
-  // load its workflow state separately.
   const onLoaded = useCallback((thread: MonitoringThread) => {
     if (inbox.threads.some(t => t.id === thread.id)) return
     setDetails(old => old[thread.id]?.state !== undefined ? old : { ...old, [thread.id]: { ...old[thread.id], ...thread } })
     if (!workflowReady) return
     api<{ workflows: Record<string, ThreadWorkflow> }>(`/api/monitoring/workflow?ids=${thread.id}`)
       .then(data => { const w = data.workflows[thread.id]; if (w) setDetails(old => ({ ...old, [thread.id]: { ...thread, ...old[thread.id], ...workflowPatch(w) } })) })
-      .catch(() => { /* Actions show their own errors. */ })
+      .catch(() => {})
   }, [inbox.threads, workflowReady])
   const open = useCallback((id: string) => { setSelected(id); setView('Inbox') }, [])
+  const showInbox = useCallback((patch: Partial<InboxFilters>) => { setFilters({ ...emptyFilters, sort: prefs.defaultSort, ...patch }); setView('Inbox') }, [prefs.defaultSort])
 
   // Keyboard: j/k next/previous conversation, "/" search, Esc back to list.
   useEffect(() => {
@@ -119,7 +148,6 @@ export function MonitoringWorkspace({ accountName, me, initialView = 'Inbox' }: 
       const next = inbox.threads[event.key === 'j' ? index + 1 : Math.max(0, index - 1)]
       if (next) {
         event.preventDefault(); setSelected(next.id)
-        // Warm the following chat so the next j/k is instant too.
         const after = inbox.threads[inbox.threads.indexOf(next) + (event.key === 'j' ? 1 : -1)]
         if (after) prefetchConversation(after.id, chatCache)
       }
@@ -128,143 +156,73 @@ export function MonitoringWorkspace({ accountName, me, initialView = 'Inbox' }: 
     return () => window.removeEventListener('keydown', key)
   }, [view, inbox.threads, selected, chatCache])
 
-  const navButton = ({ name, icon: Icon }: { name: View; icon: typeof Inbox }) => <button key={name} onClick={() => setView(name)} aria-label={name} title={name} aria-current={view === name ? 'page' : undefined}
-    className={`relative flex size-10 shrink-0 items-center justify-center rounded-xl transition-colors ${view === name ? 'bg-[#C0DD11] text-[#121316]' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>
-    <Icon size={19} />{name === 'Inbox' && (inbox.counts?.waiting ?? 0) > 0 && view !== 'Inbox' && <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-red-500 ring-2 ring-[#121316]" />}
+  const views = nav.filter(n => can(me, n.need))
+  const navButton = (name: View, label: string, Icon: typeof Inbox) => <button key={name} onClick={() => setView(name)} aria-label={label} title={label} aria-current={view === name ? 'page' : undefined}
+    className={`relative flex size-11 shrink-0 items-center justify-center rounded-full transition-colors ${view === name ? 'bg-[#121316] text-[#C0DD11] shadow-md dark:bg-[#C0DD11] dark:text-[#121316]' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`}>
+    <Icon size={19} />{name === 'Inbox' && (inbox.counts?.waiting ?? 0) > 0 && view !== 'Inbox' && <span className="absolute right-1 top-1 size-2.5 rounded-full bg-red-500 ring-2 ring-background" />}
   </button>
+  const chatOpenOnPhone = view === 'Inbox' && !!selected
 
-  return <AccessProvider me={me}><div className="monitoring-panel flex h-dvh flex-col overflow-hidden bg-background text-foreground md:flex-row">
-    <aside aria-label="Workspace" className={`flex shrink-0 items-center gap-1 bg-[#121316] px-2 py-2 md:w-16 md:flex-col md:px-0 md:py-3 ${view === 'Inbox' && selected ? 'hidden md:flex' : 'flex'}`}>
-      <div title={accountName} className="mr-1 flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#C0DD11] text-lg font-black text-[#121316] md:mb-3 md:mr-0">N</div>
-      <nav className="flex flex-1 items-center gap-1 overflow-x-auto md:flex-col md:overflow-visible">{primaryNav.filter(v => allowedView(me, v.name)).map(navButton)}{secondaryNav.some(v => allowedView(me, v.name)) && <span className="mx-1 h-6 w-px shrink-0 bg-white/10 md:my-2 md:h-px md:w-6" />}{secondaryNav.filter(v => allowedView(me, v.name)).map(navButton)}</nav>
-      <MonitoringSignOut compact />
+  return <div data-density={prefs.density} data-chat-size={prefs.chatSize} className={`monitoring-panel flex h-dvh flex-col overflow-hidden text-foreground md:flex-row md:gap-3 md:p-3 ${dark ? 'dark' : ''}`}>
+    <aside aria-label="Workspace" className={`order-last shrink-0 items-center gap-1 border-t border-border bg-card/90 px-2 py-1.5 backdrop-blur md:order-first md:flex md:w-14 md:flex-col md:border-0 md:bg-transparent md:p-0 md:py-1 ${chatOpenOnPhone ? 'hidden md:flex' : 'flex'}`}>
+      <div title={accountName} className="hidden size-11 shrink-0 items-center justify-center rounded-2xl bg-[#121316] text-lg font-black text-[#C0DD11] md:mb-4 md:flex">N</div>
+      <nav className="flex flex-1 items-center justify-around gap-1 overflow-x-auto md:flex-col md:justify-start md:overflow-visible">
+        {views.map(v => navButton(v.name, v.label, v.icon))}
+        <span className="hidden md:block md:flex-1" />
+        {navButton('Settings', 'Settings', Settings)}
+      </nav>
+      <div className="hidden md:block"><MonitoringSignOut compact /></div>
     </aside>
 
-    {view === 'Inbox' ? <main className={`grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] ${contactOpen && selectedThread ? 'lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)_320px]' : 'lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]'}`}>
-      <ConversationList inbox={inbox} filters={filters} setFilters={f => { setFilters(f) }} labels={labels} selected={selected} onSelect={setSelected} onPrefetch={id => prefetchConversation(id, chatCache)} hidden={!!selected} />
-      <section aria-label="Conversation" className={`min-h-0 min-w-0 ${selected ? 'flex flex-col' : 'hidden lg:flex lg:flex-col'}`}>
+    {view === 'Inbox' ? <main className={`grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] md:gap-3 ${contactOpen && selectedThread ? 'lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)_320px]' : 'lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]'}`}>
+      <ConversationList inbox={inbox} filters={filters} setFilters={setFilters} labels={labels} selected={selected} onSelect={setSelected}
+        onPrefetch={id => prefetchConversation(id, chatCache)} hidden={!!selected} pinned={prefs.pinned} onPin={pinned => update({ pinned })} refresh={refresh} />
+      <section aria-label="Conversation" className={`min-h-0 min-w-0 overflow-hidden md:rounded-3xl md:border md:border-border md:shadow-sm ${selected ? 'flex flex-col' : 'hidden lg:flex lg:flex-col'}`}>
         {selected ? <Conversation key={selected} id={selected} thread={selectedThread} channels={inbox.channels} repliesEnabled={replyEnabled === true && me.full} workflowReady={workflowReady}
           cache={chatCache} contactOpen={contactOpen} onToggleContact={() => setContactOpen(v => !v)} onBack={() => setSelected(null)}
           onPatched={value => patch(selected, value)} onLoaded={onLoaded} onChanged={bump} />
-          : <div className="chat-wallpaper flex h-full flex-col items-center justify-center gap-3 p-10 text-center text-muted-foreground"><span className="flex size-16 items-center justify-center rounded-2xl bg-card shadow-sm"><MessageSquare size={30} className="text-primary" /></span><p className="font-medium text-foreground">Select a conversation</p><p className="max-w-xs text-sm">Use <kbd className="rounded border border-border bg-card px-1">j</kbd> / <kbd className="rounded border border-border bg-card px-1">k</kbd> to move between conversations and <kbd className="rounded border border-border bg-card px-1">/</kbd> to search.</p></div>}
+          : <div className="chat-wallpaper flex h-full flex-col items-center justify-center gap-3 p-10 text-center text-muted-foreground"><span className="flex size-16 items-center justify-center rounded-3xl bg-card shadow-sm"><MessageSquare size={28} /></span><p className="font-medium text-foreground">Select a conversation</p><p className="max-w-xs text-sm"><kbd className="rounded border border-border bg-card px-1">j</kbd> / <kbd className="rounded border border-border bg-card px-1">k</kbd> to move, <kbd className="rounded border border-border bg-card px-1">/</kbd> to search</p></div>}
       </section>
       {contactOpen && selectedThread && <div className="fixed inset-0 z-40 bg-black/30 xl:static xl:z-auto xl:bg-transparent" onClick={e => { if (e.target === e.currentTarget) setContactOpen(false) }}>
-        <div className="ml-auto h-full w-[min(340px,92vw)] xl:w-auto"><ContactPanel key={selectedThread.id} thread={selectedThread} channels={inbox.channels} labels={labels} workflowReady={workflowReady}
+        <div className="ml-auto h-full w-[min(340px,92vw)] overflow-hidden xl:w-auto xl:rounded-3xl xl:border xl:border-border xl:shadow-sm"><ContactPanel key={selectedThread.id} thread={selectedThread} channels={inbox.channels} labels={labels} workflowReady={workflowReady}
           onPatched={value => patch(selectedThread.id, value)} onOpenThread={setSelected} onClose={() => setContactOpen(false)} /></div>
       </div>}
     </main>
       : <main className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-6xl space-y-5 p-4 lg:p-8">
-          <header className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-widest text-primary">{accountName}</p><h1 className="text-2xl font-semibold">{view}</h1></div><button className={buttonClass} onClick={bump}>Refresh</button></header>
-          {view === 'Dashboard' && <Dashboard refresh={refresh} channels={inbox.channels} onTab={tab => { setFilters({ ...emptyFilters, tab, sort: tab === 'waiting' ? 'oldest' : 'latest' }); setView('Inbox') }} onChannel={id => { setFilters({ ...emptyFilters, tab: 'all', channel: id }); setView('Inbox') }} />}
+        <div className="mx-auto max-w-7xl space-y-5 p-4 lg:p-6">
+          <header className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{accountName}</p><h1 className="text-3xl font-semibold tracking-tight">{view === 'Logs' ? 'Message logs' : view === 'Leads' ? 'Leads board' : view}</h1></div>
+            <div className="flex items-center gap-2"><button className={`${buttonClass} rounded-full`} onClick={bump}>Refresh</button><span className="md:hidden"><MonitoringSignOut compact /></span></div></header>
+          {view === 'Dashboard' && <Dashboard refresh={refresh} channels={inbox.channels} onTab={tab => showInbox({ tab, sort: tab === 'waiting' ? 'oldest' : prefs.defaultSort })} onChannel={id => showInbox({ tab: 'all', channel: id })} />}
+          {view === 'Leads' && <LeadsBoard channels={inbox.channels} refresh={refresh} onOpen={open} />}
           {view === 'Contacts' && <ContactsPanel channels={inbox.channels} onOpen={open} />}
           {view === 'Media' && <MediaLibrary channels={inbox.channels} refresh={refresh} onOpen={open} />}
-          {view === 'Message logs' && <MessageBrowser key={view} channels={inbox.channels} refresh={refresh} onOpen={open} />}
           {view === 'Reports' && <ReportsPanel channels={inbox.channels} refresh={refresh} />}
-          {view === 'Saved replies' && <QuickRepliesPanel />}
-          {view === 'Business numbers' && <><ConnectNumber onConnected={bump} /><BusinessNumbers channels={inbox.channels} refresh={refresh} onSaved={bump} onOpen={id => { setFilters({ ...emptyFilters, tab: 'all', channel: id }); setView('Inbox') }} />
-            <details className="rounded-xl border border-border bg-card p-3"><summary className="cursor-pointer p-2 font-medium">Add a number from Meta portfolio (without history sharing)</summary><PortfolioPicker onSaved={bump} /></details>
-            <details className="rounded-xl border border-border bg-card p-3"><summary className="cursor-pointer p-2 font-medium">Enter number details manually</summary><ChannelManager channels={inbox.channels} onSaved={bump} /></details></>}
-          {view === 'Import history' && <HistoryImport channels={inbox.channels} onSaved={bump} />}
-          {view === 'Events for review' && <ReviewEvents channels={inbox.channels} />}
-          {view === 'Settings' && <>
-            {me.full && <TeamSettings channels={inbox.channels} />}
-            {can(me, 'manage_settings') && <StorageSettings />}
-            {can(me, 'manage_labels') && <LabelsSettings labels={labels} ready={labelsReady} onChanged={() => { reloadLabels(); bump() }} />}
-            {me.full && <MonitoringSettings enabled={replyEnabled} onSaved={enabled => { settingsRevision.current++; setReplyEnabled(enabled); bump() }} />}
-            {can(me, 'manage_numbers') && <RenewMetaAccess channels={inbox.channels} />}
-          </>}
+          {view === 'Logs' && <MessageBrowser channels={inbox.channels} refresh={refresh} onOpen={open} />}
+          {view === 'Settings' && <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
+            <nav aria-label="Settings" className="crm-card flex gap-1 overflow-x-auto p-2 lg:sticky lg:top-0 lg:flex-col lg:self-start">
+              {sections.filter(s => s.allowed(me)).map(s => <button key={s.id} onClick={() => setSection(s.id)} aria-current={section === s.id ? 'page' : undefined}
+                className={`flex shrink-0 items-center justify-between gap-2 rounded-2xl px-3 py-2 text-left text-sm font-medium ${section === s.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>{s.label}<ChevronRight size={14} className="hidden lg:block" /></button>)}
+            </nav>
+            <div className="min-w-0 space-y-5">
+              {section === 'preferences' && <PreferencesSettings />}
+              {section === 'team' && me.full && <TeamSettings channels={inbox.channels} />}
+              {section === 'numbers' && can(me, 'manage_numbers') && <Panel><ConnectNumber onConnected={bump} /><BusinessNumbers channels={inbox.channels} refresh={refresh} onSaved={bump} onOpen={id => showInbox({ tab: 'all', channel: id })} />
+                <details className="crm-card p-4"><summary className="cursor-pointer font-medium">Add from Meta portfolio (no history)</summary><PortfolioPicker onSaved={bump} /></details>
+                <details className="crm-card p-4"><summary className="cursor-pointer font-medium">Enter number details manually</summary><ChannelManager channels={inbox.channels} onSaved={bump} /></details></Panel>}
+              {section === 'storage' && can(me, 'manage_settings') && <StorageSettings />}
+              {section === 'labels' && can(me, 'manage_labels') && <LabelsSettings labels={labels} ready={labelsReady} onChanged={() => { reloadLabels(); bump() }} />}
+              {section === 'replies' && me.full && <QuickRepliesPanel />}
+              {section === 'access' && can(me, 'manage_numbers') && <RenewMetaAccess channels={inbox.channels} />}
+              {section === 'import' && can(me, 'manage_numbers') && <HistoryImport channels={inbox.channels} onSaved={bump} />}
+              {section === 'events' && can(me, 'manage_numbers') && <ReviewEvents channels={inbox.channels} />}
+              {section === 'general' && me.full && <MonitoringSettings enabled={replyEnabled} onSaved={enabled => { settingsRevision.current++; setReplyEnabled(enabled); bump() }} />}
+            </div>
+          </div>}
         </div>
       </main>}
-  </div></AccessProvider>
-}
-
-function Pagination({ page, size, total, setPage, label = 'conversation' }: { page: number; size: number; total: number; setPage: (page: number) => void; label?: string }) {
-  return <nav aria-label={`${label} pages`} className="flex items-center justify-between gap-2 border-t border-border p-3"><button className={buttonClass} disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</button><span className="text-xs text-muted-foreground">Page {page + 1} of {Math.max(1, Math.ceil(total / size))}</span><button className={buttonClass} disabled={(page + 1) * size >= total} onClick={() => setPage(page + 1)}>Next</button></nav>
-}
-
-function ChannelManager({ channels, onSaved }: { channels: MonitoringChannel[]; onSaved: () => void }) {
-  const [error, setError] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [success, setSuccess] = useState(false)
-  return <section className="p-2"><p className="text-sm text-muted-foreground">Add a number using credentials for your Numera Meta app. Saving verifies its details and stores its encrypted credential. It does not register the number or change WabaCRM subscriptions. Use the agent’s name as the label.</p>
-    <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={async event => {
-      event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); setSaving(true); setError(''); setSuccess(false)
-      try { await api('/api/monitoring/channels', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.fromEntries(data)) }); form.reset(); setSuccess(true); onSaved() }
-      catch (err) { setError((err as Error).message) }
-      finally { setSaving(false) }
-    }}>
-      <label className="text-sm">Agent label<input className={inputClass} name="label" maxLength={120} required autoComplete="off" /></label><label className="text-sm">Phone number ID<input className={inputClass} name="phone_number_id" pattern="[0-9]+" maxLength={40} required /></label><label className="text-sm">WhatsApp Business Account ID<input className={inputClass} name="waba_id" pattern="[0-9]+" maxLength={40} required /></label><label className="text-sm">Numera app access token<input className={inputClass} name="access_token" type="password" autoComplete="new-password" maxLength={8192} required /></label><div><button className={buttonClass} disabled={saving}>{saving ? 'Verifying…' : 'Verify and add number'}</button></div>
-    </form>{error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}{success && <p role="status" className="mt-3 text-sm">Number saved. Webhook delivery still needs to be verified.</p>}
-    <p className="mt-3 text-xs text-muted-foreground">{channels.length} configured numbers.</p>
-  </section>
-}
-
-function ReviewEvents({ channels }: { channels: MonitoringChannel[] }) {
-  const [page, setPage] = useState(0)
-  const [data, setData] = useState<{ events: { id: string; channel_id: string; field: string; received_at: string }[]; total: number }>({ events: [], total: 0 })
-  const [error, setError] = useState('')
-  const [payload, setPayload] = useState<{ field: string; payload: unknown } | null>(null)
-  const [selected, setSelected] = useState<string | null>(null)
-  useEffect(() => {
-    const controller = new AbortController()
-    api<typeof data>(`/api/monitoring/events?page=${page}`, { signal: controller.signal }).then(result => { setData(result); setError('') }).catch(err => { if (!controller.signal.aborted) setError(err.message) })
-    return () => controller.abort()
-  }, [page])
-  useEffect(() => {
-    if (!selected) return
-    const controller = new AbortController()
-    api<{ event: { field: string; payload: unknown } }>(`/api/monitoring/events/${selected}`, { signal: controller.signal })
-      .then(result => { setPayload(result.event); setError('') })
-      .catch(err => { if (!controller.signal.aborted) setError(err.message) })
-    return () => controller.abort()
-  }, [selected])
-  return <section className="rounded-xl border border-border bg-card p-5"><p className="text-sm text-muted-foreground">Unsupported and history events are retained. They are not treated as imported conversations.</p>{error && <p role="alert">{error}</p>}<ul className="my-3 space-y-2">{data.events.map(event => <li key={event.id}><button onClick={() => { if (selected !== event.id) { setPayload(null); setSelected(event.id) } }} className="w-full rounded-lg bg-muted p-3 text-left text-sm hover:bg-primary/10">{event.field} · {channels.find(c => c.id === event.channel_id)?.display_number ?? 'Unknown number'} · {date(event.received_at)} · View event</button></li>)}</ul>{payload && <details open className="mb-3 rounded-lg border border-border p-3"><summary className="text-sm font-medium">Retained {payload.field} event</summary><pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(payload.payload, null, 2)}</pre></details>}{!error && data.events.length === 0 && <p className="my-3 text-sm text-muted-foreground">No events awaiting review.</p>}<Pagination page={page} size={25} total={data.total} setPage={setPage} label="event" /></section>
-}
-
-function Stat({ label, value, hint, tone = 'default', onClick }: { label: string; value: number | null | undefined; hint?: string; tone?: 'default' | 'alert' | 'good'; onClick?: () => void }) {
-  const body: ReactNode = <><p className="text-sm text-muted-foreground">{label}</p><p className={`mt-2 text-3xl font-semibold ${tone === 'alert' && value ? 'text-red-600' : tone === 'good' ? 'text-emerald-600' : ''}`}>{value === null || value === undefined ? '—' : value.toLocaleString()}</p>{hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}</>
-  return onClick ? <button onClick={onClick} className="rounded-xl border border-border bg-card p-5 text-left hover:border-primary/50 hover:shadow-sm">{body}</button> : <div className="rounded-xl border border-border bg-card p-5">{body}</div>
-}
-
-function Dashboard({ refresh, channels, onTab, onChannel }: { refresh: number; channels: MonitoringChannel[]; onTab: (tab: InboxTab) => void; onChannel: (id: string) => void }) {
-  const [summary, setSummary] = useState<{ conversations: number; inbound: number; outbound: number; numbers: number } | null>(null)
-  const [counts, setCounts] = useState<Record<InboxTab, number> | null>(null)
-  const [perAgent, setPerAgent] = useState<Record<string, number>>({})
-  const [error, setError] = useState('')
-  useEffect(() => {
-    const controller = new AbortController()
-    api<typeof summary>('/api/monitoring/summary', { signal: controller.signal }).then(setSummary).catch(e => { if (!controller.signal.aborted) setError(e.message) })
-    api<{ counts: Record<InboxTab, number> | null }>('/api/monitoring/counts', { signal: controller.signal }).then(d => setCounts(d.counts)).catch(() => {})
-    return () => controller.abort()
-  }, [refresh])
-  useEffect(() => {
-    const controller = new AbortController()
-    Promise.all(channels.filter(c => c.active).map(c => api<{ counts: Record<InboxTab, number> | null }>(`/api/monitoring/counts?channel=${c.id}`, { signal: controller.signal }).then(d => [c.id, d.counts?.waiting ?? 0] as const)))
-      .then(rows => setPerAgent(Object.fromEntries(rows))).catch(() => {})
-    return () => controller.abort()
-  }, [channels, refresh])
-  return <div className="space-y-6">
-    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-    <section><h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Needs attention</h2>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Waiting for agent reply" value={counts?.waiting} hint="Customer messaged last" tone="alert" onClick={() => onTab('waiting')} />
-        <Stat label="Unread in CRM" value={counts?.unread} hint="Not yet reviewed by management" onClick={() => onTab('unread')} />
-        <Stat label="Open conversations" value={counts?.open} onClick={() => onTab('open')} />
-        <Stat label="Resolved" value={counts?.resolved} tone="good" onClick={() => onTab('resolved')} />
-      </div>
-      {counts === null && <p className="mt-2 text-xs text-muted-foreground">Status counts appear after the inbox database update.</p>}
-    </section>
-    <section><h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Agents</h2>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{channels.map(channel => <button key={channel.id} onClick={() => onChannel(channel.id)} className="rounded-xl border border-border bg-card p-4 text-left hover:border-primary/50 hover:shadow-sm">
-        <div className="flex items-center justify-between gap-2"><p className="truncate font-semibold">{channel.label}</p><span className={`rounded-full px-2 py-0.5 text-[11px] ${channel.active ? 'bg-emerald-50 text-emerald-700' : 'bg-muted text-muted-foreground'}`}>{channel.active ? 'Monitoring' : 'Paused'}</span></div>
-        <p className="mt-1 text-sm text-muted-foreground">{channel.display_number}</p>
-        <div className="mt-3 flex items-center justify-between text-xs"><span className="text-muted-foreground">Last event {channel.last_event_at ? new Date(channel.last_event_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—'}</span>{perAgent[channel.id] ? <span className="rounded-md bg-red-50 px-1.5 py-0.5 font-medium text-red-700">{perAgent[channel.id]} waiting</span> : null}</div>
-      </button>)}</div>
-    </section>
-    <section><h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">All time</h2>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Stat label="Conversations" value={summary?.conversations} /><Stat label="Messages received" value={summary?.inbound} /><Stat label="Messages sent by agents" value={summary?.outbound} /><Stat label="Business numbers" value={summary?.numbers} /></div>
-      <p className="mt-3 text-xs text-muted-foreground">Counts reflect messages received or imported into this CRM. A customer contacting two numbers has two conversations.</p>
-    </section>
   </div>
+}
+
+function Panel({ children }: { children: ReactNode }) {
+  return <div className="space-y-5">{children}</div>
 }

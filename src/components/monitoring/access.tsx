@@ -17,7 +17,3 @@ export function useCan(permission: Permission | 'full'): boolean {
   if (!me) return true
   return permission === 'full' ? me.full : can(me, permission)
 }
-
-export function useMe(): MonitoringMe | null {
-  return useContext(AccessContext)
-}

@@ -29,7 +29,7 @@ export function TeamSettings({ channels }: { channels: MonitoringChannel[] }) {
     : !channels.length ? `${ids.length} number${ids.length === 1 ? '' : 's'}`
       : ids.map(id => channels.find(c => c.id === id)?.label ?? 'Removed number').join(', ') || 'No numbers'
 
-  return <section className="rounded-2xl border border-border bg-card p-5">
+  return <section className="crm-card p-5">
     <div className="flex items-center gap-2"><ShieldCheck size={18} className="text-primary" /><h2 className="text-lg font-semibold">Team &amp; roles</h2></div>
     {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
     {team && !team.ready && <p className="mt-3 text-sm text-amber-700">Team access needs the latest database update.</p>}
@@ -68,7 +68,7 @@ function AccessPicker({ value, onChange, roles, channels }: { value: Access; onC
 }
 
 function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
-  return <button type="button" aria-pressed={on} onClick={onClick} className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs ${on ? 'border-[#121316] bg-[#121316] text-white' : 'border-border hover:bg-muted'}`}>{on && <Check size={12} />}{children}</button>
+  return <button type="button" aria-pressed={on} onClick={onClick} className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs ${on ? 'border-transparent bg-primary text-primary-foreground' : 'border-border hover:bg-muted'}`}>{on && <Check size={12} />}{children}</button>
 }
 
 const accessBody = (v: Access) => ({ access: v.access, channel_ids: v.access === 'admin' ? null : v.channels })
@@ -95,7 +95,7 @@ function InviteForm({ team, channels, onDone }: { team: Team; channels: Monitori
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {link && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">
       <p>Send this link to <b>{link.email}</b>. It works once, for that email only, for 7 days.</p>
-      <div className="mt-2 flex gap-2"><input readOnly aria-label="Invite link" className={`${inputClass} bg-white`} value={link.url} onFocus={e => e.target.select()} />
+      <div className="mt-2 flex gap-2"><input readOnly aria-label="Invite link" className={inputClass} value={link.url} onFocus={e => e.target.select()} />
         <button type="button" className={buttonClass} onClick={() => { void navigator.clipboard?.writeText(link.url); setCopied(true) }}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? 'Copied' : 'Copy'}</button></div>
     </div>}
   </form>

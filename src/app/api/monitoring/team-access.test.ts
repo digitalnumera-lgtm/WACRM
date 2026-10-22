@@ -9,6 +9,7 @@ import { PATCH as workflow } from './threads/[id]/workflow/route'
 import { GET as media } from './messages/[id]/media/route'
 import { GET as messages } from './messages/route'
 import { GET as me } from './me/route'
+import { GET as overview } from './overview/route'
 import { GET as team } from './team/route'
 import { POST as invite } from './team/invites/route'
 import { POST as createRole } from './team/roles/route'
@@ -45,7 +46,7 @@ function database() {
     from(table: string) {
       const filters: [string, string, unknown][] = []
       let op = 'select', value: unknown, head = false
-      const matches = (row: Row) => filters.every(([kind, key, v]) => kind === 'eq' ? row[key] === v : kind === 'in' ? (v as unknown[]).includes(row[key]) : kind === 'is' ? row[key] === v || (v === null && row[key] === undefined) : kind === 'ilike' ? String(row[key] ?? '').toLowerCase() === String(v).replace(/\\(.)/g, '$1').toLowerCase() : true)
+      const matches = (row: Row) => filters.every(([kind, key, v]) => kind === 'eq' ? row[key] === v : kind === 'neq' ? row[key] !== v : kind === 'in' ? (v as unknown[]).includes(row[key]) : kind === 'is' ? row[key] === v || (v === null && row[key] === undefined) : kind === 'ilike' ? String(row[key] ?? '').toLowerCase() === String(v).replace(/\\(.)/g, '$1').toLowerCase() : true)
       const run = () => {
         if (op !== 'select') writes.push({ table, op, value })
         if (op === 'insert' || op === 'upsert') { const list = Array.isArray(value) ? value : [value]; return { data: list.map(v => ({ id: `${table}-new`, expires_at: '2026-10-29T00:00:00Z', ...(v as Row) })), error: null, count: null } }
@@ -56,7 +57,7 @@ function database() {
         select(_c?: string, options?: { head?: boolean }) { head = !!options?.head; return query },
         insert(v: unknown) { op = 'insert'; value = v; return query }, upsert(v: unknown) { op = 'upsert'; value = v; return query },
         update(v: unknown) { op = 'update'; value = v; return query }, delete() { op = 'delete'; return query },
-        eq(k: string, v: unknown) { filters.push(['eq', k, v]); return query }, in(k: string, v: unknown) { filters.push(['in', k, v]); return query },
+        eq(k: string, v: unknown) { filters.push(['eq', k, v]); return query }, neq(k: string, v: unknown) { filters.push(['neq', k, v]); return query }, in(k: string, v: unknown) { filters.push(['in', k, v]); return query },
         is(k: string, v: unknown) { filters.push(['is', k, v]); return query },
         ilike(k: string, v: unknown) { filters.push(['ilike', k, v]); return query },
         not() { return query }, or() { return query }, gte() { return query }, lt() { return query }, contains() { return query },
@@ -138,6 +139,22 @@ describe('team member access', () => {
     ;(rows.monitoring_member_access[0].monitoring_roles as Row).permissions = ['view_inbox']
     expect((await messages(get('/api/monitoring/messages?kinds=image,video'))).status).toBe(403)
     expect((await messages(get('/api/monitoring/messages'))).status).toBe(200)
+  })
+})
+
+describe('dashboard overview', () => {
+  it('counts only the member’s numbers and needs report access', async () => {
+    asMember()
+    expect((await overview(get('/api/monitoring/overview'))).status).toBe(403)
+    ;(rows.monitoring_member_access[0].monitoring_roles as Row).permissions = ['view_inbox', 'view_reports']
+    rows.monitoring_inbox = [
+      { id: threadA, account_id: company, channel_id: chanA, last_direction: 'inbound', state: 'open', last_message_at: '2026-10-21T10:00:00Z' },
+      { id: threadB, account_id: company, channel_id: chanB, last_direction: 'inbound', state: 'open', last_message_at: '2026-10-21T09:00:00Z' },
+    ]
+    const body = await (await overview(get('/api/monitoring/overview?days=7'))).json()
+    expect(body.counts.waiting).toBe(1)
+    expect(Object.keys(body.waiting)).toEqual([chanA])
+    expect((await overview(get('/api/monitoring/overview?days=5'))).status).toBe(400)
   })
 })
 

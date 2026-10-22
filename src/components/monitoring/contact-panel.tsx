@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, type ReactNode } from 'react'
-import { Building2, ChevronDown, Copy, Mail, MapPin, Pencil, Phone, Plus, X } from 'lucide-react'
+import { Building2, ChevronDown, Copy, Mail, MapPin, MessageCircle, Pencil, Phone, Plus, X } from 'lucide-react'
 import { leadStatuses, type LeadAudit, type MonitoringChannel, type MonitoringThread } from '@/lib/monitoring/types'
 import type { ContactProfile, ConversationPriority, MonitoringLabel } from '@/lib/monitoring/workflow-types'
 import { LabelPicker } from './labels'
@@ -55,12 +55,17 @@ export function ContactPanel({ thread, channels, labels, workflowReady, onPatche
   const others = related.filter(r => r.id !== thread.id)
 
   return <aside aria-label="Contact details" className="flex h-full min-h-0 flex-col overflow-y-auto border-l border-border bg-card">
-    <div className="flex items-center justify-between border-b border-border px-4 py-3"><h3 className="text-sm font-semibold">Contact</h3><button className={`${buttonClass} px-2 py-1.5`} aria-label="Close contact panel" onClick={onClose}><X size={16} /></button></div>
+    <div className="flex items-center justify-between px-4 py-3"><h3 className="text-sm font-semibold">Contact</h3><button className={`${buttonClass} px-2 py-1.5`} aria-label="Close contact panel" onClick={onClose}><X size={16} /></button></div>
     {error && <p role="alert" className="mx-4 mt-3 rounded-lg bg-red-50 p-2 text-xs text-red-700">{error}</p>}
-    <div className="border-b border-border px-4 py-5 text-center">
+    <div className="border-b border-border px-4 pb-5 pt-1 text-center">
       <div className="flex justify-center"><Avatar name={name} seed={thread.customer} size="lg" /></div>
-      <p className="mt-3 break-words text-base font-semibold">{name}</p>
+      <p className="mt-3 break-words text-lg font-semibold tracking-tight">{name}</p>
       {profile?.company && <p className="text-xs text-muted-foreground">{profile.company}</p>}
+      <div className="mt-3 flex justify-center gap-2">
+        <a href={`https://wa.me/${thread.customer}`} target="_blank" rel="noreferrer" aria-label="Open in WhatsApp" title="Open in WhatsApp" className="flex size-9 items-center justify-center rounded-full border border-border hover:bg-muted"><MessageCircle size={15} /></a>
+        <button aria-label="Copy number" title="Copy number" className="flex size-9 items-center justify-center rounded-full border border-border hover:bg-muted" onClick={() => void navigator.clipboard?.writeText(`+${thread.customer}`)}><Copy size={15} /></button>
+        {profile?.email && <a href={`mailto:${profile.email}`} aria-label="Email" title="Email" className="flex size-9 items-center justify-center rounded-full border border-border hover:bg-muted"><Mail size={15} /></a>}
+      </div>
       {!editing ? <ul className="mt-4 space-y-2 text-left text-sm">
         <li className="flex items-center gap-2"><Phone size={14} className="text-muted-foreground" /><a className="flex-1 truncate hover:text-primary" href={`https://wa.me/${thread.customer}`} target="_blank" rel="noreferrer">+{thread.customer}</a><button className="text-muted-foreground hover:text-foreground" aria-label="Copy number" onClick={() => void navigator.clipboard?.writeText(`+${thread.customer}`)}><Copy size={13} /></button></li>
         <li className="flex items-center gap-2"><Mail size={14} className="text-muted-foreground" />{profile?.email ? <a className="truncate hover:text-primary" href={`mailto:${profile.email}`}>{profile.email}</a> : <span className="text-muted-foreground">No email</span>}</li>
