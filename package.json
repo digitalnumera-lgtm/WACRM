@@ -54,7 +54,7 @@
     "date-fns": "^4.4.0",
     "lucide-react": "^1.52.0",
     "motion": "^14.5.0",
-    "next": "16.3.8",
+    "next": "16.4.1",
     "next-intl": "^4.14.8",
     "opus-recorder": "^8.0.5",
     "react": "19.2.4",
@@ -70,19 +70,20 @@
     "@types/node": "^26",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/mocker": "^4.1.12",
     "eslint": "^9",
-    "eslint-config-next": "16.3.8",
+    "eslint-config-next": "16.4.1",
     "prettier": "^3.9.9",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4",
     "typescript": "^6",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   },
   "overrides": {
     "postcss": "^8.5.10",
-    "ip-address": "^10.7.1",
+    "ip-address": "^10.7.4",
     "fast-uri": "^3.1.8",
-    "hono": "^4.13.5",
+    "hono": "^4.13.11",
     "js-yaml": "^4.3.2",
     "nanoid": "^3.3.17",
     "@babel/core": "^7.29.6",
@@ -92,6 +93,7 @@
     "proxy-addr": "^2.0.8",
     "@modelcontextprotocol/sdk": "^1.31.0",
     "undici": "^7.29.1",
-    "source-map-js": "^1.2.2"
+    "source-map-js": "^1.2.2",
+    "vite": "^8.1.6"
   }
 }
