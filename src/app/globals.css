@@ -245,7 +245,16 @@ html[data-theme="rose"] {
   --primary-foreground: #ffffff;
   --ring: #c0dd11;
   --destructive: #c0352b;
-  --lime: #c0dd11;
+  /* Theme tokens: highlight (badges, active states), ink (dark brand surfaces). */
+  --hl: #c0dd11;
+  --hl-fg: #121316;
+  --ink: #121316;
+  --ink-fg: #ffffff;
+  --ink-accent: #c0dd11;
+  --lime: var(--hl);
+  --bubble-agent-label: #c0dd11;
+  --card-radius: 1.5rem;
+  --card-shadow: 0 1px 2px rgb(18 19 22 / 0.04), 0 8px 24px -12px rgb(18 19 22 / 0.08);
   --rail: transparent;
   --chat-bg: #eef3ef;
   --bubble-agent: #121316;
@@ -281,6 +290,7 @@ html[data-theme="rose"] {
   --chat-bg: #111214;
   --bubble-agent: #c0dd11;
   --bubble-agent-fg: #121316;
+  --bubble-agent-label: rgb(18 19 22 / 0.7);
   --bubble-customer: #23252a;
   --bubble-customer-fg: #f3f3ee;
   --series-in: #3987e5;
@@ -290,10 +300,10 @@ html[data-theme="rose"] {
 .monitoring-panel[data-chat-size="small"] { --chat-font: 13px; }
 .monitoring-panel[data-chat-size="large"] { --chat-font: 16px; }
 .monitoring-panel .crm-card {
-  border-radius: 1.5rem;
+  border-radius: var(--card-radius);
   border: 1px solid var(--border);
   background: var(--card);
-  box-shadow: 0 1px 2px rgb(18 19 22 / 0.04), 0 8px 24px -12px rgb(18 19 22 / 0.08);
+  box-shadow: var(--card-shadow);
 }
 .monitoring-panel .chat-wallpaper { background-color: var(--chat-bg); }
 .monitoring-panel { --bubble-icon: var(--card); }
@@ -303,6 +313,107 @@ html[data-theme="rose"] {
 .monitoring-panel[data-density="compact"] .density-row { padding-top: 0.5rem; padding-bottom: 0.5rem; }
 .monitoring-panel .wave-bar { width: 3px; border-radius: 9999px; background: currentColor; opacity: 0.35; transition: opacity 0.15s; }
 .monitoring-panel .wave-bar[data-played="true"] { opacity: 1; }
+
+/* ------------------------------------------------------------------
+   Styles (Settings > Preferences > Style). Each sets the light palette;
+   the .dark rule after it sets the dark one. Numera (above) is default.
+   ------------------------------------------------------------------ */
+.monitoring-panel[data-style="lavender"] {
+  --background: #f6f5fb; --foreground: #1d1a3a; --card: #ffffff; --card-foreground: #1d1a3a; --popover: #ffffff; --popover-foreground: #1d1a3a;
+  --border: #eceaf5; --input: #e4e1f1; --muted: #f3f2fa; --muted-foreground: #6c6889;
+  --primary: #5b3df5; --primary-foreground: #ffffff; --ring: #5b3df5;
+  --hl: #5b3df5; --hl-fg: #ffffff; --ink: #1d1a3a; --ink-fg: #ffffff; --ink-accent: #c9bfff;
+  --chat-bg: #f2f0fb; --bubble-agent: #5b3df5; --bubble-agent-fg: #ffffff; --bubble-agent-label: #ddd6ff; --bubble-customer: #ffffff; --bubble-customer-fg: #1d1a3a;
+  --series-in: #5b3df5; --series-out: #0e958f;
+  --card-radius: 1.75rem; --card-shadow: 0 1px 2px rgb(29 26 58 / 0.04), 0 24px 48px -28px rgb(91 61 245 / 0.22);
+  background-image: radial-gradient(900px 520px at 8% -10%, #dfe5ff 0%, transparent 65%), radial-gradient(900px 700px at 100% 0%, #f7e4f5 0%, transparent 60%), radial-gradient(800px 600px at 50% 115%, #ebe6ff 0%, transparent 70%);
+}
+.monitoring-panel.dark[data-style="lavender"] {
+  --background: #0f0d1a; --foreground: #f1effa; --card: #181528; --card-foreground: #f1effa; --popover: #1e1a31; --popover-foreground: #f1effa;
+  --border: #2a2540; --input: #2a2540; --muted: #221e36; --muted-foreground: #a7a2c3;
+  --primary: #7c63ff; --primary-foreground: #ffffff; --ring: #8b74ff;
+  --hl: #7c63ff; --hl-fg: #ffffff; --ink: #2a2540; --ink-fg: #ffffff; --ink-accent: #c9bfff;
+  --chat-bg: #120f1f; --bubble-agent: #6d55ff; --bubble-agent-fg: #ffffff; --bubble-agent-label: #ddd6ff; --bubble-customer: #221e36; --bubble-customer-fg: #f1effa;
+  --series-in: #7c5cff; --series-out: #12a39b;
+  background-image: radial-gradient(900px 520px at 8% -10%, #1d1838 0%, transparent 65%), radial-gradient(900px 700px at 100% 0%, #24152a 0%, transparent 60%);
+}
+.monitoring-panel[data-style="blue"] {
+  --background: #f5f7fb; --foreground: #0f172a; --card: #ffffff; --card-foreground: #0f172a; --popover: #ffffff; --popover-foreground: #0f172a;
+  --border: #e6e9f0; --input: #e0e5ee; --muted: #f1f4f9; --muted-foreground: #64748b;
+  --primary: #2563eb; --primary-foreground: #ffffff; --ring: #2563eb;
+  --hl: #2563eb; --hl-fg: #ffffff; --ink: #0f172a; --ink-fg: #ffffff; --ink-accent: #93c5fd;
+  --chat-bg: #eef2f8; --bubble-agent: #2563eb; --bubble-agent-fg: #ffffff; --bubble-agent-label: #d3e3ff; --bubble-customer: #ffffff; --bubble-customer-fg: #0f172a;
+  --series-in: #2563eb; --series-out: #16a34a;
+  --card-radius: 1.25rem; --card-shadow: 0 1px 2px rgb(15 23 42 / 0.05), 0 12px 32px -20px rgb(37 99 235 / 0.2);
+  background-image: radial-gradient(1000px 600px at 100% 0%, #e8eefb 0%, transparent 70%);
+}
+.monitoring-panel.dark[data-style="blue"] {
+  --background: #0b1120; --foreground: #e6ecf7; --card: #111a2e; --card-foreground: #e6ecf7; --popover: #16213a; --popover-foreground: #e6ecf7;
+  --border: #1f2a44; --input: #1f2a44; --muted: #18233b; --muted-foreground: #94a3b8;
+  --primary: #3b82f6; --primary-foreground: #ffffff; --ring: #60a5fa;
+  --hl: #3b82f6; --hl-fg: #ffffff; --ink: #1e293b; --ink-fg: #ffffff; --ink-accent: #93c5fd;
+  --chat-bg: #0d1526; --bubble-agent: #2563eb; --bubble-agent-fg: #ffffff; --bubble-agent-label: #d3e3ff; --bubble-customer: #18233b; --bubble-customer-fg: #e6ecf7;
+  --series-in: #3b82f6; --series-out: #22a35a;
+  background-image: radial-gradient(1000px 600px at 100% 0%, #111d36 0%, transparent 70%);
+}
+.monitoring-panel[data-style="glass"] {
+  --background: #e4ebf1; --foreground: #0e1116; --card: rgb(255 255 255 / 0.58); --card-foreground: #0e1116; --popover: rgb(255 255 255 / 0.94); --popover-foreground: #0e1116;
+  --border: rgb(255 255 255 / 0.75); --input: #d3dbe2; --muted: rgb(20 32 48 / 0.06); --muted-foreground: #58626d;
+  --primary: #0e1116; --primary-foreground: #ffffff; --ring: #2a4df0;
+  --hl: #2a4df0; --hl-fg: #ffffff; --ink: #0e1116; --ink-fg: #ffffff; --ink-accent: #f2e64d;
+  --chat-bg: rgb(255 255 255 / 0.32); --bubble-agent: #0e1116; --bubble-agent-fg: #ffffff; --bubble-agent-label: #f2e64d; --bubble-customer: rgb(255 255 255 / 0.88); --bubble-customer-fg: #0e1116;
+  --series-in: #2a4df0; --series-out: #1597a8;
+  --card-radius: 1.75rem; --card-shadow: 0 12px 40px -22px rgb(30 50 80 / 0.28);
+  background-image: radial-gradient(700px 500px at 0% 0%, #cddcf2 0%, transparent 70%), radial-gradient(800px 600px at 100% 100%, #eef0d6 0%, transparent 70%), linear-gradient(135deg, #d9e4f3 0%, #e8edef 50%, #edf0de 100%);
+  background-attachment: fixed;
+}
+.monitoring-panel.dark[data-style="glass"] {
+  --background: #0e1218; --foreground: #eef1f4; --card: rgb(255 255 255 / 0.06); --card-foreground: #eef1f4; --popover: rgb(24 28 36 / 0.96); --popover-foreground: #eef1f4;
+  --border: rgb(255 255 255 / 0.1); --input: rgb(255 255 255 / 0.14); --muted: rgb(255 255 255 / 0.07); --muted-foreground: #9aa3ad;
+  --primary: #f2e64d; --primary-foreground: #0e1116; --ring: #f2e64d;
+  --hl: #5b7cff; --hl-fg: #ffffff; --ink: #1b212b; --ink-fg: #ffffff; --ink-accent: #f2e64d;
+  --chat-bg: rgb(255 255 255 / 0.03); --bubble-agent: #f2e64d; --bubble-agent-fg: #0e1116; --bubble-agent-label: rgb(14 17 22 / 0.7); --bubble-customer: rgb(255 255 255 / 0.09); --bubble-customer-fg: #eef1f4;
+  --series-in: #5b7cff; --series-out: #1ba3b5;
+  background-image: radial-gradient(700px 500px at 0% 0%, #142236 0%, transparent 70%), radial-gradient(800px 600px at 100% 100%, #1b2014 0%, transparent 70%), linear-gradient(135deg, #10161f 0%, #11151a 100%);
+}
+.monitoring-panel[data-style="glass"] .crm-card, .monitoring-panel[data-style="glass"] .bg-card, .monitoring-panel[data-style="glass"] .bg-popover { backdrop-filter: blur(22px) saturate(1.25); -webkit-backdrop-filter: blur(22px) saturate(1.25); }
+.monitoring-panel[data-style="mono"] {
+  --background: #f3f2ee; --foreground: #151515; --card: #ffffff; --card-foreground: #151515; --popover: #ffffff; --popover-foreground: #151515;
+  --border: #e4e2dc; --input: #dedcd5; --muted: #f1f0eb; --muted-foreground: #6b6863;
+  --primary: #151515; --primary-foreground: #ffffff; --ring: #151515;
+  --hl: #151515; --hl-fg: #ffffff; --ink: #151515; --ink-fg: #ffffff; --ink-accent: #ffffff;
+  --chat-bg: #efeee9; --bubble-agent: #151515; --bubble-agent-fg: #ffffff; --bubble-agent-label: #c4c1b9; --bubble-customer: #ffffff; --bubble-customer-fg: #151515;
+  --series-in: #3f5f9f; --series-out: #a8641f;
+  --card-radius: 1rem; --card-shadow: none;
+  background-image: none;
+}
+.monitoring-panel.dark[data-style="mono"] {
+  --background: #0c0c0c; --foreground: #f2f2f2; --card: #161616; --card-foreground: #f2f2f2; --popover: #1c1c1c; --popover-foreground: #f2f2f2;
+  --border: #2a2a2a; --input: #2a2a2a; --muted: #1f1f1f; --muted-foreground: #a3a3a3;
+  --primary: #f2f2f2; --primary-foreground: #111111; --ring: #f2f2f2;
+  --hl: #f2f2f2; --hl-fg: #111111; --ink: #262626; --ink-fg: #ffffff; --ink-accent: #ffffff;
+  --chat-bg: #111111; --bubble-agent: #f2f2f2; --bubble-agent-fg: #111111; --bubble-agent-label: rgb(17 17 17 / 0.6); --bubble-customer: #1f1f1f; --bubble-customer-fg: #f2f2f2;
+  --series-in: #5f84d6; --series-out: #c07a2e;
+}
+.monitoring-panel[data-style="sky"] {
+  --background: #e9f1fa; --foreground: #13202f; --card: #ffffff; --card-foreground: #13202f; --popover: #ffffff; --popover-foreground: #13202f;
+  --border: #e1e9f2; --input: #dbe4ee; --muted: #f2f6fb; --muted-foreground: #66758a;
+  --primary: #1c2633; --primary-foreground: #ffffff; --ring: #2f7fe0;
+  --hl: #2f7fe0; --hl-fg: #ffffff; --ink: #1c2633; --ink-fg: #ffffff; --ink-accent: #a6d4ff;
+  --chat-bg: #eef4fa; --bubble-agent: #1c2633; --bubble-agent-fg: #ffffff; --bubble-agent-label: #a6d4ff; --bubble-customer: #ffffff; --bubble-customer-fg: #13202f;
+  --series-in: #2f7fe0; --series-out: #2e9e63;
+  --card-radius: 1.75rem; --card-shadow: 0 14px 40px -26px rgb(30 70 120 / 0.3);
+  background-image: linear-gradient(180deg, #c6daf1 0%, #dce9f7 300px, #edf3f9 640px);
+}
+.monitoring-panel.dark[data-style="sky"] {
+  --background: #0b131d; --foreground: #e8f0f8; --card: #121c28; --card-foreground: #e8f0f8; --popover: #172331; --popover-foreground: #e8f0f8;
+  --border: #1f2c3b; --input: #1f2c3b; --muted: #182433; --muted-foreground: #8fa1b6;
+  --primary: #e8f0f8; --primary-foreground: #0b131d; --ring: #3d8fe8;
+  --hl: #3d8fe8; --hl-fg: #ffffff; --ink: #1d2a3a; --ink-fg: #ffffff; --ink-accent: #a6d4ff;
+  --chat-bg: #0e1824; --bubble-agent: #2f7fe0; --bubble-agent-fg: #ffffff; --bubble-agent-label: #d3e9ff; --bubble-customer: #182433; --bubble-customer-fg: #e8f0f8;
+  --series-in: #3d8fe8; --series-out: #2fa868;
+  background-image: linear-gradient(180deg, #11253c 0%, #0b131d 380px);
+}
 
 /* Sign-in pages: Numera brand surfaces regardless of the app theme. */
 .numera-auth {

@@ -166,7 +166,7 @@ function RoleEditor({ role, onClose, onSaved }: { role: Role | null; onClose: ()
     {PERMISSION_GROUPS.map(group => <fieldset key={group.title}><legend className="text-xs font-medium text-muted-foreground">{group.title}</legend>
       <div className="mt-1 space-y-1">{group.items.map(item => { const always = item.key === 'view_inbox'; return <label key={item.key} title={item.hint} className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-muted/50">
         <span>{item.label}</span>
-        <input type="checkbox" role="switch" className="size-4 accent-[#121316]" checked={always || permissions.includes(item.key)} disabled={always} onChange={() => toggle(item.key)} />
+        <input type="checkbox" role="switch" className="size-4 accent-[var(--primary)]" checked={always || permissions.includes(item.key)} disabled={always} onChange={() => toggle(item.key)} />
       </label> })}</div>
     </fieldset>)}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

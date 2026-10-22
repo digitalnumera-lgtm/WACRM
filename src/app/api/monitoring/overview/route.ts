@@ -2,20 +2,26 @@ import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { MonitoringInputError, monitoringError, privateJson } from '@/lib/monitoring/http'
 import { applyInboxTab, missingWorkflowSchema } from '@/lib/monitoring/inbox'
 import { requireMonitoring, scopeChannels } from '@/lib/monitoring/team-access'
+import { newNumbers } from '@/lib/monitoring/new-numbers'
 
 type Counted = PromiseLike<{ count: number | null; error: unknown }>
 
 /**
- * Dashboard in one request: status counts, who is waiting per agent, and
- * message volume for the period against the period before it.
+ * Dashboard in one request: status counts, who is waiting per agent, new
+ * numbers today, and message volume for the period against the one before.
  */
 export async function GET(request: Request) {
   try {
     const access = await requireMonitoring('view_reports')
     const { accountId, db } = access
-    const days = Number(new URL(request.url).searchParams.get('days') ?? 7)
+    const params = new URL(request.url).searchParams
+    const days = Number(params.get('days') ?? 7)
     if (![1, 7, 30].includes(days)) throw new MonitoringInputError('Choose 1, 7 or 30 days')
     const now = Date.now()
+    // Midnight in the viewer's time zone (sent by the browser); UTC midnight otherwise.
+    const todayParam = params.get('today')
+    const todayStart = todayParam ? new Date(todayParam) : new Date(new Date(now).setUTCHours(0, 0, 0, 0))
+    if (!Number.isFinite(todayStart.getTime()) || todayStart.getTime() > now || now - todayStart.getTime() > 36 * 3600000) throw new MonitoringInputError('Invalid start of day')
     const start = new Date(now - days * 86400000).toISOString()
     const previous = new Date(now - 2 * days * 86400000).toISOString()
     const admin = monitoringAdmin()
@@ -26,7 +32,8 @@ export async function GET(request: Request) {
     type Rows = { order: (column: string) => { limit: (n: number) => PromiseLike<{ data: { channel_id: string; last_message_at: string }[] | null; error: unknown }> } }
     const base = scopeChannels(access, admin.from('monitoring_inbox').select('channel_id,last_message_at').eq('account_id', accountId)) as unknown as Parameters<typeof applyInboxTab>[0]
     const waitingQuery = applyInboxTab(base, 'waiting') as unknown as Rows
-    const [unread, open, resolved, waitingRows, inNow, inBefore, outNow, outBefore, active] = await Promise.all([
+    const [fresh, unread, open, resolved, waitingRows, inNow, inBefore, outNow, outBefore, active] = await Promise.all([
+      newNumbers(access, accountId, todayStart).catch(() => null),
       applyInboxTab(inbox(), 'unread') as unknown as Counted,
       applyInboxTab(inbox(), 'open') as unknown as Counted,
       applyInboxTab(inbox(), 'resolved') as unknown as Counted,
@@ -51,6 +58,7 @@ export async function GET(request: Request) {
       waiting: perAgent,
       volume: { inbound: [inNow.count ?? 0, inBefore.count ?? 0], outbound: [outNow.count ?? 0, outBefore.count ?? 0] },
       activeConversations: active.count ?? 0,
+      newNumbers: fresh,
     })
   } catch (error) { return monitoringError(error) }
 }
