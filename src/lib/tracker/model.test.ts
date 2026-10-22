@@ -79,9 +79,15 @@ describe('client tracker view', () => {
 })
 
 describe('apps script file', () => {
-  it('is valid JavaScript and never writes to the Sheet', () => {
+  it('is valid JavaScript and checks the key before anything else', () => {
     expect(() => new Script(TRACKER_APPS_SCRIPT)).not.toThrow()
-    expect(TRACKER_APPS_SCRIPT).not.toMatch(/setValue|appendRow|deleteRow|insertRow|clear\(|setFormula|moveTo|setTrashed|method:\s*'(post|put|delete)'/i)
+    const post = TRACKER_APPS_SCRIPT.slice(TRACKER_APPS_SCRIPT.indexOf('function doPost'))
+    expect(post.indexOf('crmKeyMatches_(body.key)')).toBeLessThan(post.indexOf('crmSnapshot_()'))
+    expect(post.indexOf('crmKeyMatches_(body.key)')).toBeLessThan(post.indexOf('CRM_ACTIONS[body.action]'))
     expect(TRACKER_APPS_SCRIPT).toContain("const CRM_KEY = 'PASTE-KEY-HERE'")
+  })
+  it('changes the Sheet only through the main script functions the forms and tabs use', () => {
+    for (const fn of ['dealFromRaw_(', 'addDeal_(', 'addPayment_(', 'createProject_(', 'syncClickUpStatus_(', 'deleteDeal_(', 'recalc_()']) expect(TRACKER_APPS_SCRIPT).toContain(fn)
+    expect(TRACKER_APPS_SCRIPT).not.toMatch(/appendRow|deleteRow|insertRow|setFormula|setTrashed|UrlFetchApp\.fetch\(/)
   })
 })

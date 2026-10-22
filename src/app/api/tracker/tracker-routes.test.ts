@@ -5,6 +5,7 @@ vi.mock('@/lib/monitoring/admin', () => ({ monitoringAdmin: mocks.admin }))
 import { GET as view } from './route'
 import { GET as settings, POST as saveSettings } from './settings/route'
 import { PUT as setAccess } from './access/route'
+import { POST as act } from './actions/route'
 
 const company = '11111111-1111-4111-8111-111111111111'
 const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -94,5 +95,13 @@ describe('client tracker access', () => {
     as(owner, 'owner')
     const res = await saveSettings(new Request('http://crm.test/api/tracker/settings', { method: 'POST', headers: { 'content-type': 'application/json', origin: 'http://crm.test', host: 'crm.test' }, body: JSON.stringify({ url: 'https://evil.example/exec' }) }))
     expect(res.status).toBe(400)
+  })
+
+  it('allows changes only at Full level', async () => {
+    const req = () => new Request('http://crm.test/api/tracker/actions', { method: 'POST', headers: { 'content-type': 'application/json', origin: 'http://crm.test', host: 'crm.test' }, body: JSON.stringify({ action: 'approve', input: { dealId: 'D-0001' } }) })
+    rows.tracker_access.push({ account_id: company, user_id: admin, level: 'amounts' })
+    as(admin, 'admin'); expect((await act(req())).status).toBe(403)
+    as(agent, 'viewer'); expect((await act(req())).status).toBe(403)
+    as(owner, 'owner'); expect((await act(req())).status).toBe(409) // allowed, but the Sheet is not connected in this test
   })
 })

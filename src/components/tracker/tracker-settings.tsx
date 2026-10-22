@@ -13,7 +13,7 @@ const LEVELS: { value: Exclude<TrackerLevel, 'owner'> | ''; label: string; hint:
   { value: '', label: 'No access', hint: 'Cannot open the Client Tracker' },
   { value: 'view', label: 'View', hint: 'Deals, clients and statuses, no amounts' },
   { value: 'amounts', label: 'View + amounts', hint: 'Also totals, paid, owed and payments' },
-  { value: 'full', label: 'Full', hint: 'Also commission (and editing, when added)' },
+  { value: 'full', label: 'Full', hint: 'Also commission, and can add and change deals and payments' },
 ]
 
 export function TrackerSettings({ level, crm, onConnected }: { level: TrackerLevel; crm: boolean; onConnected: () => void }) {
@@ -78,7 +78,7 @@ function Connection({ data, onSaved, onConnected }: { data: SettingsData; onSave
   const connected = !!data.connection.url && data.connection.hasKey
   return <section className="crm-card space-y-5 p-5">
     <div><h2 className="flex items-center gap-2 font-semibold"><PlugZap size={17} />Google Sheet connection</h2>
-      <p className="text-sm text-muted-foreground">{connected ? 'Connected to the Numera Client Tracker Sheet through Apps Script. Read-only: nothing in the Sheet, ClickUp or Drive is changed.' : 'Connect the Numera Client Tracker Sheet in four steps. Read-only: nothing in the Sheet, ClickUp or Drive is changed.'}</p></div>
+      <p className="text-sm text-muted-foreground">{connected ? 'Connected to the Numera Client Tracker Sheet through Apps Script.' : 'Connect the Numera Client Tracker Sheet in four steps.'} Changes made here (by you or people with Full access) run your main script&apos;s own functions, so ClickUp, Drive, balances, commission and emails work exactly as with the forms.</p></div>
     <ol className="space-y-5 text-sm">
       <li className="space-y-2"><p className="font-medium">1. Create a private key</p>
         {key ? <div className="space-y-2 rounded-2xl bg-muted/60 p-3"><p className="text-xs text-muted-foreground">Shown only now. Paste it into the script in step 2, in place of PASTE-KEY-HERE.</p><div className="flex flex-wrap items-center gap-2"><code className="select-all break-all rounded-lg bg-background px-2 py-1 text-xs">{key}</code><CopyButton text={key} label="Copy key" /></div></div>

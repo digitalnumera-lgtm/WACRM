@@ -42,7 +42,7 @@ function useTracker() {
     const timer = window.setInterval(() => { if (!document.hidden) void load() }, 60_000)
     return () => window.clearInterval(timer)
   }, [load])
-  return { data, error, busy, reload: load }
+  return { data, error, busy, reload: load, setData }
 }
 
 function Workspace({ accountName, level, crm }: { accountName: string; level: TrackerLevel; crm: boolean }) {
@@ -51,6 +51,7 @@ function Workspace({ accountName, level, crm }: { accountName: string; level: Tr
   const [page, setPage] = useState<TrackerPage>('Overview')
   const [openClient, setOpenClient] = useState<string | null>(null)
   const tracker = useTracker()
+  const canEdit = atLeast(level, 'full')
   useEffect(() => { rememberPanel('tracker') }, [])
 
   const pages: { name: TrackerPage; label: string; icon: typeof Settings; min: TrackerLevel }[] = [
@@ -94,9 +95,9 @@ function Workspace({ accountName, level, crm }: { accountName: string; level: Tr
         : !d ? tracker.error ? <NotReady error={tracker.error} owner={level === 'owner'} onSettings={() => setPage('Settings')} /> : loading()
           : <>
             {page === 'Overview' && <Overview data={d} onClient={showClient} onDeals={() => setPage('Deals')} />}
-            {page === 'Deals' && <Deals data={d} openClient={openClient} onClient={setOpenClient} />}
+            {page === 'Deals' && <Deals data={d} openClient={openClient} onClient={setOpenClient} canEdit={canEdit} onChanged={view => tracker.setData(view)} />}
             {page === 'Payments' && d.payments && <Payments data={d} onClient={showClient} />}
-            {page === 'Commission' && d.commission && <Commission data={d} />}
+            {page === 'Commission' && d.commission && <Commission data={d} canEdit={canEdit} onChanged={view => tracker.setData(view)} />}
           </>}
     </main>
   </div></MotionRoot>

@@ -40,12 +40,12 @@ export async function saveConnection(accountId: string, userId: string, patch: {
 }
 
 /** Calls the Apps Script web app. The key travels in the body, never in the URL. */
-export async function callScript(url: string, key: string, action: string): Promise<Record<string, unknown>> {
+export async function callScript(url: string, key: string, action: string, extra: Record<string, unknown> = {}, timeout = TIMEOUT_MS): Promise<Record<string, unknown>> {
   if (!WEBAPP_URL.test(url)) throw new TrackerConnectionError('not_connected', 'The web app link is not a Google Apps Script link.')
   let response: Response
   try {
     // Apps Script answers a POST with a redirect to the result, which fetch follows as a GET.
-    response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ key, action }), redirect: 'follow', cache: 'no-store', signal: AbortSignal.timeout(TIMEOUT_MS) })
+    response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ ...extra, key, action }), redirect: 'follow', cache: 'no-store', signal: AbortSignal.timeout(timeout) })
   } catch { throw new TrackerConnectionError('unreachable', 'Google did not answer. Try again in a moment.') }
   const text = await response.text()
   let body: Record<string, unknown>
@@ -55,6 +55,7 @@ export async function callScript(url: string, key: string, action: string): Prom
       : `Google answered with an error (${response.status}). Check the web app link and that it is deployed.`)
   }
   if (body.ok !== true) {
+    if (body.error === 'unknown_action') throw new TrackerConnectionError('script_error', 'The script file is out of date. Copy the latest script from Client Tracker → Settings, paste it over crm-connect and deploy a new version.')
     if (body.error === 'bad_key') throw new TrackerConnectionError('bad_key', 'The script rejected the key. Paste the current key into the script, save, and deploy a new version.')
     throw new TrackerConnectionError('script_error', typeof body.message === 'string' ? `The script hit an error: ${body.message}` : 'The script could not read the Sheet.')
   }
@@ -92,4 +93,12 @@ export async function getSnapshot(accountId: string, { force = false } = {}): Pr
     if (have && error instanceof TrackerConnectionError) return { ...have, stale: error.message }
     throw error
   }
+}
+
+/** Saves a Sheet copy the script returned after a change. */
+export async function storeSnapshot(accountId: string, snapshot: RawSnapshot): Promise<string> {
+  const fetchedAt = new Date().toISOString()
+  const saved = await monitoringAdmin().from('tracker_snapshot').upsert({ account_id: accountId, data: snapshot, fetched_at: fetchedAt }, { onConflict: 'account_id' })
+  if (saved.error) throw saved.error
+  return fetchedAt
 }

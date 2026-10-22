@@ -1,10 +1,11 @@
 'use client'
 
 import { useMemo, useState, type ReactNode } from 'react'
-import { ExternalLink, FolderOpen, Search, X } from 'lucide-react'
-import { signed, type SheetTable, type TrackerDeal, type TrackerView } from '@/lib/tracker/model'
+import { ExternalLink, FolderOpen, Pencil, Plus, Search, X } from 'lucide-react'
+import { dayKey, signed, type SheetTable, type TrackerDeal, type TrackerView } from '@/lib/tracker/model'
+import { AddDealDialog, DealActions, PayoutDialog, type Changed } from './tracker-edit'
 import { CountUp } from '@/components/monitoring/motion'
-import { Avatar, buttonClass, inputClass } from '@/components/monitoring/ui'
+import { Avatar, buttonClass, inputClass, primaryButton } from '@/components/monitoring/ui'
 
 export const pkr = (n: number | null | undefined) => n == null ? '—' : `Rs ${Math.round(n).toLocaleString()}`
 const clientKey = (d: Pick<TrackerDeal, 'clientId' | 'client'>) => d.clientId || d.client
@@ -104,7 +105,8 @@ export function TrackerOverview({ data, onClient, onDeals }: { data: TrackerView
   </div>
 }
 
-export function TrackerDeals({ data, openClient, onClient }: { data: TrackerView; openClient: string | null; onClient: (key: string | null) => void }) {
+export function TrackerDeals({ data, openClient, onClient, canEdit, onChanged }: { data: TrackerView; openClient: string | null; onClient: (key: string | null) => void; canEdit: boolean; onChanged: Changed }) {
+  const [adding, setAdding] = useState(false)
   const [q, setQ] = useState('')
   const [agent, setAgent] = useState('')
   const [status, setStatus] = useState('')
@@ -128,7 +130,9 @@ export function TrackerDeals({ data, openClient, onClient }: { data: TrackerView
       <select className={field} value={status} onChange={e => setStatus(e.target.value)} aria-label="Client status"><option value="">Any status</option>{options.statuses.map(a => <option key={a}>{a}</option>)}</select>
       {money && <select className={field} value={payment} onChange={e => setPayment(e.target.value)} aria-label="Payment status"><option value="">Any payment</option>{options.payments.map(a => <option key={a}>{a}</option>)}</select>}
       <select className={field} value={month} onChange={e => setMonth(e.target.value)} aria-label="Month closed"><option value="">Any month</option>{options.months.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}</select>
+      {canEdit && <button className={primaryButton} onClick={() => setAdding(true)}><Plus size={15} />Add deal</button>}
     </div>
+    {adding && <AddDealDialog data={data} onClose={() => setAdding(false)} onChanged={(view, result) => { onChanged(view, result); const id = result?.dealId; const d = view.deals.find(x => x.id === id); if (d) onClient(clientKey(d)) }} />}
     <p className="px-1 text-sm text-muted-foreground">{rows.length} deal{rows.length === 1 ? '' : 's'}{money && <> · total {pkr(total)} · still owed {pkr(owed)}</>}</p>
     <div className="crm-card overflow-x-auto">
       <table className="w-full min-w-[760px] text-sm">
@@ -148,11 +152,11 @@ export function TrackerDeals({ data, openClient, onClient }: { data: TrackerView
         {rows.length === 0 && <tr><td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">No deals match these filters.</td></tr>}</tbody>
       </table>
     </div>
-    {openClient && <ClientSheet data={data} clientKey={openClient} onClose={() => onClient(null)} />}
+    {openClient && <ClientSheet data={data} clientKey={openClient} onClose={() => onClient(null)} canEdit={canEdit} onChanged={onChanged} />}
   </div>
 }
 
-function ClientSheet({ data, clientKey: key, onClose }: { data: TrackerView; clientKey: string; onClose: () => void }) {
+function ClientSheet({ data, clientKey: key, onClose, canEdit, onChanged }: { data: TrackerView; clientKey: string; onClose: () => void; canEdit: boolean; onChanged: Changed }) {
   const deals = data.deals.filter(d => clientKey(d) === key)
   const first = deals[0]
   if (!first) return null
@@ -196,6 +200,7 @@ function ClientSheet({ data, clientKey: key, onClose }: { data: TrackerView; cli
           {d.clickupUrl && <a className={buttonClass} href={d.clickupUrl} target="_blank" rel="noopener noreferrer"><ExternalLink size={14} />ClickUp project</a>}
           {d.driveUrl && <a className={buttonClass} href={d.driveUrl} target="_blank" rel="noopener noreferrer"><FolderOpen size={14} />Drive folder</a>}
         </div>
+        {canEdit && <div className="border-t border-border pt-3"><DealActions deal={d} onChanged={onChanged} /></div>}
       </section>)}</div>
       {payments.length > 0 && <section className="mt-5">
         <h3 className="mb-2 font-semibold">Payments</h3>
@@ -237,7 +242,7 @@ export function TrackerPayments({ data, onClient }: { data: TrackerView; onClien
   </div>
 }
 
-export function TrackerCommission({ data }: { data: TrackerView }) {
+export function TrackerCommission({ data, canEdit, onChanged }: { data: TrackerView; canEdit: boolean; onChanged: Changed }) {
   const tabs = [['agents', 'Sales agents'], ['pm', 'PM commission'], ['owner', 'Owner deals']] as const
   const [tab, setTab] = useState<(typeof tabs)[number][0]>('agents')
   const table = data.commission?.[tab] ?? null
@@ -245,19 +250,29 @@ export function TrackerCommission({ data }: { data: TrackerView }) {
     <div role="tablist" aria-label="Commission" className="inline-flex gap-1 rounded-full bg-card p-1 shadow-sm">
       {tabs.map(([id, label]) => <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`rounded-full px-4 py-1.5 text-sm font-medium ${tab === id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{label}</button>)}
     </div>
-    {table ? <SheetGrid table={table} /> : <p className="crm-card p-6 text-sm text-muted-foreground">This tab was not found in the Sheet.</p>}
+    {table ? <SheetGrid table={table} payout={canEdit && tab !== 'owner' ? tab : null} onChanged={onChanged} /> : <p className="crm-card p-6 text-sm text-muted-foreground">This tab was not found in the Sheet.</p>}
   </div>
 }
 
-/** A Sheet tab shown as it is, newest records first. */
-function SheetGrid({ table }: { table: SheetTable }) {
+/** "Aug 2026" → "2026-08". */
+const payMonth = (v: string) => { const m = /^([A-Za-z]{3})\w* (\d{4})$/.exec(v.trim()); if (!m) return ''; const i = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'].indexOf(m[1].toLowerCase()); return i < 0 ? '' : `${m[2]}-${String(i + 1).padStart(2, '0')}` }
+
+/** A Sheet tab shown as it is, newest records first. Payout cells can be edited on Agents and PM Commission. */
+function SheetGrid({ table, payout, onChanged }: { table: SheetTable; payout: 'agents' | 'pm' | null; onChanged: Changed }) {
+  const [editing, setEditing] = useState<string[] | null>(null)
   const note = table.notes?.find(n => n.length > 60)
   const numeric = (h: string) => /PKR|Deals|Rate|Commission|Paid|Sales|Earned|Remaining|Total/i.test(h) && !/Status|Note|On$/i.test(h)
+  const col = (row: string[], name: string) => row[table.headers.indexOf(name)] ?? ''
+  const who = table.headers[1]
   return <div className="space-y-3">
     {note && <details className="crm-card px-4 py-3 text-sm"><summary className="cursor-pointer font-medium">How this is worked out</summary><p className="mt-2 text-muted-foreground">{note}</p></details>}
     <div className="crm-card overflow-x-auto"><table className="w-full min-w-[720px] text-sm">
-      <thead className="text-left text-xs text-muted-foreground"><tr>{table.headers.map(h => <th key={h} className={`whitespace-nowrap px-3 py-3 font-medium ${numeric(h) ? 'text-right' : ''}`}>{h.replace(' (PKR)', '')}</th>)}</tr></thead>
-      <tbody>{[...table.rows].reverse().map((row, i) => <tr key={i} className="border-t border-border">{table.headers.map((h, j) => <td key={h} className={`whitespace-nowrap px-3 py-2 ${numeric(h) ? 'text-right tabular-nums' : ''} ${j === 0 ? 'font-medium' : ''}`}>{row[j] || <span className="text-muted-foreground">—</span>}</td>)}</tr>)}</tbody>
+      <thead className="text-left text-xs text-muted-foreground"><tr>{table.headers.map(h => <th key={h} className={`whitespace-nowrap px-3 py-3 font-medium ${numeric(h) ? 'text-right' : ''}`}>{h.replace(' (PKR)', '')}</th>)}{payout && <th className="px-3 py-3" />}</tr></thead>
+      <tbody>{[...table.rows].reverse().map((row, i) => <tr key={i} className="border-t border-border">{table.headers.map((h, j) => <td key={h} className={`whitespace-nowrap px-3 py-2 ${numeric(h) ? 'text-right tabular-nums' : ''} ${j === 0 ? 'font-medium' : ''}`}>{row[j] || <span className="text-muted-foreground">—</span>}</td>)}
+        {payout && <td className="px-3 py-1.5 text-right">{payMonth(row[0]) && <button className={buttonClass} onClick={() => setEditing(row)} aria-label={`Edit payout for ${row[1]}, ${row[0]}`}><Pencil size={13} />Payout</button>}</td>}
+      </tr>)}</tbody>
     </table></div>
+    {editing && payout && <PayoutDialog tab={payout} month={payMonth(editing[0])} name={col(editing, who)} onClose={() => setEditing(null)} onChanged={onChanged}
+      current={{ status: col(editing, 'Payout Status'), paidOn: dayKey(col(editing, 'Paid On')), amount: col(editing, 'Amount Paid (PKR)'), note: col(editing, 'Payout Note') }} />}
   </div>
 }
