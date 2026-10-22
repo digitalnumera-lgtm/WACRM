@@ -1,8 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { AlarmClock, ArrowDown, ArrowLeft, CheckCheck, ChevronDown, LoaderCircle, LockKeyhole, Mail, MailOpen, MoreVertical, PanelRight, Pin, PinOff, RotateCcw, Send } from 'lucide-react'
-import { MessageMedia } from './message-media'
+import { AlarmClock, ArrowDown, ArrowLeft, CheckCheck, ChevronDown, Copy, Download, Info, LoaderCircle, LockKeyhole, Mail, MailOpen, MoreVertical, PanelRight, Pin, PinOff, RotateCcw, Send } from 'lucide-react'
+import { MessageMedia, mediaLabel } from './message-media'
 import { useCan } from './access'
 import { togglePinned, useClock, usePreferences } from './preferences'
 import { ReplyComposer } from './reply-composer'
@@ -283,13 +283,42 @@ type Clock = (value: string | number | Date, withDate?: boolean) => string
 function MessageBubble({ message, messages, agent, grouped, clock }: { message: MonitoringMessage; messages: MonitoringMessage[]; agent?: string; grouped: boolean; clock: Clock }) {
   const outbound = message.direction === 'outbound'
   return <div className={`flex ${outbound ? 'justify-end' : 'justify-start'} ${grouped ? '' : 'pt-2.5'}`}>
-    <article data-message-id={message.id} className={`relative w-fit max-w-[85%] rounded-3xl px-4 py-2.5 shadow-sm sm:max-w-[68%] ${outbound ? 'bubble-agent' : 'bubble-customer'} ${grouped ? '' : outbound ? 'rounded-br-lg' : 'rounded-bl-lg'}`}>
+    <article data-message-id={message.id} className={`group/bubble relative w-fit max-w-[85%] rounded-3xl px-4 py-2.5 shadow-sm sm:max-w-[68%] ${outbound ? 'bubble-agent' : 'bubble-customer'} ${grouped ? '' : outbound ? 'rounded-br-lg' : 'rounded-bl-lg'}`}>
       {!grouped && <p className={`mb-0.5 text-xs font-semibold ${outbound ? 'text-[var(--bubble-agent-label)]' : 'text-muted-foreground'}`}>{outbound ? agent ?? 'Agent' : 'Customer'}</p>}
       {message.reaction && <div className="text-sm"><span className="text-2xl">{message.reaction.emoji || '—'}</span><p className="text-xs opacity-60">{message.reaction.emoji ? 'Reacted to: ' : 'Reaction removed from: '}{messages.find(m => m.meta_id === message.reaction?.target)?.content || 'an earlier message'}</p></div>}
       {!message.reaction && (message.content || !message.media_id) && <p className="bubble-text whitespace-pre-wrap break-words">{message.content || (message.kind === 'revoke' ? <i className="opacity-60">This message was deleted</i> : message.kind === 'media_placeholder' ? <i className="opacity-60">Media from chat history (WhatsApp did not share the file)</i> : <i className="opacity-60">This message type isn’t shown yet</i>)}</p>}
       <MessageMedia message={message} />
+      <MessageActions message={message} from={outbound ? agent ?? 'Agent' : 'Customer'} align={outbound ? 'right' : 'left'} />
       <time title={new Date(message.sent_at).toLocaleString()} className="mt-1 flex items-center justify-end gap-1 text-[11px] opacity-60">{clock(message.sent_at)}{outbound && <CheckCheck size={12} />}</time>
     </article>
+  </div>
+}
+
+/** WhatsApp-style ⌄ on each message: info, copy text and download. */
+function MessageActions({ message, from, align }: { message: MonitoringMessage; from: string; align: 'left' | 'right' }) {
+  const canMedia = useCan('view_media')
+  const [info, setInfo] = useState(false)
+  const [copied, setCopied] = useState(false)
+  if (message.reaction) return null
+  const media = !!message.media_id && canMedia
+  const type = message.media_id ? mediaLabel(message.kind) : 'Text'
+  return <div className="absolute right-2 top-1.5 z-10 opacity-0 transition-opacity focus-within:z-30 focus-within:opacity-100 group-hover/bubble:opacity-100 [@media(hover:none)]:opacity-100" onMouseLeave={() => setInfo(false)}>
+    <Menu label="Message options" align={align} trigger={<ChevronDown size={16} />} triggerClass="flex size-6 items-center justify-center rounded-full bg-black/10 backdrop-blur-sm hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20">{close => info
+      ? <div className="w-64 space-y-2 p-2 text-sm">
+          <p className="font-semibold">Message info</p>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+            <dt className="text-muted-foreground">From</dt><dd>{from}</dd>
+            <dt className="text-muted-foreground">Sent</dt><dd>{new Date(message.sent_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'medium' })}</dd>
+            <dt className="text-muted-foreground">Type</dt><dd>{type}</dd>
+            <dt className="text-muted-foreground">Direction</dt><dd>{message.direction === 'outbound' ? 'Sent by the agent' : 'Received from the customer'}</dd>
+          </dl>
+          <button type="button" className="text-xs underline" onClick={() => setInfo(false)}>Back</button>
+        </div>
+      : <>
+        <MenuItem onClick={() => setInfo(true)}><Info size={15} />Message info</MenuItem>
+        {message.content && <MenuItem onClick={() => { void navigator.clipboard?.writeText(message.content ?? '').then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }); close() }}><Copy size={15} />{copied ? 'Copied' : message.media_id ? 'Copy caption' : 'Copy text'}</MenuItem>}
+        {media && <a role="menuitem" href={`/api/monitoring/messages/${message.id}/media`} download onClick={close} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm hover:bg-muted"><Download size={15} />Download {type.toLowerCase()}</a>}
+      </>}</Menu>
   </div>
 }
 
