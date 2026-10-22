@@ -93,16 +93,26 @@ export function MediaLibrary({ channels, refresh, onOpen }: { channels: Monitori
   </section>
 }
 
-/** Photos load lazily; videos only load when opened (saving them uses storage). */
+/** Photos load lazily with a loading shimmer; videos only load when opened (saving them uses storage). */
 function Tile({ item, onClick }: { item: Item; onClick: () => void }) {
-  const [broken, setBroken] = useState(false)
+  const [state, setState] = useState<'loading' | 'loaded' | 'broken'>('loading')
+  const [attempt, setAttempt] = useState(0)
   const video = item.kind === 'video'
+  // A photo not saved yet is fetched from Meta on first view, which can time
+  // out when many load at once: try once more before calling it unavailable.
+  const failed = () => {
+    if (attempt === 0) { setTimeout(() => setAttempt(1), 1500); return }
+    setState('broken')
+  }
   return <button onClick={onClick} aria-label={`Open ${video ? 'video' : 'photo'} from ${item.customer_name || item.customer}`} className="group relative aspect-square overflow-hidden rounded-xl bg-muted">
-    {video ? <span className="flex h-full w-full flex-col items-center justify-center gap-1 bg-[var(--ink)] text-white/80"><Play size={28} className="fill-current" /><span className="text-xs">Video</span></span>
-      : broken ? <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground"><ImageOff size={22} /><span className="px-2 text-center text-xs">No longer available</span></span>
-        // eslint-disable-next-line @next/next/no-img-element
-        : <img src={src(item.id)} alt="" loading="lazy" onError={() => setBroken(true)} className="h-full w-full object-cover transition-transform group-hover:scale-105" />}
-    <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-4 text-left text-xs text-white opacity-0 group-hover:opacity-100">{item.customer_name || `+${item.customer}`}</span>
+    {video ? <span className="flex h-full w-full flex-col items-center justify-center gap-1 bg-[var(--ink)] text-white/80"><Play size={28} className="fill-current" /><span className="text-xs">Video</span>{item.content && <span className="line-clamp-1 px-2 text-[11px] text-white/60">{item.content}</span>}</span>
+      : state === 'broken' ? <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground"><ImageOff size={22} /><span className="px-2 text-center text-xs">No longer available</span></span>
+        : <>
+          {state === 'loading' && <span aria-hidden className="absolute inset-0 animate-pulse bg-muted-foreground/10" />}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img key={attempt} src={attempt ? `${src(item.id)}?retry=1` : src(item.id)} alt="" loading="lazy" decoding="async" onLoad={() => setState('loaded')} onError={failed}
+            className={`h-full w-full object-cover transition-[opacity,transform] duration-300 group-hover:scale-105 ${state === 'loaded' ? 'opacity-100' : 'opacity-0'}`} />
+        </>}
   </button>
 }
 
