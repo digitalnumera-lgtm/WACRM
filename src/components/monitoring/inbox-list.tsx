@@ -177,8 +177,10 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
   const row = (thread: MonitoringThread) => {
     const channel = channels.find(c => c.id === thread.channel_id)
     const name = thread.customer_name || `+${thread.customer}`
-    const unread = (thread.unread_count ?? 0) > 0 || thread.marked_unread
+    // Highlighted with a counter until the agent replies, like WhatsApp.
     const waiting = thread.last_direction === 'inbound' && thread.state !== 'resolved'
+    const pending = waiting ? thread.waiting_count : undefined
+    const unread = (waiting && pending !== 0) || !!thread.marked_unread
     const waitMinutes = (now - Date.parse(thread.last_message_at)) / 60000
     const threadLabels = (thread.label_ids ?? []).map(id => labelMap.get(id)).filter((l): l is MonitoringLabel => !!l)
     const isPinned = pinned.includes(thread.id)
@@ -198,7 +200,8 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
               {thread.last_direction === 'outbound' && <CheckCheck size={13} className="mr-1 inline text-emerald-600" aria-label="Agent replied" />}
               <PreviewIcon preview={thread.last_preview} />{previewText(thread.last_preview) || 'Media message'}
             </p>
-            {unread && <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#C0DD11] px-1.5 text-xs font-bold text-[#121316]" aria-label={`${thread.unread_count || ''} unread`}>{thread.marked_unread && !thread.unread_count ? '' : (thread.unread_count ?? 0) > 99 ? '99+' : thread.unread_count}</span>}
+            {pending ? <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#C0DD11] px-1.5 text-xs font-bold text-[#121316]" aria-label={`${pending} not replied`}>{pending > 99 ? '99+' : pending}</span>
+              : (waiting ? pending === undefined : thread.marked_unread) && <span className="size-2.5 shrink-0 rounded-full bg-[#C0DD11]" aria-label={waiting ? 'Not replied' : 'Marked unread'} />}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
             <span className="truncate font-medium">{channel?.label ?? 'Unknown number'}</span>

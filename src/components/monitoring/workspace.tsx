@@ -125,10 +125,13 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
     const tick = async () => {
       if (stopped) return
       try {
-        const data = await api<{ threads: Latest[]; now: string }>(`/api/monitoring/latest${since ? `?since=${encodeURIComponent(since)}` : ''}`)
+        const data = await api<{ threads: Latest[]; changed?: boolean; now: string }>(`/api/monitoring/latest${since ? `?since=${encodeURIComponent(since)}` : ''}`)
         const fresh = since ? data.threads : []
+        const changed = !!since && (data.changed ?? fresh.length > 0)
         since = data.now
-        if (!fresh.length || stopped) return
+        if (!changed || stopped) return
+        // Any activity (including agent replies) refreshes counters; only customer messages alert.
+        if (!fresh.length) { setRefresh(n => n + 1); return }
         const { prefs: p, selected: open, channels } = live.current
         if (p.sound) playChime()
         if (p.notify && 'Notification' in window && Notification.permission === 'granted') {

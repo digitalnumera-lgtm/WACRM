@@ -154,6 +154,10 @@ describe('new message alerts', () => {
     rows.monitoring_threads = [{ id: threadA, account_id: company, channel_id: chanA, last_direction: 'inbound' }, { id: threadB, account_id: company, channel_id: chanB, last_direction: 'inbound' }]
     const next = await (await latest(get(`/api/monitoring/latest?since=${encodeURIComponent(first.now)}`))).json()
     expect(next.threads.map((t: Row) => t.id)).toEqual([threadA])
+    expect(next.changed).toBe(true)
+    rows.monitoring_threads = [{ id: threadA, account_id: company, channel_id: chanA, last_direction: 'outbound' }]
+    const replied = await (await latest(get(`/api/monitoring/latest?since=${encodeURIComponent(first.now)}`))).json()
+    expect(replied).toMatchObject({ threads: [], changed: true })
     expect((await latest(get('/api/monitoring/latest?since=yesterday'))).status).toBe(400)
   })
 })
