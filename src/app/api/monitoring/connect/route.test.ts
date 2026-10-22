@@ -80,7 +80,7 @@ describe('Connect number', () => {
   })
   it('retries with the opening page when Meta bound the code to it (shortcut flow)', async () => {
     const fetcher = globalThis.fetch as ReturnType<typeof vi.fn>
-    const original = fetcher.getMockImplementation()!
+    const original = fetcher.getMockImplementation() as (input: string | URL, init?: RequestInit) => Promise<Response>
     fetcher.mockImplementation(async (input: string | URL, init?: RequestInit) => {
       const url = String(input)
       if (url.includes('/oauth/access_token') && new URL(url).searchParams.get('redirect_uri') !== 'https://crm.test/monitoring?view=settings') {
