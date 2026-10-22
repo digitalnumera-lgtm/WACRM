@@ -19,11 +19,14 @@ export function MessageMedia({ message }: { message: MonitoringMessage }) {
       if (response.status === 401) { if (!controller.signal.aborted) setProblem({ message: 'Your CRM session expired. Sign in again to load this attachment.', login: true }); return }
       const data = await readJson(response)
       if (controller.signal.aborted) return
-      if (response.ok && data.available) setProblem({ message: 'This browser could not preview the attachment. Download it to open in a compatible app.', download: true })
+      // The file is reachable: the first load most likely timed out while the
+      // CRM fetched it from Meta (it is usually saved by now), so load it again.
+      if (response.ok && data.available && attempt < 2) { setFailed(false); setAttempt(attempt + 1); return }
+      if (response.ok && data.available) setProblem({ message: message.kind === 'audio' || message.kind === 'video' ? 'This browser cannot play this file format. Download it to play it on your device.' : 'This browser could not preview the attachment. Download it to open it.', download: true })
       else setProblem({ message: data.error || 'The CRM could not load this attachment. Please retry.', renew: ['meta_access_invalid', 'meta_access_denied', 'credential_unavailable'].includes(data.code) })
     }).catch(() => { if (!controller.signal.aborted) setProblem({ message: 'The CRM could not be reached. Check your connection and retry.' }) })
     return () => controller.abort()
-  }, [failed, src, message.media_id])
+  }, [failed, src, message.media_id, message.kind, attempt])
   if (!message.media_id) return null
   if (!allowed) return <p className="mt-1 flex items-center gap-1 text-xs opacity-70"><Lock size={12} aria-hidden="true" />{mediaLabel(message.kind)} hidden for your role</p>
   if (failed) return <div className="mt-2 space-y-2 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100" role="status"><p>{problem?.message || 'Checking attachment access…'}</p><div className="flex flex-wrap gap-3"><button className="underline" onClick={() => { setProblem(null); setFailed(false); setAttempt(attempt + 1) }}>Retry</button>{problem?.renew && <a className="underline" href="/monitoring?view=settings&section=access">Renew Meta access</a>}{problem?.download && <a className="underline" href={src} download>Download attachment</a>}{problem?.login && <a className="underline" href="/login">Sign in</a>}</div></div>

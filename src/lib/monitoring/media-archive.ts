@@ -5,6 +5,7 @@
 // can read or write the bucket.
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { fetchMonitoringMedia } from './media'
+import { mediaFailure } from './media-errors'
 import { decrypt } from '@/lib/whatsapp/encryption'
 
 export const MEDIA_BUCKET = 'monitoring-media'
@@ -92,6 +93,7 @@ async function archivedIds(db: SupabaseClient, accountId: string): Promise<Set<s
 /** Saves recent photos and other auto-saved media that have no stored copy yet. */
 export async function archiveMissingMedia(db: SupabaseClient, policy: AutoSavePolicy = defaultPolicy, limit = 20, now = Date.now()): Promise<{ saved: number; failed: number }> {
   const result = { saved: 0, failed: 0 }
+  const reasons: Record<string, number> = {}
   if (now - lastCatchUp < CATCH_UP_EVERY_MS) return result
   lastCatchUp = now
   const since = new Date(now - CATCH_UP_DAYS * 86_400_000).toISOString()
@@ -123,12 +125,14 @@ export async function archiveMissingMedia(db: SupabaseClient, policy: AutoSavePo
       await db.storage.from(MEDIA_BUCKET).upload(archivePath(row.account_id, row.id), bytes, { contentType: type, upsert: true, cacheControl: '31536000' }).then(r => { if (r.error) throw r.error })
       existing.add(row.id)
       result.saved++
-    } catch {
+    } catch (error) {
       recentFailures.set(row.id, now)
       result.failed++
+      const code = `${row.kind}:${mediaFailure(error).code}`
+      reasons[code] = (reasons[code] ?? 0) + 1
     }
   }
-  if (result.saved || result.failed) console.info('[media-catch-up]', JSON.stringify(result))
+  if (result.saved || result.failed) console.info('[media-catch-up]', JSON.stringify({ ...result, reasons }))
   return result
 }
 
