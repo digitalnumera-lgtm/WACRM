@@ -1,5 +1,5 @@
 import { after } from 'next/server'
-import { requireRole } from '@/lib/auth/account'
+import { canSeeChannel, requireMonitoring } from '@/lib/monitoring/team-access'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { checkedId, monitoringError, privateJson } from '@/lib/monitoring/http'
 import { fetchMonitoringMedia, mediaResponse } from '@/lib/monitoring/media'
@@ -16,13 +16,14 @@ const SIGNED_URL_SECONDS = 3600
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const { supabase, accountId } = await requireRole('admin')
+    const access = await requireMonitoring('view_media')
+    const { db: supabase, accountId } = access
     const id = checkedId((await context.params).id)
     // Company scoping: the message row must belong to the caller's account.
     // Its channel is guaranteed to be the same account by foreign keys.
     const message = await supabase.from('monitoring_messages').select('channel_id,media_id').eq('account_id', accountId).eq('id', id).maybeSingle()
     if (message.error) throw message.error
-    if (!message.data?.media_id) return privateJson({ error: 'Media not found.' }, 404)
+    if (!message.data?.media_id || !canSeeChannel(access, message.data.channel_id)) return privateJson({ error: 'Media not found.' }, 404)
     const db = monitoringAdmin()
     const diagnose = new URL(request.url).searchParams.get('diagnose') === '1'
     // Look up a permanent copy and the Meta credential at the same time.

@@ -23,10 +23,10 @@ it('blocks anonymous and non-management callers before any private ledger access
     }
   }
   expect(mocks.admin).not.toHaveBeenCalled()
-  expect(mocks.role).toHaveBeenCalledWith('admin')
+  expect(mocks.role).toHaveBeenCalledWith('viewer')
 })
 it('rejects cross-origin mutations before any database writes', async () => {
-  mocks.role.mockResolvedValue({ accountId: 'company', userId: 'manager' })
+  mocks.role.mockResolvedValue({ role: 'admin',  accountId: 'company', userId: 'manager' })
   for (const handler of [addNote, changeWorkflow, addReply, changeReply]) {
     expect((await handler(request('https://other.test'), context)).status).toBe(403)
   }
@@ -35,14 +35,14 @@ it('rejects cross-origin mutations before any database writes', async () => {
 it('checks thread ownership before notes or workflow service writes', async () => {
   const chain = { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) }
   const supabase = { from: vi.fn().mockReturnValue(chain) }
-  mocks.role.mockResolvedValue({ accountId: 'own-company', userId: 'manager', supabase })
+  mocks.role.mockResolvedValue({ role: 'admin',  accountId: 'own-company', userId: 'manager', supabase })
   for (const handler of [notes, addNote, changeWorkflow]) expect((await handler(request(), context)).status).toBe(404)
   expect(chain.eq).toHaveBeenCalledWith('account_id', 'own-company')
   expect(chain.eq).toHaveBeenCalledWith('id', id)
   expect(mocks.admin).not.toHaveBeenCalled()
 })
 it('rejects oversized metadata batches and malformed IDs before querying', async () => {
-  mocks.role.mockResolvedValue({ accountId: 'company' })
+  mocks.role.mockResolvedValue({ role: 'admin',  accountId: 'company' })
   expect((await workflows(new Request('https://crm.test/api/monitoring/workflow?ids=invalid'))).status).toBe(400)
   expect((await workflows(new Request('https://crm.test/api/monitoring/workflow'))).status).toBe(400)
   expect(mocks.admin).not.toHaveBeenCalled()

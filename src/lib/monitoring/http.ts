@@ -27,7 +27,7 @@ export function privateJson(data: unknown, status = 200) {
 
 export function monitoringError(error: unknown) {
   if (error instanceof UnauthorizedError) return privateJson({ error: 'Sign in to continue.' }, 401)
-  if (error instanceof ForbiddenError) return privateJson({ error: 'Monitoring is available to company owners and admins only.' }, 403)
+  if (error instanceof ForbiddenError) return privateJson({ error: 'Your role does not allow this. Ask your company owner for access.' }, 403)
   if (error instanceof MonitoringInputError) return privateJson({ error: error.message }, 400)
   if (error instanceof WorkflowSchemaMissing) return privateJson({ error: error.message, code: 'workflow_schema_missing' }, 409)
   // Supabase errors can contain row values. Do not log or return them.

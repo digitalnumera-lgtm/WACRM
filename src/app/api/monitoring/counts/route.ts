@@ -1,4 +1,4 @@
-import { requireRole } from '@/lib/auth/account'
+import { allowedChannels, requireMonitoring } from '@/lib/monitoring/team-access'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { monitoringError, privateJson } from '@/lib/monitoring/http'
 import { applyInboxFilters, applyInboxTab, inboxTabs, missingWorkflowSchema, readInboxFilters } from '@/lib/monitoring/inbox'
@@ -7,15 +7,17 @@ import { applyInboxFilters, applyInboxTab, inboxTabs, missingWorkflowSchema, rea
 // using the same number/agent/lead/label/priority/search filters as the list.
 export async function GET(request: Request) {
   try {
-    const { supabase, accountId } = await requireRole('admin')
+    const access = await requireMonitoring('view_inbox')
+    const { db: supabase, accountId } = access
     const filters = readInboxFilters(new URL(request.url).searchParams)
     let channelIds: string[] | null = null
     if (filters.channel || filters.agent) {
       const channels = await supabase.from('monitoring_channels').select('id,label').eq('account_id', accountId)
       if (channels.error) throw channels.error
       channelIds = (channels.data ?? []).filter(c => (!filters.channel || c.id === filters.channel) && (!filters.agent || c.label === filters.agent)).map(c => c.id)
-      if (!channelIds.length) return privateJson({ counts: Object.fromEntries(inboxTabs.map(tab => [tab, 0])), workflowReady: true })
     }
+    channelIds = allowedChannels(access, channelIds)
+    if (channelIds && !channelIds.length) return privateJson({ counts: Object.fromEntries(inboxTabs.map(tab => [tab, 0])), workflowReady: true })
     const db = monitoringAdmin()
     const countFor = (tab: typeof inboxTabs[number]) => {
       const base = db.from('monitoring_inbox').select('id', { count: 'exact', head: true }).eq('account_id', accountId)

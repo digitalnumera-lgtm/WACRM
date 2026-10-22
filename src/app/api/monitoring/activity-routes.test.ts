@@ -15,7 +15,7 @@ function database(results: Record<string, { data: unknown[]; count?: number; err
     query.then = (resolve: (value: unknown) => unknown) => Promise.resolve(results[table] ?? { data: [] }).then(resolve)
     return query
   })
-  mocks.role.mockResolvedValue({ supabase: { from }, accountId: 'own-company' })
+  mocks.role.mockResolvedValue({ role: 'admin',  supabase: { from }, accountId: 'own-company' })
   return { queries, from }
 }
 

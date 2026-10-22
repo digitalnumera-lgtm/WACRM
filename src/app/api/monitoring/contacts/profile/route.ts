@@ -1,4 +1,4 @@
-import { requireRole } from '@/lib/auth/account'
+import { requireMonitoring, scopeChannels } from '@/lib/monitoring/team-access'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { MonitoringInputError, monitoringError, privateJson, readJson, WorkflowSchemaMissing } from '@/lib/monitoring/http'
 import { missingWorkflowSchema } from '@/lib/monitoring/inbox'
@@ -16,14 +16,16 @@ function customerId(value: unknown) {
 // that customer has with any of this company's business numbers.
 export async function GET(request: Request) {
   try {
-    const { supabase, accountId } = await requireRole('admin')
+    const access = await requireMonitoring('view_contacts')
+    const { db: supabase, accountId } = access
     const customer = customerId(new URL(request.url).searchParams.get('customer'))
     const [threads, profile] = await Promise.all([
-      supabase.from('monitoring_threads').select('id,channel_id,lead_status,last_message_at,last_preview,last_direction,message_count,customer_name')
-        .eq('account_id', accountId).eq('customer', customer).order('last_message_at', { ascending: false }).limit(50),
+      scopeChannels(access, supabase.from('monitoring_threads').select('id,channel_id,lead_status,last_message_at,last_preview,last_direction,message_count,customer_name')
+        .eq('account_id', accountId).eq('customer', customer)).order('last_message_at', { ascending: false }).limit(50),
       monitoringAdmin().from('monitoring_contact_profiles').select(profileColumns).eq('account_id', accountId).eq('customer', customer).maybeSingle(),
     ])
     if (threads.error) throw threads.error
+    if (!access.full && !threads.data?.length) return privateJson({ error: 'Contact not found.' }, 404)
     const ready = !(profile.error && missingWorkflowSchema(profile.error))
     if (profile.error && ready) throw profile.error
     return privateJson({ profile: profile.data ?? null, conversations: threads.data, workflowReady: ready })
@@ -32,11 +34,12 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const { supabase, accountId, userId } = await requireRole('admin')
+    const access = await requireMonitoring('edit_contacts')
+    const { db: supabase, accountId, userId } = access
     const body = await readJson(request)
     const customer = customerId(body.customer)
     // Only customers who actually have a conversation with this company.
-    const known = await supabase.from('monitoring_threads').select('id').eq('account_id', accountId).eq('customer', customer).limit(1)
+    const known = await scopeChannels(access, supabase.from('monitoring_threads').select('id').eq('account_id', accountId).eq('customer', customer)).limit(1)
     if (known.error) throw known.error
     if (!known.data?.length) return privateJson({ error: 'Contact not found.' }, 404)
     const values: Record<string, string | null> = {}

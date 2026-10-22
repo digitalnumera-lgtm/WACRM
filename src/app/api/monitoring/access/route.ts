@@ -1,4 +1,4 @@
-import { requireRole } from '@/lib/auth/account'
+import { canSeeChannel, requireMonitoring } from '@/lib/monitoring/team-access'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { checkedId, MonitoringInputError, monitoringError, privateJson, readJson, requiredText } from '@/lib/monitoring/http'
 import { verifyRenewedAccess } from '@/lib/monitoring/renew-access'
@@ -7,14 +7,15 @@ import { encrypt } from '@/lib/whatsapp/encryption'
 
 export async function POST(request: Request) {
   try {
-    const { supabase, accountId } = await requireRole('admin')
+    const access = await requireMonitoring('manage_numbers')
+    const { db: supabase, accountId } = access
     const body = await readJson(request, 32768)
     const token = requiredText(body, 'access_token', 8192)
     if (!Array.isArray(body.channel_ids) || !body.channel_ids.length || body.channel_ids.length > 100 || body.channel_ids.some(id => typeof id !== 'string')) throw new MonitoringInputError('Select the business numbers to renew.')
     const ids = [...new Set((body.channel_ids as string[]).map(checkedId))]
     const channels = await supabase.from('monitoring_channels').select('id,phone_number_id,waba_id').eq('account_id', accountId).in('id', ids)
     if (channels.error) throw channels.error
-    if (channels.data.length !== ids.length) return privateJson({ error: 'One or more business numbers are unavailable.' }, 404)
+    if (channels.data.length !== ids.length || !ids.every(id => canSeeChannel(access, id))) return privateJson({ error: 'One or more business numbers are unavailable.' }, 404)
     try { await verifyRenewedAccess(channels.data, token) }
     catch (error) {
       const failure = mediaFailure(error)

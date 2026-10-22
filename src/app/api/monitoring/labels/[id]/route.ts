@@ -1,4 +1,4 @@
-import { requireRole } from '@/lib/auth/account'
+import { requireMonitoring } from '@/lib/monitoring/team-access'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { assertSameOrigin, checkedId, monitoringError, privateJson, readJson } from '@/lib/monitoring/http'
 import { check, labelColumns, labelInput } from '@/lib/monitoring/labels'
@@ -7,7 +7,7 @@ type Context = { params: Promise<{ id: string }> }
 
 export async function PATCH(request: Request, context: Context) {
   try {
-    const { accountId } = await requireRole('admin')
+    const { accountId } = await requireMonitoring('manage_labels')
     const id = checkedId((await context.params).id)
     const input = labelInput(await readJson(request), true)
     const result = check(await monitoringAdmin().from('monitoring_labels').update(input).eq('account_id', accountId).eq('id', id).select(labelColumns).maybeSingle())
@@ -18,7 +18,7 @@ export async function PATCH(request: Request, context: Context) {
 
 export async function DELETE(request: Request, context: Context) {
   try {
-    const { accountId } = await requireRole('admin')
+    const { accountId } = await requireMonitoring('manage_labels')
     const id = checkedId((await context.params).id)
     assertSameOrigin(request)
     // Removing a label detaches it from conversations (cascade); messages are untouched.

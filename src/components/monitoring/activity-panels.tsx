@@ -5,6 +5,7 @@ import type { MonitoringChannel, MonitoringMessage } from '@/lib/monitoring/type
 import type { activityReport } from '@/lib/monitoring/activity-report'
 import { formatDuration, type agentReport } from '@/lib/monitoring/agent-report'
 import { MessageMedia } from './message-media'
+import { useCan } from './access'
 import { csvCell } from '@/lib/monitoring/csv'
 
 const input = 'min-w-0 rounded-lg border border-border bg-background px-3 py-2 text-sm'
@@ -35,6 +36,7 @@ function useRemote<T>(url: string, refresh: number) {
 }
 
 export function MessageBrowser({ channels, media = false, refresh, onOpen }: { channels: MonitoringChannel[]; media?: boolean; refresh: number; onOpen: (id: string) => void }) {
+  const canExport = useCan('export_data')
   const [filters, setFilters] = useState({ channel: '', direction: '', kind: '', q: '', from: '', to: '' })
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
@@ -53,7 +55,7 @@ export function MessageBrowser({ channels, media = false, refresh, onOpen }: { c
       <label className="text-xs text-muted-foreground">Through (UTC)<input type="date" className={`${input} ml-2`} value={filters.to} onChange={e => filter('to', e.target.value)} /></label>
     </div>
     {error && <p role="alert" className="text-destructive">{error}</p>}
-    <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm">{loading ? 'Loading…' : `${data?.total ?? 0} matching messages`}</p><button className={button} disabled={loading || !data?.messages.length} onClick={() => downloadCsv('wacrm-message-page.csv', [['Sent at (UTC)', 'Direction', 'Business number', 'Customer', 'Phone', 'Format', 'Message', 'Message ID'], ...(data?.messages ?? []).map(m => [m.sent_at, m.direction, name(m.channel_id), m.customer_name, m.customer, m.kind, m.content, m.meta_id])])}>Export this page (CSV)</button></div>
+    <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm">{loading ? 'Loading…' : `${data?.total ?? 0} matching messages`}</p>{canExport && <button className={button} disabled={loading || !data?.messages.length} onClick={() => downloadCsv('wacrm-message-page.csv', [['Sent at (UTC)', 'Direction', 'Business number', 'Customer', 'Phone', 'Format', 'Message', 'Message ID'], ...(data?.messages ?? []).map(m => [m.sent_at, m.direction, name(m.channel_id), m.customer_name, m.customer, m.kind, m.content, m.meta_id])])}>Export this page (CSV)</button>}</div>
     <div className={media ? 'grid gap-4 sm:grid-cols-2 xl:grid-cols-3' : 'space-y-3'}>{data?.messages.map(m => <article key={m.id} className="min-w-0 rounded-xl border border-border bg-card p-4">
       <div className="flex flex-wrap justify-between gap-2"><button className="text-left font-semibold text-primary hover:underline" onClick={() => onOpen(m.thread_id)}>{m.customer_name || m.customer || 'Open conversation'}</button><span className="text-xs text-muted-foreground">{m.direction === 'inbound' ? 'Incoming' : 'Outgoing'} · {m.kind}</span></div>
       <p className="mt-1 text-xs text-muted-foreground">{name(m.channel_id)} · {new Date(m.sent_at).toLocaleString()}</p>
@@ -67,11 +69,12 @@ export function MessageBrowser({ channels, media = false, refresh, onOpen }: { c
 }
 
 export function ReportsPanel({ channels, refresh }: { channels: MonitoringChannel[]; refresh: number }) {
+  const canExport = useCan('export_data')
   const [days, setDays] = useState('30'), [channel, setChannel] = useState('')
   const { data, error } = useRemote<Report>(`/api/monitoring/reports?${new URLSearchParams({ days, channel })}`, refresh)
   const max = Math.max(1, ...(data?.daily.map(d => d.inbound + d.outbound) ?? []))
   return <section className="space-y-5">
-    <div className="flex flex-wrap gap-3"><select aria-label="Report period" className={input} value={days} onChange={e => setDays(e.target.value)}>{[7, 30, 90].map(d => <option key={d} value={d}>Last {d} days</option>)}</select><select aria-label="Report business number" className={input} value={channel} onChange={e => setChannel(e.target.value)}><option value="">All business numbers</option>{channels.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select><button className={button} disabled={!data} onClick={() => downloadCsv('wacrm-daily-activity.csv', [['Date (UTC)', 'Incoming', 'Outgoing', 'Coverage'], ...(data?.daily ?? []).map(d => [d.date, d.inbound, d.outbound, data?.truncated ? 'Partial: latest 10000 records' : 'All stored records in period'])])}>Export daily activity</button></div>
+    <div className="flex flex-wrap gap-3"><select aria-label="Report period" className={input} value={days} onChange={e => setDays(e.target.value)}>{[7, 30, 90].map(d => <option key={d} value={d}>Last {d} days</option>)}</select><select aria-label="Report business number" className={input} value={channel} onChange={e => setChannel(e.target.value)}><option value="">All business numbers</option>{channels.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select>{canExport && <button className={button} disabled={!data} onClick={() => downloadCsv('wacrm-daily-activity.csv', [['Date (UTC)', 'Incoming', 'Outgoing', 'Coverage'], ...(data?.daily ?? []).map(d => [d.date, d.inbound, d.outbound, data?.truncated ? 'Partial: latest 10000 records' : 'All stored records in period'])])}>Export daily activity</button>}</div>
     <p className="text-sm text-muted-foreground">Activity from messages stored in this CRM, grouped by their original message date in UTC. Imported history is included. Outgoing volume is not a delivery or read rate.</p>
     {error && <p role="alert" className="text-destructive">{error}</p>}
     {!data && !error && <p role="status">Loading activity…</p>}
@@ -88,6 +91,7 @@ export function ReportsPanel({ channels, refresh }: { channels: MonitoringChanne
 
 const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 function AgentPerformance({ data, channels }: { data: Report; channels: MonitoringChannel[] }) {
+  const canExport = useCan('export_data')
   const name = (id: string) => channels.find(c => c.id === id)?.label ?? 'Business number'
   const waiting = new Map(data.waiting.map(w => [w.channel_id, w]))
   const peak = Math.max(1, ...data.heatmap.flat())
@@ -95,7 +99,7 @@ function AgentPerformance({ data, channels }: { data: Report; channels: Monitori
   return <>
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex flex-wrap items-end justify-between gap-2 p-5 pb-3"><div><h3 className="font-semibold">Agent performance</h3><p className="mt-1 text-xs text-muted-foreground">Response time = time from a customer&apos;s first unanswered message to the agent&apos;s next reply, in this period.</p></div>
-        <button className={button} onClick={() => downloadCsv('wacrm-agent-performance.csv', [['Agent', 'Conversations', 'Received', 'Sent', 'Customer messages answered', 'Unanswered in period', 'Waiting now', 'Median response (s)', 'Average response (s)', 'Answered within 5 min', 'Answered within 1 hour'], ...ids.map(id => { const a = data.agents.find(x => x.channel_id === id); return [name(id), a?.conversations ?? 0, a?.inbound ?? 0, a?.outbound ?? 0, a?.answered ?? 0, a?.unanswered ?? 0, waiting.get(id)?.count ?? 0, a?.median_response_seconds ?? '', a?.average_response_seconds ?? '', a?.within_5_min ?? 0, a?.within_1_hour ?? 0] })])}>Export</button></div>
+        {canExport && <button className={button} onClick={() => downloadCsv('wacrm-agent-performance.csv', [['Agent', 'Conversations', 'Received', 'Sent', 'Customer messages answered', 'Unanswered in period', 'Waiting now', 'Median response (s)', 'Average response (s)', 'Answered within 5 min', 'Answered within 1 hour'], ...ids.map(id => { const a = data.agents.find(x => x.channel_id === id); return [name(id), a?.conversations ?? 0, a?.inbound ?? 0, a?.outbound ?? 0, a?.answered ?? 0, a?.unanswered ?? 0, waiting.get(id)?.count ?? 0, a?.median_response_seconds ?? '', a?.average_response_seconds ?? '', a?.within_5_min ?? 0, a?.within_1_hour ?? 0] })])}>Export</button>}</div>
       <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm">
         <thead className="border-y border-border bg-muted/50 text-xs text-muted-foreground"><tr><th className="px-5 py-2 font-medium">Agent</th><th className="px-3 py-2 font-medium">Waiting now</th><th className="px-3 py-2 font-medium">Median response</th><th className="px-3 py-2 font-medium">Average</th><th className="px-3 py-2 font-medium">Within 5 min</th><th className="px-3 py-2 font-medium">Within 1 hour</th><th className="px-3 py-2 font-medium">Unanswered</th><th className="px-3 py-2 font-medium">Chats</th><th className="px-3 py-2 font-medium">In / Out</th></tr></thead>
         <tbody className="divide-y divide-border">{ids.map(id => { const a = data.agents.find(x => x.channel_id === id); const w = waiting.get(id); const pct = (n = 0) => a?.answered ? `${Math.round(n / a.answered * 100)}%` : '—'

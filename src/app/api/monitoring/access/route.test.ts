@@ -14,7 +14,7 @@ const request = (ids = [id, second], origin = 'https://crm.test') => new Request
 afterEach(() => vi.resetAllMocks())
 function setup(rows = numbers) {
   const query = { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), in: vi.fn().mockResolvedValue({ data: rows }) }
-  mocks.role.mockResolvedValue({ accountId: 'own-company', supabase: { from: () => query } })
+  mocks.role.mockResolvedValue({ role: 'admin',  accountId: 'own-company', supabase: { from: () => query } })
   const upsert = vi.fn().mockResolvedValue({ error: null })
   mocks.admin.mockReturnValue({ from: vi.fn().mockReturnValue({ upsert }) }); mocks.encrypt.mockReturnValue('encrypted-new-token')
   mocks.verify.mockResolvedValue(undefined)

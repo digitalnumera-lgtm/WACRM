@@ -1,16 +1,19 @@
-import { requireRole } from '@/lib/auth/account'
+import { requireMonitoring, scopeChannels } from '@/lib/monitoring/team-access'
 import { monitoringError, privateJson } from '@/lib/monitoring/http'
 import { mediaKinds, messageFilters } from '@/lib/monitoring/message-query'
 
 export async function GET(request: Request) {
   try {
-    const { supabase, accountId } = await requireRole('admin')
     const f = messageFilters(new URL(request.url).searchParams)
-    let query = supabase.from('monitoring_messages').select('id,thread_id,channel_id,meta_id,direction,sent_at,kind,content,media_id', { count: 'exact' }).eq('account_id', accountId)
+    // The Media library also needs permission to open media.
+    const access = await requireMonitoring(f.mediaOnly ? 'view_media' : 'view_inbox')
+    const { db: supabase, accountId } = access
+    let query = scopeChannels(access, supabase.from('monitoring_messages').select('id,thread_id,channel_id,meta_id,direction,sent_at,kind,content,media_id', { count: 'exact' }).eq('account_id', accountId))
     if (f.channel) query = query.eq('channel_id', f.channel)
     if (f.thread) query = query.eq('thread_id', f.thread)
     if (f.direction) query = query.eq('direction', f.direction)
     if (f.kind) query = query.eq('kind', f.kind)
+    if (f.kinds) query = query.in('kind', f.kinds)
     if (f.from) query = query.gte('sent_at', `${f.from}T00:00:00Z`)
     if (f.until) query = query.lt('sent_at', f.until)
     if (f.mediaOnly) query = query.in('kind', [...mediaKinds]).not('media_id', 'is', null)

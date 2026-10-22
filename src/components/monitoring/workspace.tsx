@@ -15,6 +15,11 @@ import { Conversation, prefetchConversation, workflowPatch, type ChatSnapshot } 
 import { ContactsPanel } from './contacts-panel'
 import { ContactPanel } from './contact-panel'
 import { MessageBrowser, ReportsPanel } from './activity-panels'
+import { AccessProvider } from './access'
+import { MediaLibrary } from './media-library'
+import { StorageSettings } from './storage-settings'
+import { TeamSettings } from './team-settings'
+import { can, type MonitoringMe, type Permission } from '@/lib/monitoring/permissions'
 import { HistoryImport, PortfolioPicker } from './setup-panels'
 import { ConversationList, emptyFilters, useInbox, type InboxFilters, type InboxTab } from './inbox-list'
 import { LabelsSettings, useLabels } from './labels'
@@ -29,6 +34,17 @@ const secondaryNav: { name: View; icon: typeof Inbox }[] = [
   { name: 'Saved replies', icon: Zap }, { name: 'Business numbers', icon: Phone }, { name: 'Import history', icon: History },
   { name: 'Events for review', icon: CircleAlert }, { name: 'Settings', icon: Settings },
 ]
+// What each view needs. Settings shows when any of its sections is allowed.
+const viewNeeds: Record<View, Permission | 'full'> = {
+  Inbox: 'view_inbox', Dashboard: 'view_reports', Contacts: 'view_contacts', Reports: 'view_reports', Media: 'view_media',
+  'Message logs': 'view_inbox', 'Saved replies': 'full', 'Business numbers': 'manage_numbers', 'Import history': 'manage_numbers',
+  'Events for review': 'manage_numbers', Settings: 'full',
+}
+function allowedView(me: MonitoringMe, view: View) {
+  if (view === 'Settings') return me.full || ['manage_labels', 'manage_settings', 'manage_numbers'].some(p => can(me, p as Permission))
+  const need = viewNeeds[view]
+  return need === 'full' ? me.full : can(me, need)
+}
 const date = (value: string | null) => value ? new Date(value).toLocaleString() : 'No events yet'
 
 export function MonitoringSignOut({ compact }: { compact?: boolean }) {
@@ -44,8 +60,8 @@ export function MonitoringSignOut({ compact }: { compact?: boolean }) {
     : <button className={buttonClass} onClick={signOut}>Sign out</button>}{error && <p role="alert" className="text-xs text-red-400">{error}</p>}</>
 }
 
-export function MonitoringWorkspace({ accountName, initialView = 'Inbox' }: { accountName: string; initialView?: 'Inbox' | 'Settings' }) {
-  const [view, setView] = useState<View>(initialView)
+export function MonitoringWorkspace({ accountName, me, initialView = 'Inbox' }: { accountName: string; me: MonitoringMe; initialView?: 'Inbox' | 'Settings' }) {
+  const [view, setView] = useState<View>(() => allowedView(me, initialView) ? initialView : 'Inbox')
   const [filters, setFilters] = useState<InboxFilters>(emptyFilters)
   const [selected, setSelected] = useState<string | null>(null)
   const [refresh, setRefresh] = useState(0)
@@ -117,17 +133,17 @@ export function MonitoringWorkspace({ accountName, initialView = 'Inbox' }: { ac
     <Icon size={19} />{name === 'Inbox' && (inbox.counts?.waiting ?? 0) > 0 && view !== 'Inbox' && <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-red-500 ring-2 ring-[#121316]" />}
   </button>
 
-  return <div className="monitoring-panel flex h-dvh flex-col overflow-hidden bg-background text-foreground md:flex-row">
+  return <AccessProvider me={me}><div className="monitoring-panel flex h-dvh flex-col overflow-hidden bg-background text-foreground md:flex-row">
     <aside aria-label="Workspace" className={`flex shrink-0 items-center gap-1 bg-[#121316] px-2 py-2 md:w-16 md:flex-col md:px-0 md:py-3 ${view === 'Inbox' && selected ? 'hidden md:flex' : 'flex'}`}>
       <div title={accountName} className="mr-1 flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#C0DD11] text-lg font-black text-[#121316] md:mb-3 md:mr-0">N</div>
-      <nav className="flex flex-1 items-center gap-1 overflow-x-auto md:flex-col md:overflow-visible">{primaryNav.map(navButton)}<span className="mx-1 h-6 w-px shrink-0 bg-white/10 md:my-2 md:h-px md:w-6" />{secondaryNav.map(navButton)}</nav>
+      <nav className="flex flex-1 items-center gap-1 overflow-x-auto md:flex-col md:overflow-visible">{primaryNav.filter(v => allowedView(me, v.name)).map(navButton)}{secondaryNav.some(v => allowedView(me, v.name)) && <span className="mx-1 h-6 w-px shrink-0 bg-white/10 md:my-2 md:h-px md:w-6" />}{secondaryNav.filter(v => allowedView(me, v.name)).map(navButton)}</nav>
       <MonitoringSignOut compact />
     </aside>
 
     {view === 'Inbox' ? <main className={`grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] ${contactOpen && selectedThread ? 'lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)_320px]' : 'lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]'}`}>
       <ConversationList inbox={inbox} filters={filters} setFilters={f => { setFilters(f) }} labels={labels} selected={selected} onSelect={setSelected} onPrefetch={id => prefetchConversation(id, chatCache)} hidden={!!selected} />
       <section aria-label="Conversation" className={`min-h-0 min-w-0 ${selected ? 'flex flex-col' : 'hidden lg:flex lg:flex-col'}`}>
-        {selected ? <Conversation key={selected} id={selected} thread={selectedThread} channels={inbox.channels} repliesEnabled={replyEnabled === true} workflowReady={workflowReady}
+        {selected ? <Conversation key={selected} id={selected} thread={selectedThread} channels={inbox.channels} repliesEnabled={replyEnabled === true && me.full} workflowReady={workflowReady}
           cache={chatCache} contactOpen={contactOpen} onToggleContact={() => setContactOpen(v => !v)} onBack={() => setSelected(null)}
           onPatched={value => patch(selected, value)} onLoaded={onLoaded} onChanged={bump} />
           : <div className="chat-wallpaper flex h-full flex-col items-center justify-center gap-3 p-10 text-center text-muted-foreground"><span className="flex size-16 items-center justify-center rounded-2xl bg-card shadow-sm"><MessageSquare size={30} className="text-primary" /></span><p className="font-medium text-foreground">Select a conversation</p><p className="max-w-xs text-sm">Use <kbd className="rounded border border-border bg-card px-1">j</kbd> / <kbd className="rounded border border-border bg-card px-1">k</kbd> to move between conversations and <kbd className="rounded border border-border bg-card px-1">/</kbd> to search.</p></div>}
@@ -142,7 +158,8 @@ export function MonitoringWorkspace({ accountName, initialView = 'Inbox' }: { ac
           <header className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-widest text-primary">{accountName}</p><h1 className="text-2xl font-semibold">{view}</h1></div><button className={buttonClass} onClick={bump}>Refresh</button></header>
           {view === 'Dashboard' && <Dashboard refresh={refresh} channels={inbox.channels} onTab={tab => { setFilters({ ...emptyFilters, tab, sort: tab === 'waiting' ? 'oldest' : 'latest' }); setView('Inbox') }} onChannel={id => { setFilters({ ...emptyFilters, tab: 'all', channel: id }); setView('Inbox') }} />}
           {view === 'Contacts' && <ContactsPanel channels={inbox.channels} onOpen={open} />}
-          {(view === 'Media' || view === 'Message logs') && <MessageBrowser key={view} channels={inbox.channels} media={view === 'Media'} refresh={refresh} onOpen={open} />}
+          {view === 'Media' && <MediaLibrary channels={inbox.channels} refresh={refresh} onOpen={open} />}
+          {view === 'Message logs' && <MessageBrowser key={view} channels={inbox.channels} refresh={refresh} onOpen={open} />}
           {view === 'Reports' && <ReportsPanel channels={inbox.channels} refresh={refresh} />}
           {view === 'Saved replies' && <QuickRepliesPanel />}
           {view === 'Business numbers' && <><ConnectNumber onConnected={bump} /><BusinessNumbers channels={inbox.channels} refresh={refresh} onSaved={bump} onOpen={id => { setFilters({ ...emptyFilters, tab: 'all', channel: id }); setView('Inbox') }} />
@@ -151,13 +168,15 @@ export function MonitoringWorkspace({ accountName, initialView = 'Inbox' }: { ac
           {view === 'Import history' && <HistoryImport channels={inbox.channels} onSaved={bump} />}
           {view === 'Events for review' && <ReviewEvents channels={inbox.channels} />}
           {view === 'Settings' && <>
-            <LabelsSettings labels={labels} ready={labelsReady} onChanged={() => { reloadLabels(); bump() }} />
-            <MonitoringSettings enabled={replyEnabled} onSaved={enabled => { settingsRevision.current++; setReplyEnabled(enabled); bump() }} />
-            <RenewMetaAccess channels={inbox.channels} />
+            {me.full && <TeamSettings channels={inbox.channels} />}
+            {can(me, 'manage_settings') && <StorageSettings />}
+            {can(me, 'manage_labels') && <LabelsSettings labels={labels} ready={labelsReady} onChanged={() => { reloadLabels(); bump() }} />}
+            {me.full && <MonitoringSettings enabled={replyEnabled} onSaved={enabled => { settingsRevision.current++; setReplyEnabled(enabled); bump() }} />}
+            {can(me, 'manage_numbers') && <RenewMetaAccess channels={inbox.channels} />}
           </>}
         </div>
       </main>}
-  </div>
+  </div></AccessProvider>
 }
 
 function Pagination({ page, size, total, setPage, label = 'conversation' }: { page: number; size: number; total: number; setPage: (page: number) => void; label?: string }) {

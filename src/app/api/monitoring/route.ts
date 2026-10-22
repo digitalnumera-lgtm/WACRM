@@ -1,28 +1,32 @@
 import { cursorFilter, makeCursor } from '@/lib/monitoring/scroll'
-import { requireRole } from '@/lib/auth/account'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { allowedChannels, requireMonitoring, scopeChannels } from '@/lib/monitoring/team-access'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { channelColumns, monitoringError, pageNumber, privateJson, threadColumns } from '@/lib/monitoring/http'
 import { applyInboxCursor, applyInboxFilters, applyInboxTab, inboxColumns, missingWorkflowSchema, pageSize, readInboxFilters, searchLiteral } from '@/lib/monitoring/inbox'
 
 export async function GET(request: Request) {
   try {
-    const { supabase, accountId } = await requireRole('admin')
+    const access = await requireMonitoring('view_inbox')
+    const { db: supabase, accountId } = access
     const params = new URL(request.url).searchParams
     const page = pageNumber(params.get('page'))
     const scroll = params.get('scroll') === '1'
     const filters = readInboxFilters(params)
-    const channels = await supabase.from('monitoring_channels').select(channelColumns).eq('account_id', accountId).order('label').order('id')
+    const channels = await scopeChannels(access, supabase.from('monitoring_channels').select(channelColumns).eq('account_id', accountId), 'id').order('label').order('id')
     if (channels.error) throw channels.error
     // Channel and agent filters resolve only against this company's channels.
     let channelIds: string[] | null = null
     if (filters.channel) channelIds = (channels.data ?? []).filter(c => c.id === filters.channel).map(c => c.id)
     // The recovered schema stores the agent's display label on each channel.
     if (filters.agent) channelIds = (channels.data ?? []).filter(c => c.label === filters.agent && (!channelIds || channelIds.includes(c.id))).map(c => c.id)
+    // Members only ever see their assigned numbers.
+    channelIds = allowedChannels(access, channelIds)
     if (channelIds && channelIds.length === 0) return privateJson({ channels: channels.data, threads: [], total: 0, page, nextCursor: null, workflowReady: true })
 
     const ascending = filters.sort === 'oldest'
-    // Service role is used only with an explicit company filter, after the
-    // owner/admin check above; the view itself is not exposed to browsers.
+    // Service role is used only with an explicit company (and number) filter,
+    // after the access check above; the view itself is not exposed to browsers.
     let query = monitoringAdmin().from('monitoring_inbox').select(inboxColumns, { count: filters.cursor ? undefined : 'exact' }).eq('account_id', accountId)
     query = applyInboxTab(applyInboxFilters(query, { ...filters, channelIds }), filters.tab)
     query = applyInboxCursor(query, filters)
@@ -39,7 +43,7 @@ export async function GET(request: Request) {
 // Used until supabase/numera/001_inbox_workflow.sql is installed: the original
 // thread list without workflow tabs, labels or priority.
 async function legacyList(
-  supabase: Awaited<ReturnType<typeof requireRole>>['supabase'], accountId: string, channels: unknown[],
+  supabase: SupabaseClient, accountId: string, channels: unknown[],
   channelIds: string[] | null, filters: ReturnType<typeof readInboxFilters>, page: number, scroll: boolean,
 ) {
   let query = supabase.from('monitoring_threads').select(threadColumns, { count: filters.cursor ? undefined : 'exact' }).eq('account_id', accountId)

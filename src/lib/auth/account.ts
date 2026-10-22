@@ -120,6 +120,11 @@ const CONTEXT_CACHE_MS = process.env.NODE_ENV === "production" ? 60_000 : 0;
 type CachedContext = { expires: number; accountId: string; role: AccountRole; account: { id: string; name: string } };
 const contextCache = new Map<string, CachedContext>();
 
+/** Forget a user's cached account/role after a team change (removal, role change). */
+export function forgetAccountContext(userId: string): void {
+  contextCache.delete(userId);
+}
+
 export async function verifiedUserId(supabase: SupabaseClient): Promise<string | null> {
   const auth = supabase.auth as unknown as {
     getClaims?: () => Promise<{ data: { claims?: { sub?: unknown } } | null; error: unknown }>;

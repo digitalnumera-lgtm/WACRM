@@ -16,7 +16,7 @@ it('rejects anonymous and non-management reads and writes', async () => {
   expect(mocks.admin).not.toHaveBeenCalled(); expect(mocks.save).not.toHaveBeenCalled()
 })
 it('persists only a boolean for the authenticated company and actor', async () => {
-  const db = {}; mocks.admin.mockReturnValue(db); mocks.role.mockResolvedValue({ accountId: 'own-company', userId: 'manager' }); mocks.save.mockResolvedValue(true)
+  const db = {}; mocks.admin.mockReturnValue(db); mocks.role.mockResolvedValue({ role: 'admin',  accountId: 'own-company', userId: 'manager' }); mocks.save.mockResolvedValue(true)
   expect((await PATCH(request({ management_replies_enabled: false, account_id: 'foreign-company' }))).status).toBe(200)
   expect(mocks.save).toHaveBeenCalledWith(db, 'own-company', 'manager', false)
   mocks.save.mockClear()
@@ -25,7 +25,7 @@ it('persists only a boolean for the authenticated company and actor', async () =
   expect(mocks.save).not.toHaveBeenCalled()
 })
 it('does not report success when storage fails or there is no number to configure', async () => {
-  mocks.role.mockResolvedValue({ accountId: 'company', userId: 'manager' })
+  mocks.role.mockResolvedValue({ role: 'admin',  accountId: 'company', userId: 'manager' })
   mocks.save.mockResolvedValue(false)
   expect((await PATCH(request({ management_replies_enabled: false }))).status).toBe(409)
   mocks.save.mockRejectedValue(new Error('private database error'))

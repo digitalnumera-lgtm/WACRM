@@ -18,7 +18,7 @@ it('rejects anonymous users and unauthorized agents before accessing credentials
 })
 function ownedMedia() {
   const query = { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValueOnce({ data: { channel_id: 'channel', media_id: '123' } }).mockResolvedValueOnce({ data: { id: 'channel' } }) }
-  mocks.role.mockResolvedValue({ accountId: 'company', supabase: { from: () => query } })
+  mocks.role.mockResolvedValue({ role: 'admin',  accountId: 'company', supabase: { from: () => query } })
   const credential = { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: { encrypted_token: 'ciphertext' } }) }
   mocks.admin.mockReturnValue({ from: () => credential }); mocks.decrypt.mockReturnValue('secret-token')
 }
@@ -43,7 +43,7 @@ it('distinguishes inaccessible stored credentials from expired media', async () 
 it('scopes the message lookup to the manager company and hides missing/foreign media', async () => {
   const query = { select: vi.fn(), eq: vi.fn(), maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) }
   query.select.mockReturnValue(query); query.eq.mockReturnValue(query)
-  mocks.role.mockResolvedValue({ accountId: 'company', supabase: { from: () => query } })
+  mocks.role.mockResolvedValue({ role: 'admin',  accountId: 'company', supabase: { from: () => query } })
   expect((await GET(new Request('https://crm.test/media'), context)).status).toBe(404)
   expect(query.eq).toHaveBeenCalledWith('account_id', 'company')
   expect(mocks.admin).not.toHaveBeenCalled()

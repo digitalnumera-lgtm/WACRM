@@ -1,6 +1,6 @@
-// Permanent copies of WhatsApp media in a private Supabase Storage bucket.
-// Meta keeps media only for a limited time; once archived, a file stays
-// viewable in the CRM. Every function here is best-effort: archiving never
+// Saved copies of WhatsApp media in a private Supabase Storage bucket.
+// Meta keeps incoming media for only 7 days; a saved copy stays viewable in
+// the CRM until storage cleanup removes it (see storage.ts). Every function here is best-effort: archiving never
 // blocks message storage or viewing, and only the server (service role)
 // can read or write the bucket.
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -35,17 +35,25 @@ export async function archiveMedia(db: SupabaseClient, accountId: string, messag
 
 export interface ArchiveJob { channelId: string; accountId: string; metaIds: string[] }
 
+/** Media types saved as they arrive (others are saved when someone opens them). */
+export type AutoSavePolicy = (accountId: string) => Promise<{ kinds: string[]; maxBytes: number }>
+const defaultPolicy: AutoSavePolicy = async () => ({ kinds: ['image', 'audio', 'sticker'], maxBytes: 16 * 1024 * 1024 })
+
 /** Copies newly delivered media into storage. Runs after the webhook response. */
-export async function archiveDeliveredMedia(db: SupabaseClient, jobs: ArchiveJob[], limit = 25) {
+export async function archiveDeliveredMedia(db: SupabaseClient, jobs: ArchiveJob[], limit = 25, policy: AutoSavePolicy = defaultPolicy) {
   let done = 0
+  const policies = new Map<string, Awaited<ReturnType<AutoSavePolicy>>>()
   for (const job of jobs) {
     if (done >= limit) return
+    if (!policies.has(job.accountId)) policies.set(job.accountId, await policy(job.accountId))
+    const { kinds, maxBytes } = policies.get(job.accountId)!
+    if (!kinds.length) continue
     const credential = await db.from('monitoring_credentials').select('encrypted_token').eq('channel_id', job.channelId).maybeSingle()
     if (credential.error || !credential.data) continue
     let token: string
     try { token = decrypt(credential.data.encrypted_token) } catch { continue }
     for (let i = 0; i < job.metaIds.length && done < limit; i += 100) {
-      const rows = await db.from('monitoring_messages').select('id,media_id').eq('channel_id', job.channelId).in('meta_id', job.metaIds.slice(i, i + 100)).not('media_id', 'is', null)
+      const rows = await db.from('monitoring_messages').select('id,media_id').eq('channel_id', job.channelId).in('meta_id', job.metaIds.slice(i, i + 100)).in('kind', kinds).not('media_id', 'is', null)
       if (rows.error) break
       for (const row of rows.data ?? []) {
         if (done >= limit) return
@@ -53,7 +61,7 @@ export async function archiveDeliveredMedia(db: SupabaseClient, jobs: ArchiveJob
         try {
           if (await signedArchiveUrl(db, job.accountId, row.id, 60)) continue
           const { bytes, type } = await fetchMonitoringMedia(row.media_id, token)
-          await archiveMedia(db, job.accountId, row.id, bytes, type)
+          if (bytes.byteLength <= maxBytes) await archiveMedia(db, job.accountId, row.id, bytes, type)
         } catch { /* Expired, unsupported or inaccessible media stays as-is. */ }
       }
     }

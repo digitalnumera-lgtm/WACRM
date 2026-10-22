@@ -1,4 +1,4 @@
-import { requireRole } from '@/lib/auth/account'
+import { requireMonitoring, scopeChannels } from '@/lib/monitoring/team-access'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { checkedId, MonitoringInputError, monitoringError, privateJson } from '@/lib/monitoring/http'
 import { canRequestSync, connectionEventId, historyProgress, SYNC_TYPES, type ConnectionRecord } from '@/lib/monitoring/connect'
@@ -8,11 +8,12 @@ export const runtime = 'nodejs'
 /** Connection and history-sync progress for this company's numbers. */
 export async function GET(request: Request) {
   try {
-    const { supabase, accountId } = await requireRole('admin')
+    const access = await requireMonitoring('manage_numbers')
+    const { db: supabase, accountId } = access
     const ids = [...new Set((new URL(request.url).searchParams.get('ids') ?? '').split(',').filter(Boolean))]
     if (!ids.length || ids.length > 50) throw new MonitoringInputError('Choose between 1 and 50 numbers.')
     ids.forEach(checkedId)
-    const channels = await supabase.from('monitoring_channels').select('id').eq('account_id', accountId).in('id', ids)
+    const channels = await scopeChannels(access, supabase.from('monitoring_channels').select('id').eq('account_id', accountId).in('id', ids), 'id')
     if (channels.error) throw channels.error
     const owned = (channels.data ?? []).map(c => c.id as string)
     const db = monitoringAdmin()

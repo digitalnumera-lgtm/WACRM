@@ -1,4 +1,4 @@
-import { requireRole } from '@/lib/auth/account'
+import { canSeeChannel, requireMonitoring } from '@/lib/monitoring/team-access'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { checkedId, monitoringError, privateJson, readJson } from '@/lib/monitoring/http'
 
@@ -6,8 +6,10 @@ import { checkedId, monitoringError, privateJson, readJson } from '@/lib/monitor
 // The webhook and management reply paths already reject inactive channels.
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const { accountId } = await requireRole('admin')
+    const access = await requireMonitoring('manage_numbers')
+    const { accountId } = access
     const id = checkedId((await context.params).id)
+    if (!canSeeChannel(access, id)) return privateJson({ error: 'Business number not found.' }, 404)
     const body = await readJson(request)
     if (typeof body.active !== 'boolean') return privateJson({ error: 'Choose whether monitoring is enabled.' }, 400)
     const result = await monitoringAdmin().from('monitoring_channels')

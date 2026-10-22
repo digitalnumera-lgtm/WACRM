@@ -43,7 +43,7 @@ beforeEach(() => {
   tables = { monitoring_channels: [], monitoring_credentials: [], monitoring_events: [] }
   writes = []; calls = []; exchange = { ok: true, body: { access_token: 'business-token' } }
   rpc = vi.fn(async (_name: string, args: Row) => { tables.monitoring_channels.push({ id: channel, account_id: company, phone_number_id: args.p_phone, active: true }); return { error: null } })
-  mocks.role.mockResolvedValue({ supabase: database(), accountId: company, userId: 'manager' })
+  mocks.role.mockResolvedValue({ role: 'admin',  supabase: database(), accountId: company, userId: 'manager' })
   mocks.admin.mockImplementation(() => database())
   mocks.list.mockResolvedValue([{ id: '555', display_phone_number: '+92 308 6803745' }])
   mocks.verify.mockResolvedValue({ display_phone_number: '+92 308 6803745' })
