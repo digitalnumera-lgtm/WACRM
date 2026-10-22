@@ -69,13 +69,13 @@ export function ConnectNumber({ onConnected }: { onConnected: (channelId: string
   const finish = useCallback(async (code: string) => {
     setStep('saving')
     // The finish message normally arrives first; wait briefly if not. The code
-    // expires after about 30 seconds, so do not wait long.
-    for (let i = 0; i < 25 && !session.current?.waba_id; i++) await new Promise(r => setTimeout(r, 200))
+    // expires after about 30 seconds, so do not wait long. Without it, the
+    // server finds the shared WhatsApp account from the new access token.
+    for (let i = 0; i < 10 && !session.current?.waba_id; i++) await new Promise(r => setTimeout(r, 200))
     const info = session.current
-    if (!info?.waba_id) { setError('Meta did not report which WhatsApp account was connected. Please run Connect again.'); setStep('idle'); return }
-    if (info.event === 'FINISH_ONLY_WABA') { setError('Only the WhatsApp account was shared, without a phone number. Run Connect again and select the agent’s number.'); setStep('idle'); return }
+    if (info?.event === 'FINISH_ONLY_WABA') { setError('Only the WhatsApp account was shared, without a phone number. Run Connect again and select the agent’s number.'); setStep('idle'); return }
     try {
-      const data = await api<{ channel_id: string; display_number: string | null; syncs: Record<string, SyncAttempt> }>('/api/monitoring/connect', sendJson('POST', { code, waba_id: info.waba_id, phone_number_id: info.phone_number_id, label: label.trim() }))
+      const data = await api<{ channel_id: string; display_number: string | null; syncs: Record<string, SyncAttempt> }>('/api/monitoring/connect', sendJson('POST', { code, waba_id: info?.waba_id, phone_number_id: info?.phone_number_id, label: label.trim() }))
       setResult(data); setStep('done'); onConnected(data.channel_id)
     } catch (e) { setError((e as Error).message); setStep('idle') }
   }, [label, onConnected])
@@ -94,18 +94,18 @@ export function ConnectNumber({ onConnected }: { onConnected: (channelId: string
     } catch (e) { setError((e as Error).message); setStep('idle') }
   }
 
-  return <section className="rounded-xl border border-primary/30 bg-card p-5 shadow-sm">
+  return <section className="crm-card p-6">
     <div className="flex items-start gap-3"><span className="rounded-xl bg-primary/10 p-3 text-primary"><Smartphone size={20} /></span>
-      <div className="min-w-0 flex-1"><h3 className="text-lg font-semibold">Connect a WhatsApp number</h3>
-        <p className="mt-1 text-sm text-muted-foreground">Opens Meta’s window, the same one WabaCRM uses. The agent keeps using the WhatsApp Business app on their phone. Approve “Share chat history” on the phone to bring in up to 6 months of past chats and the phone’s contacts.</p></div></div>
+      <div className="min-w-0 flex-1"><h3 className="text-lg font-semibold">Add or reconnect an agent</h3>
+        <p className="mt-1 text-sm text-muted-foreground">The one way to add an agent, or to reconnect an existing one and bring in up to 6 months of old chats. The agent keeps using WhatsApp Business on their phone. Reconnecting keeps all chats already in the CRM.</p></div></div>
     <ol className="mt-4 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
-      <li className="rounded-lg bg-muted/60 p-3"><b className="text-foreground">1.</b> Enter the agent’s name and click Connect.</li>
+      <li className="rounded-lg bg-muted/60 p-3"><b className="text-foreground">1.</b> Enter the agent’s name (use the same name to reconnect) and click Connect.</li>
       <li className="rounded-lg bg-muted/60 p-3"><b className="text-foreground">2.</b> In Meta’s window choose Numera Digital and the agent’s number, then confirm.</li>
       <li className="rounded-lg bg-muted/60 p-3"><b className="text-foreground">3.</b> On the agent’s phone, approve the request and allow chat history sharing.</li>
     </ol>
     <div className="mt-4 flex flex-wrap items-end gap-3">
       <label className="min-w-56 flex-1 text-xs font-medium text-muted-foreground">Agent name (label)<input className={inputClass} value={label} maxLength={120} onChange={e => setLabel(e.target.value)} placeholder="e.g. Ali Anwar" disabled={step === 'popup' || step === 'saving'} /></label>
-      <button className={`${primaryButton} bg-[#1877f2]`} onClick={() => void start()} disabled={step === 'popup' || step === 'saving'}>
+      <button className={`${primaryButton} !bg-[#1877f2] !text-white`} onClick={() => void start()} disabled={step === 'popup' || step === 'saving'}>
         {step === 'popup' ? <><LoaderCircle size={16} className="animate-spin" />Waiting for Meta…</> : step === 'saving' ? <><LoaderCircle size={16} className="animate-spin" />Connecting…</> : 'Connect with Facebook'}
       </button>
     </div>
@@ -136,7 +136,7 @@ export function HistoryStatus({ channelId, status, onRetried }: { channelId: str
   const [error, setError] = useState('')
   if (!status) return null
   const { connected, syncs, retry, progress } = status
-  if (!connected && !progress.chunks && !progress.contacts) return <p className="text-xs text-muted-foreground">Chat history: not shared through Connect number.</p>
+  if (!connected && !progress.chunks && !progress.contacts) return <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">Added manually, so old chats were not imported. Use <b>Add or reconnect an agent</b> above with this agent’s name to bring in up to 6 months of history.</p>
   const done = (progress.progress ?? 0) >= 100
   const pct = Math.max(0, Math.min(100, progress.progress ?? 0))
   async function again(type: string) {
