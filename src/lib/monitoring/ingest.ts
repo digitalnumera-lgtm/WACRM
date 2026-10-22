@@ -42,6 +42,38 @@ function canonical(value: unknown): string {
   return JSON.stringify(value) ?? 'null'
 }
 
+/** Messages, phone replies and statuses delivered as ordinary webhook payloads. */
+function liveBatch(wabaId: string, change: Json, value: Json, field: string, phoneId: string | null, hash: string): ChangeBatch {
+  const events = normalizeMonitoringEvents({ object: 'whatsapp_business_account', entry: [{ id: wabaId, changes: [change] }] })
+  const messages: StoredMessage[] = []
+  let review = false
+  for (const event of events) {
+    if (event.kind === 'unsupported') { review = true; continue }
+    if (event.kind === 'status') continue // Preserve status payload in the event ledger.
+    const timestamp = Number(event.timestamp)
+    if (!event.messageId || !event.customer || !event.phoneNumberId || !event.timestamp || !/^\d+$/.test(event.timestamp) || !Number.isFinite(timestamp) || timestamp < 0 || timestamp > 253402300799) {
+      review = true
+      continue
+    }
+    const contact = Array.isArray(value.contacts) ? value.contacts.map(object).find(c => c.wa_id === event.customer) : undefined
+    const name = object(contact?.profile).name
+    const kind = typeof event.raw.type === 'string' ? event.raw.type : 'unknown'
+    const media = object(event.raw[kind])
+    messages.push({
+      id: event.messageId, customer: event.customer,
+      name: typeof name === 'string' ? name : null,
+      direction: event.kind === 'incoming' ? 'inbound' : 'outbound',
+      timestamp: new Date(timestamp * 1000).toISOString(), kind,
+      text: messageText(event.raw),
+      media_id: typeof media.id === 'string' ? media.id : null,
+    })
+    // Interactive, contact/location, edits and other non-text payloads are
+    // retained in full for review until their complete rendering is supported.
+    if (!['text', 'image', 'video', 'audio', 'document', 'sticker'].includes(kind)) review = true
+  }
+  return { waba: wabaId, phone: phoneId, field, hash, payload: change, messages, review }
+}
+
 export function monitoringBatches(payload: unknown): ChangeBatch[] {
   // Validate the complete envelope before doing any database work.
   normalizeMonitoringEvents(payload)
@@ -55,6 +87,17 @@ export function monitoringBatches(payload: unknown): ChangeBatch[] {
       const phoneId = typeof phone === 'string' ? phone : null
       // Coexistence sync deliveries can be large; the ledger keeps a compact,
       // content-free summary while messages/contacts are stored normally.
+      if (field === 'history' && !Array.isArray(value.history) && (Array.isArray(value.messages) || Array.isArray(value.message_echoes))) {
+        // Meta also delivers shared history as ordinary customer-message and
+        // phone-reply payloads under the history field. Store them as history.
+        for (const [key, asField] of [['messages', 'messages'], ['message_echoes', 'smb_message_echoes']] as const) {
+          if (!Array.isArray(value[key])) continue
+          const part = { messaging_product: value.messaging_product, metadata: value.metadata, contacts: value.contacts, [key]: value[key] }
+          const batch = liveBatch(entry.id, { field: asField, value: part }, part, asField, phoneId, `${hash}:${key}`)
+          batches.push({ ...batch, field, payload: change, historical: true })
+        }
+        continue
+      }
       if (field === 'history') {
         const { messages, summary } = parseHistory(value)
         // A delivery with no chats, no errors and no progress metadata is not a
@@ -68,34 +111,7 @@ export function monitoringBatches(payload: unknown): ChangeBatch[] {
         batches.push({ waba: entry.id, phone: phoneId, field, hash, payload: { field, value: { source: 'meta_contacts', received: contacts.length, removed: contacts.filter(c => c.action === 'remove').length } }, messages: [], review: false, contacts })
         continue
       }
-      const events = normalizeMonitoringEvents({ object: 'whatsapp_business_account', entry: [{ id: entry.id, changes: [change] }] })
-      const messages: StoredMessage[] = []
-      let review = false
-      for (const event of events) {
-        if (event.kind === 'unsupported') { review = true; continue }
-        if (event.kind === 'status') continue // Preserve status payload in the event ledger.
-        const timestamp = Number(event.timestamp)
-        if (!event.messageId || !event.customer || !event.phoneNumberId || !event.timestamp || !/^\d+$/.test(event.timestamp) || !Number.isFinite(timestamp) || timestamp < 0 || timestamp > 253402300799) {
-          review = true
-          continue
-        }
-        const contact = Array.isArray(value.contacts) ? value.contacts.map(object).find(c => c.wa_id === event.customer) : undefined
-        const name = object(contact?.profile).name
-        const kind = typeof event.raw.type === 'string' ? event.raw.type : 'unknown'
-        const media = object(event.raw[kind])
-        messages.push({
-          id: event.messageId, customer: event.customer,
-          name: typeof name === 'string' ? name : null,
-          direction: event.kind === 'incoming' ? 'inbound' : 'outbound',
-          timestamp: new Date(timestamp * 1000).toISOString(), kind,
-          text: messageText(event.raw),
-          media_id: typeof media.id === 'string' ? media.id : null,
-        })
-        // Interactive, contact/location, edits and other non-text payloads are
-        // retained in full for review until their complete rendering is supported.
-        if (!['text', 'image', 'video', 'audio', 'document', 'sticker'].includes(kind)) review = true
-      }
-      batches.push({ waba: entry.id, phone: phoneId, field, hash, payload: change, messages, review })
+      batches.push(liveBatch(entry.id, change, value, field, phoneId, hash))
     }
   }
   return batches

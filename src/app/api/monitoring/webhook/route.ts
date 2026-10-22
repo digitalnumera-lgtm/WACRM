@@ -1,6 +1,7 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto'
 import { after } from 'next/server'
 import { archiveDeliveredMedia } from '@/lib/monitoring/media-archive'
+import { reprocessStoredHistory } from '@/lib/monitoring/history-reprocess'
 import { AUTO_SAVE_MAX_BYTES, readStorageSettings, runStorageCleanup } from '@/lib/monitoring/storage'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
@@ -51,12 +52,12 @@ export async function POST(request: Request) {
     outcomes.batches = batches.length
     const db = monitoringAdmin()
     const archive = await persistMonitoringBatches(db, batches, event => { outcomes[event] = (outcomes[event] ?? 0) + 1 })
+    const policy = async (accountId: string) => {
+      const settings = await readStorageSettings(db, accountId)
+      return { kinds: settings.auto_save, maxBytes: AUTO_SAVE_MAX_BYTES }
+    }
     // Save new media to storage after Meta has its acknowledgement.
     if (archive?.length) {
-      const policy = async (accountId: string) => {
-        const settings = await readStorageSettings(db, accountId)
-        return { kinds: settings.auto_save, maxBytes: AUTO_SAVE_MAX_BYTES }
-      }
       // Save new media, then (at most hourly per company) apply storage cleanup.
       const work = async () => {
         await archiveDeliveredMedia(db, archive, 25, policy).catch(() => {})
@@ -64,6 +65,8 @@ export async function POST(request: Request) {
       }
       try { after(work) } catch { /* No request scope (tests): skip archiving. */ }
     }
+    // Catch up on history kept for review before its format was supported.
+    try { after(async () => { const jobs = await reprocessStoredHistory(db).catch(() => []); if (jobs.length) await archiveDeliveredMedia(db, jobs, 25, policy).catch(() => {}) }) } catch { /* No request scope (tests). */ }
     return finish('acknowledged', 200, { received: true })
   } catch {
     // Do not return 200 before durable storage: let Meta retry the delivery.

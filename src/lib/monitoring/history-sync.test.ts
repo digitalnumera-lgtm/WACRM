@@ -135,3 +135,14 @@ describe('connection rules and progress', () => {
     expect(p).toEqual({ chunks: 3, messages: 310, progress: 100, phases: [0, 1, 2], declined: false, contacts: 344, last_received_at: '2026-10-21T11:00:00Z' })
   })
 })
+
+describe('history delivered as ordinary message payloads', () => {
+  const value = (key: 'messages' | 'message_echoes', message: Record<string, unknown>) => ({ messaging_product: 'whatsapp', metadata: { phone_number_id: '1334421996415091', display_phone_number: '923086803745' }, [key]: [message] })
+  const env = (v: unknown) => ({ object: 'whatsapp_business_account', entry: [{ id: '1192605976360851', changes: [{ field: 'history', value: v }] }] })
+  it('stores customer messages and phone replies as history', () => {
+    const [inbound] = monitoringBatches(env(value('messages', { id: 'wamid.in', from: '923086803747', type: 'text', text: { body: 'Salam' }, timestamp: '1792673052' })))
+    expect(inbound).toMatchObject({ field: 'history', historical: true, review: false, messages: [{ id: 'wamid.in', customer: '923086803747', direction: 'inbound', text: 'Salam' }] })
+    const [outbound] = monitoringBatches(env(value('message_echoes', { id: 'wamid.out', from: '923086803745', to: '923025458505', type: 'audio', audio: { id: '1589380289144296', voice: true }, timestamp: '1792668719' })))
+    expect(outbound).toMatchObject({ field: 'history', historical: true, messages: [{ id: 'wamid.out', customer: '923025458505', direction: 'outbound', kind: 'audio', media_id: '1589380289144296' }] })
+  })
+})
