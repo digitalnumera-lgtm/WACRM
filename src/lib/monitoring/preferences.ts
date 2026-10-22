@@ -8,13 +8,14 @@ export interface Preferences {
   timeFormat: '12h' | '24h'
   chatSize: 'small' | 'medium' | 'large'
   sound: boolean
+  notify: boolean
   contactPanel: boolean
   pinned: string[]
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
   theme: 'light', density: 'comfortable', defaultTab: 'open', defaultSort: 'latest',
-  timeFormat: '12h', chatSize: 'medium', sound: false, contactPanel: true, pinned: [],
+  timeFormat: '12h', chatSize: 'medium', sound: true, notify: false, contactPanel: true, pinned: [],
 }
 
 const choices: { [K in keyof Preferences]?: readonly Preferences[K][] } = {
@@ -32,6 +33,7 @@ export function sanitizePreferences(value: unknown): Preferences {
     if (allowed.includes(input[key])) (out as Record<string, unknown>)[key] = input[key]
   }
   if (typeof input.sound === 'boolean') out.sound = input.sound
+  if (typeof input.notify === 'boolean') out.notify = input.notify
   if (typeof input.contactPanel === 'boolean') out.contactPanel = input.contactPanel
   if (Array.isArray(input.pinned)) out.pinned = [...new Set(input.pinned.filter((id): id is string => typeof id === 'string' && uuid.test(id)))].slice(0, MAX_PINNED)
   return out

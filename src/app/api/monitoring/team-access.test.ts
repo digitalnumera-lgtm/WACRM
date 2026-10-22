@@ -10,6 +10,7 @@ import { GET as media } from './messages/[id]/media/route'
 import { GET as messages } from './messages/route'
 import { GET as me } from './me/route'
 import { GET as overview } from './overview/route'
+import { GET as latest } from './latest/route'
 import { GET as team } from './team/route'
 import { POST as invite } from './team/invites/route'
 import { POST as createRole } from './team/roles/route'
@@ -60,7 +61,7 @@ function database() {
         eq(k: string, v: unknown) { filters.push(['eq', k, v]); return query }, neq(k: string, v: unknown) { filters.push(['neq', k, v]); return query }, in(k: string, v: unknown) { filters.push(['in', k, v]); return query },
         is(k: string, v: unknown) { filters.push(['is', k, v]); return query },
         ilike(k: string, v: unknown) { filters.push(['ilike', k, v]); return query },
-        not() { return query }, or() { return query }, gte() { return query }, lt() { return query }, contains() { return query },
+        not() { return query }, or() { return query }, gt() { return query }, gte() { return query }, lt() { return query }, contains() { return query },
         order() { return query }, limit() { return query }, range() { return query },
         single() { const r = run(); return Promise.resolve({ ...r, data: Array.isArray(r.data) ? r.data[0] ?? null : r.data }) },
         maybeSingle() { const r = run(); return Promise.resolve({ ...r, data: Array.isArray(r.data) ? r.data[0] ?? null : r.data }) },
@@ -139,6 +140,19 @@ describe('team member access', () => {
     ;(rows.monitoring_member_access[0].monitoring_roles as Row).permissions = ['view_inbox']
     expect((await messages(get('/api/monitoring/messages?kinds=image,video'))).status).toBe(403)
     expect((await messages(get('/api/monitoring/messages'))).status).toBe(200)
+  })
+})
+
+describe('new message alerts', () => {
+  it('starts with a server time, then returns only the member’s numbers', async () => {
+    asMember()
+    const first = await (await latest(get('/api/monitoring/latest'))).json()
+    expect(first.threads).toEqual([])
+    expect(Date.parse(first.now)).not.toBeNaN()
+    rows.monitoring_threads = [{ id: threadA, account_id: company, channel_id: chanA, last_direction: 'inbound' }, { id: threadB, account_id: company, channel_id: chanB, last_direction: 'inbound' }]
+    const next = await (await latest(get(`/api/monitoring/latest?since=${encodeURIComponent(first.now)}`))).json()
+    expect(next.threads.map((t: Row) => t.id)).toEqual([threadA])
+    expect((await latest(get('/api/monitoring/latest?since=yesterday'))).status).toBe(400)
   })
 })
 

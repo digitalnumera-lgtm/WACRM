@@ -14,7 +14,7 @@ function Section({ title, children, defaultOpen = true, action }: { title: strin
   const [open, setOpen] = useState(defaultOpen)
   return <section className="border-b border-border">
     <div className="flex items-center justify-between gap-2 px-4 py-3">
-      <button type="button" aria-expanded={open} className="flex flex-1 items-center gap-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground" onClick={() => setOpen(v => !v)}><ChevronDown size={14} className={`transition-transform ${open ? '' : '-rotate-90'}`} />{title}</button>{action}
+      <button type="button" aria-expanded={open} className="flex flex-1 items-center gap-2 text-left text-sm font-semibold" onClick={() => setOpen(v => !v)}><ChevronDown size={14} className={`transition-transform ${open ? '' : '-rotate-90'}`} />{title}</button>{action}
     </div>
     {open && <div className="px-4 pb-4">{children}</div>}
   </section>
@@ -59,7 +59,7 @@ export function ContactPanel({ thread, channels, labels, workflowReady, onPatche
     {error && <p role="alert" className="mx-4 mt-3 rounded-lg bg-red-50 p-2 text-xs text-red-700">{error}</p>}
     <div className="border-b border-border px-4 pb-5 pt-1 text-center">
       <div className="flex justify-center"><Avatar name={name} seed={thread.customer} size="lg" /></div>
-      <p className="mt-3 break-words text-lg font-semibold tracking-tight">{name}</p>
+      <p className="font-display mt-3 break-words text-xl font-semibold tracking-tight">{name}</p>
       {profile?.company && <p className="text-xs text-muted-foreground">{profile.company}</p>}
       <div className="mt-3 flex justify-center gap-2">
         <a href={`https://wa.me/${thread.customer}`} target="_blank" rel="noreferrer" aria-label="Open in WhatsApp" title="Open in WhatsApp" className="flex size-9 items-center justify-center rounded-full border border-border hover:bg-muted"><MessageCircle size={15} /></a>
@@ -96,7 +96,7 @@ export function ContactPanel({ thread, channels, labels, workflowReady, onPatche
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
         <dt className="text-muted-foreground">Agent</dt><dd className="truncate font-medium">{channel?.label ?? '—'}</dd>
         <dt className="text-muted-foreground">Number</dt><dd className="truncate">{channel?.display_number ?? '—'}{channel && !channel.active && <span className="ml-1 text-xs text-amber-700">(removed)</span>}</dd>
-        <dt className="text-muted-foreground">Status</dt><dd className="capitalize">{thread.state ?? '—'}{thread.snoozed_until && <span className="block text-xs text-muted-foreground">until {new Date(thread.snoozed_until).toLocaleString()}</span>}</dd>
+        <dt className="text-muted-foreground">Status</dt><dd className="capitalize">{thread.state === 'resolved' ? 'Done' : thread.state ?? '—'}{thread.snoozed_until && <span className="block text-xs text-muted-foreground">until {new Date(thread.snoozed_until).toLocaleString()}</span>}</dd>
         <dt className="text-muted-foreground">Messages</dt><dd>{thread.message_count.toLocaleString()}</dd>
         <dt className="text-muted-foreground">Last activity</dt><dd title={new Date(thread.last_message_at).toLocaleString()}>{new Date(thread.last_message_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</dd>
         <dt className="text-muted-foreground">Last message</dt><dd>{thread.last_direction === 'inbound' ? 'From customer' : 'From agent'}</dd>

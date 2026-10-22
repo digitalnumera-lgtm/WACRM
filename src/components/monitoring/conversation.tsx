@@ -208,30 +208,30 @@ export function Conversation({ id, thread: listThread, channels, repliesEnabled,
       <button className={`${buttonClass} px-2 lg:hidden`} aria-label="Back to conversations" onClick={onBack}><ArrowLeft size={16} /></button>
       {thread && <span className="hidden sm:block"><Avatar name={name} seed={thread.customer} /></span>}
       <div className="min-w-0 flex-1">
-        <h3 className="flex items-center gap-2 truncate text-lg font-semibold tracking-tight">{name}<PriorityIcon priority={priority} /></h3>
-        <p className="truncate text-xs text-muted-foreground">{thread && `+${thread.customer}`}{channel && <> · <span className="font-medium text-foreground/80">{channel.label}</span> · {channel.display_number}</>}{channel && !channel.active && ' · removed from monitoring'}</p>
+        <h3 className="font-display flex items-center gap-2 truncate text-lg font-semibold tracking-tight">{name}<PriorityIcon priority={priority} /></h3>
+        <p className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"><span className="truncate">{thread && `+${thread.customer}`}</span>{channel && <span title={`Agent number ${channel.display_number}`} className="hidden shrink-0 rounded-full bg-[#C0DD11]/25 px-2 py-0.5 font-medium text-foreground sm:inline">{channel.label}{!channel.active && ' (paused)'}</span>}</p>
       </div>
       {canManage && workflowReady && thread?.state && <div className="flex items-center gap-1.5">
         <div className="flex">
           {state === 'open'
-            ? <button className={`${primaryButton} rounded-r-none`} disabled={busy} onClick={() => void update({ action: 'status', status: 'resolved' })}><CheckCheck size={16} /><span className="hidden sm:inline">Resolve</span></button>
+            ? <button className={`${primaryButton} rounded-r-none`} disabled={busy} onClick={() => void update({ action: 'status', status: 'resolved' })} title="Mark as done: moves it out of Open. A new message reopens it."><CheckCheck size={16} /><span className="hidden sm:inline">Done</span></button>
             : <button className={`${primaryButton} rounded-r-none`} disabled={busy} onClick={() => void update({ action: 'status', status: 'open' })}><RotateCcw size={16} /><span className="hidden sm:inline">Reopen</span></button>}
           <Menu label="Snooze conversation" trigger={<ChevronDown size={16} />} disabled={busy} triggerClass={`${primaryButton} rounded-l-none border-l border-white/20 px-2`}>{close => <>
-            <p className="px-3 py-1.5 text-[11px] font-semibold uppercase text-muted-foreground">Snooze until</p>
+            <p className="px-3 py-1.5 text-[11px] font-medium text-muted-foreground">Snooze until</p>
             {snoozeOptions.map(o => <MenuItem key={o.label} onClick={() => { close(); void update({ action: 'status', status: 'snoozed', until: new Date(Date.now() + o.hours * 3600000).toISOString() }) }}><AlarmClock size={14} />{o.label}</MenuItem>)}
           </>}</Menu>
         </div>
         <Menu label="More actions" trigger={<MoreVertical size={16} />} disabled={busy}>{close => <>
           <MenuItem onClick={() => { close(); updatePrefs({ pinned: togglePinned(prefs.pinned, id) }) }}>{pinned ? <><PinOff size={14} />Unpin</> : <><Pin size={14} />Pin to top</>}</MenuItem>
           <MenuItem onClick={() => { close(); void update({ action: unread ? 'read' : 'unread' }) }}>{unread ? <><MailOpen size={14} />Mark as read</> : <><Mail size={14} />Mark as unread</>}</MenuItem>
-          <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase text-muted-foreground">Priority</p>
+          <p className="px-3 pb-1 pt-2 text-[11px] font-medium text-muted-foreground">Priority</p>
           {(['urgent', 'high', 'medium', 'low', 'none'] as const).map(p => { const Icon = priorityMeta[p].icon; return <MenuItem key={p} active={priority === p} onClick={() => { close(); void update({ action: 'priority', priority: p }) }}><Icon size={14} className={priorityMeta[p].className} />{priorityMeta[p].label}</MenuItem> })}
         </>}</Menu>
       </div>}
       <button className={`${buttonClass} px-2 ${contactOpen ? 'bg-muted' : ''}`} aria-label={contactOpen ? 'Hide contact panel' : 'Show contact panel'} aria-pressed={contactOpen} title="Contact details" onClick={onToggleContact}><PanelRight size={16} /></button>
     </header>
     {state === 'snoozed' && thread?.snoozed_until && <p className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200"><AlarmClock size={14} />Snoozed until {new Date(thread.snoozed_until).toLocaleString()}. A new message reopens it.</p>}
-    {state === 'resolved' && <p className="flex items-center gap-2 border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-xs text-emerald-900 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200"><CheckCheck size={14} />Resolved. A new message from either side reopens it.</p>}
+    {state === 'resolved' && <p className="flex items-center gap-2 border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-xs text-emerald-900 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200"><CheckCheck size={14} />Marked done. A new message reopens it.</p>}
     {actionError && <p role="alert" className="border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">{actionError}</p>}
     {error && <div role="alert" className="flex items-center justify-between gap-3 bg-red-50 px-4 py-2 text-sm text-red-700">{error}<button className={buttonClass} onClick={() => { setError(''); setRetry(n => n + 1) }}>Retry</button></div>}
     <div className="relative min-h-0 flex-1">

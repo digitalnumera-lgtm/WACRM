@@ -27,7 +27,7 @@ function Kpi({ label, value, icon: Icon, children, dark }: { label: string; valu
   return <div className={`rounded-3xl p-5 ${dark ? 'bg-[#121316] text-white dark:bg-[#C0DD11] dark:text-[#121316]' : 'crm-card'}`}>
     <div className="flex items-center justify-between"><span className={`flex size-9 items-center justify-center rounded-full ${dark ? 'bg-white/10 dark:bg-black/10' : 'bg-muted'}`}><Icon size={17} /></span>{children}</div>
     <p className={`mt-5 text-sm ${dark ? 'opacity-70' : 'text-muted-foreground'}`}>{label}</p>
-    <p className="mt-1 text-3xl font-semibold tracking-tight">{value === undefined ? '—' : value.toLocaleString()}</p>
+    <p className="font-display mt-1 text-4xl font-semibold tracking-tight">{value === undefined ? '—' : value.toLocaleString()}</p>
   </div>
 }
 
@@ -46,7 +46,7 @@ export function Dashboard({ refresh, channels, onTab, onChannel }: { refresh: nu
     { tab: 'waiting', label: 'Waiting for reply', value: counts?.waiting, icon: Clock, tone: 'text-red-600 dark:text-red-400' },
     { tab: 'unread', label: 'Unread', value: counts?.unread, icon: MailWarning, tone: '' },
     { tab: 'open', label: 'Open', value: counts?.open, icon: Inbox, tone: '' },
-    { tab: 'resolved', label: 'Resolved', value: counts?.resolved, icon: CheckCheck, tone: 'text-emerald-600 dark:text-emerald-400' },
+    { tab: 'resolved', label: 'Done', value: counts?.resolved, icon: CheckCheck, tone: 'text-emerald-600 dark:text-emerald-400' },
   ]
   return <div className="space-y-5">
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
@@ -60,13 +60,13 @@ export function Dashboard({ refresh, channels, onTab, onChannel }: { refresh: nu
       <Kpi label={`Active conversations · ${period}`} value={data?.activeConversations} icon={Users} />
     </div>
     <section className="crm-card p-5">
-      <h2 className="text-sm font-semibold">Needs attention</h2>
+      <h2 className="font-display text-lg font-semibold">Needs attention</h2>
       <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{attention.map(a => <button key={a.tab} onClick={() => onTab(a.tab)} className="flex items-center gap-3 rounded-2xl bg-muted/60 p-3 text-left hover:bg-muted">
         <a.icon size={18} className={a.tone || 'text-muted-foreground'} /><span className="flex-1 text-sm">{a.label}</span><span className={`text-lg font-semibold ${a.tone}`}>{a.value?.toLocaleString() ?? '—'}</span></button>)}</div>
       {data && !data.workflowReady && <p className="mt-2 text-xs text-muted-foreground">Status counts need the inbox database update.</p>}
     </section>
     <section>
-      <h2 className="mb-3 text-sm font-semibold">Agents</h2>
+      <h2 className="font-display mb-3 text-lg font-semibold">Agents</h2>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{channels.map(channel => { const w = data?.waiting[channel.id]; return <button key={channel.id} onClick={() => onChannel(channel.id)} className="crm-card p-5 text-left transition-shadow hover:shadow-md">
         <div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-full bg-[#121316] text-sm font-bold text-[#C0DD11]">{channel.label.slice(0, 2).toUpperCase()}</span>
           <div className="min-w-0 flex-1"><p className="truncate font-semibold">{channel.label}</p><p className="truncate text-xs text-muted-foreground">{channel.display_number}</p></div>

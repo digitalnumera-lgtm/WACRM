@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import dynamic from 'next/dynamic'
-import { ChartNoAxesCombined, ChevronRight, Columns3, Image as ImageIcon, Inbox, LayoutDashboard, List, LogOut, MessageSquare, Settings, Users } from 'lucide-react'
+import { ChartNoAxesCombined, Columns3, Image as ImageIcon, Inbox, LayoutDashboard, LogOut, MessageSquare, Settings, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { MonitoringThread } from '@/lib/monitoring/types'
@@ -11,9 +11,10 @@ import { can, type MonitoringMe, type Permission } from '@/lib/monitoring/permis
 import type { Preferences } from '@/lib/monitoring/preferences'
 import { Conversation, prefetchConversation, workflowPatch, type ChatSnapshot } from './conversation'
 import { ContactPanel } from './contact-panel'
-import { ConversationList, emptyFilters, useInbox, type InboxFilters } from './inbox-list'
+import { ConversationList, emptyFilters, previewText, useInbox, type InboxFilters } from './inbox-list'
 import { LabelsSettings, useLabels } from './labels'
 import { AccessProvider } from './access'
+import { SectionBoundary } from './error-boundary'
 import { playChime, PreferencesProvider, PreferencesSettings, useDarkMode, usePreferences } from './preferences'
 import { MonitoringSettings } from './settings-panel'
 import { api, buttonClass } from './ui'
@@ -36,7 +37,7 @@ const RenewMetaAccess = dynamic(() => import('./renew-access').then(m => m.Renew
 const ChannelManager = dynamic(() => import('./admin-panels').then(m => m.ChannelManager), { loading })
 const ReviewEvents = dynamic(() => import('./admin-panels').then(m => m.ReviewEvents), { loading })
 
-type View = 'Inbox' | 'Dashboard' | 'Leads' | 'Contacts' | 'Media' | 'Reports' | 'Logs' | 'Settings'
+type View = 'Inbox' | 'Dashboard' | 'Leads' | 'Contacts' | 'Media' | 'Reports' | 'Settings'
 export type SettingsSection = 'preferences' | 'team' | 'numbers' | 'storage' | 'labels' | 'replies' | 'import' | 'events' | 'access' | 'general'
 
 const nav: { name: View; label: string; icon: typeof Inbox; need: Permission }[] = [
@@ -45,21 +46,22 @@ const nav: { name: View; label: string; icon: typeof Inbox; need: Permission }[]
   { name: 'Leads', label: 'Leads board', icon: Columns3, need: 'view_inbox' },
   { name: 'Contacts', label: 'Contacts', icon: Users, need: 'view_contacts' },
   { name: 'Media', label: 'Media', icon: ImageIcon, need: 'view_media' },
-  { name: 'Reports', label: 'Reports', icon: ChartNoAxesCombined, need: 'view_reports' },
-  { name: 'Logs', label: 'Message logs', icon: List, need: 'view_inbox' },
+  { name: 'Reports', label: 'Reports', icon: ChartNoAxesCombined, need: 'view_inbox' },
 ]
-const sections: { id: SettingsSection; label: string; allowed: (me: MonitoringMe) => boolean }[] = [
-  { id: 'preferences', label: 'Preferences', allowed: () => true },
-  { id: 'team', label: 'Team & roles', allowed: me => me.full },
-  { id: 'numbers', label: 'Business numbers', allowed: me => can(me, 'manage_numbers') },
-  { id: 'storage', label: 'Media storage', allowed: me => can(me, 'manage_settings') },
-  { id: 'labels', label: 'Labels', allowed: me => can(me, 'manage_labels') },
-  { id: 'replies', label: 'Saved replies', allowed: me => me.full },
-  { id: 'access', label: 'Meta access', allowed: me => can(me, 'manage_numbers') },
-  { id: 'import', label: 'Import history', allowed: me => can(me, 'manage_numbers') },
-  { id: 'events', label: 'Events for review', allowed: me => can(me, 'manage_numbers') },
-  { id: 'general', label: 'Management replies', allowed: me => me.full },
+type Section = { id: SettingsSection; label: string; group: 'You' | 'Workspace' | 'Advanced'; allowed: (me: MonitoringMe, replies: boolean) => boolean }
+const sections: Section[] = [
+  { id: 'preferences', label: 'Preferences', group: 'You', allowed: () => true },
+  { id: 'team', label: 'Team & roles', group: 'Workspace', allowed: me => me.full },
+  { id: 'numbers', label: 'Business numbers', group: 'Workspace', allowed: me => can(me, 'manage_numbers') },
+  { id: 'labels', label: 'Labels', group: 'Workspace', allowed: me => can(me, 'manage_labels') },
+  { id: 'storage', label: 'Media storage', group: 'Workspace', allowed: me => can(me, 'manage_settings') },
+  { id: 'access', label: 'Meta access', group: 'Advanced', allowed: me => can(me, 'manage_numbers') },
+  { id: 'import', label: 'Import history', group: 'Advanced', allowed: me => can(me, 'manage_numbers') },
+  { id: 'events', label: 'Events for review', group: 'Advanced', allowed: me => can(me, 'manage_numbers') },
+  { id: 'general', label: 'Replying from the CRM', group: 'Advanced', allowed: me => me.full },
+  { id: 'replies', label: 'Saved replies', group: 'Advanced', allowed: (me, replies) => me.full && replies },
 ]
+type Latest = { id: string; channel_id: string; customer: string; customer_name: string | null; last_message_at: string; last_preview: string | null }
 
 export function MonitoringSignOut({ compact }: { compact?: boolean }) {
   const [error, setError] = useState('')
@@ -82,7 +84,8 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
   const { prefs, update } = usePreferences()
   const dark = useDarkMode(prefs.theme)
   const [view, setView] = useState<View>(initialView)
-  const [section, setSection] = useState<SettingsSection>(() => initialSection && sections.some(s => s.id === initialSection && s.allowed(me)) ? initialSection : 'preferences')
+  const [section, setSection] = useState<SettingsSection>(() => initialSection && sections.some(s => s.id === initialSection && s.allowed(me, true)) ? initialSection : 'preferences')
+  const [reportsTab, setReportsTab] = useState<'activity' | 'log'>('activity')
   const [filters, setFilters] = useState<InboxFilters>(() => ({ ...emptyFilters, tab: prefs.defaultTab, sort: prefs.defaultSort }))
   const [selected, setSelected] = useState<string | null>(null)
   const [refresh, setRefresh] = useState(0)
@@ -111,14 +114,36 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
     return () => controller.abort()
   }, [me.full])
 
-  // Chime when more customers start waiting for a reply.
-  const waitingCount = inbox.counts?.waiting
-  const lastWaiting = useRef<number | undefined>(undefined)
+  // New customer messages: sound, desktop notification and a list refresh.
+  const live = useRef({ prefs, selected, channels: inbox.channels })
+  useEffect(() => { live.current = { prefs, selected, channels: inbox.channels } })
   useEffect(() => {
-    if (waitingCount === undefined) return
-    if (prefs.sound && lastWaiting.current !== undefined && waitingCount > lastWaiting.current) playChime()
-    lastWaiting.current = waitingCount
-  }, [waitingCount, prefs.sound])
+    let since: string | null = null
+    let stopped = false
+    const tick = async () => {
+      if (stopped) return
+      try {
+        const data = await api<{ threads: Latest[]; now: string }>(`/api/monitoring/latest${since ? `?since=${encodeURIComponent(since)}` : ''}`)
+        const fresh = since ? data.threads : []
+        since = data.now
+        if (!fresh.length || stopped) return
+        const { prefs: p, selected: open, channels } = live.current
+        if (p.sound) playChime()
+        if (p.notify && 'Notification' in window && Notification.permission === 'granted') {
+          for (const t of fresh.slice(0, 3)) {
+            if (!document.hidden && t.id === open) continue
+            const agent = channels.find(c => c.id === t.channel_id)?.label
+            const note = new Notification(`${t.customer_name || `+${t.customer}`}${agent ? ` → ${agent}` : ''}`, { body: previewText(t.last_preview) || 'New message', tag: t.id, icon: '/icon' })
+            note.onclick = () => { window.focus(); setSelected(t.id); setView('Inbox'); note.close() }
+          }
+        }
+        setRefresh(n => n + 1)
+      } catch { /* Try again on the next tick. */ }
+    }
+    void tick()
+    const timer = window.setInterval(() => void tick(), 15000)
+    return () => { stopped = true; window.clearInterval(timer) }
+  }, [])
 
   const selectedThread = selected ? inbox.threads.find(t => t.id === selected) ?? details[selected] : undefined
   const patch = useCallback((id: string, value: Partial<MonitoringThread>) => {
@@ -178,9 +203,9 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
       <ConversationList inbox={inbox} filters={filters} setFilters={setFilters} labels={labels} selected={selected} onSelect={setSelected}
         onPrefetch={id => prefetchConversation(id, chatCache)} hidden={!!selected} pinned={prefs.pinned} onPin={pinned => update({ pinned })} refresh={refresh} />
       <section aria-label="Conversation" className={`min-h-0 min-w-0 overflow-hidden md:rounded-3xl md:border md:border-border md:shadow-sm ${selected ? 'flex flex-col' : 'hidden lg:flex lg:flex-col'}`}>
-        {selected ? <Conversation key={selected} id={selected} thread={selectedThread} channels={inbox.channels} repliesEnabled={replyEnabled === true && me.full} workflowReady={workflowReady}
+        {selected ? <SectionBoundary resetKey={selected}><Conversation key={selected} id={selected} thread={selectedThread} channels={inbox.channels} repliesEnabled={replyEnabled === true && me.full} workflowReady={workflowReady}
           cache={chatCache} contactOpen={contactOpen} onToggleContact={() => setContactOpen(v => !v)} onBack={() => setSelected(null)}
-          onPatched={value => patch(selected, value)} onLoaded={onLoaded} onChanged={bump} />
+          onPatched={value => patch(selected, value)} onLoaded={onLoaded} onChanged={bump} /></SectionBoundary>
           : <div className="chat-wallpaper flex h-full flex-col items-center justify-center gap-3 p-10 text-center text-muted-foreground"><span className="flex size-16 items-center justify-center rounded-3xl bg-card shadow-sm"><MessageSquare size={28} /></span><p className="font-medium text-foreground">Select a conversation</p><p className="max-w-xs text-sm"><kbd className="rounded border border-border bg-card px-1">j</kbd> / <kbd className="rounded border border-border bg-card px-1">k</kbd> to move, <kbd className="rounded border border-border bg-card px-1">/</kbd> to search</p></div>}
       </section>
       {contactOpen && selectedThread && <div className="fixed inset-0 z-40 bg-black/30 xl:static xl:z-auto xl:bg-transparent" onClick={e => { if (e.target === e.currentTarget) setContactOpen(false) }}>
@@ -190,18 +215,27 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
     </main>
       : <main className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-7xl space-y-5 p-4 lg:p-6">
-          <header className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{accountName}</p><h1 className="text-3xl font-semibold tracking-tight">{view === 'Logs' ? 'Message logs' : view === 'Leads' ? 'Leads board' : view}</h1></div>
+          <header className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-sm text-muted-foreground">{accountName}</p><h1 className="font-display text-3xl font-semibold tracking-tight">{view === 'Leads' ? 'Leads board' : view}</h1></div>
             <div className="flex items-center gap-2"><button className={`${buttonClass} rounded-full`} onClick={bump}>Refresh</button><span className="md:hidden"><MonitoringSignOut compact /></span></div></header>
+          <SectionBoundary resetKey={`${view}:${section}:${reportsTab}`}>
           {view === 'Dashboard' && <Dashboard refresh={refresh} channels={inbox.channels} onTab={tab => showInbox({ tab, sort: tab === 'waiting' ? 'oldest' : prefs.defaultSort })} onChannel={id => showInbox({ tab: 'all', channel: id })} />}
           {view === 'Leads' && <LeadsBoard channels={inbox.channels} refresh={refresh} onOpen={open} />}
           {view === 'Contacts' && <ContactsPanel channels={inbox.channels} onOpen={open} />}
           {view === 'Media' && <MediaLibrary channels={inbox.channels} refresh={refresh} onOpen={open} />}
-          {view === 'Reports' && <ReportsPanel channels={inbox.channels} refresh={refresh} />}
-          {view === 'Logs' && <MessageBrowser channels={inbox.channels} refresh={refresh} onOpen={open} />}
+          {view === 'Reports' && <div className="space-y-5">
+            <div role="tablist" aria-label="Reports" className="inline-flex gap-1 rounded-full bg-card p-1 shadow-sm">
+              {([['activity', 'Activity & agents', 'view_reports'], ['log', 'Message search', 'view_inbox']] as const).filter(([, , need]) => can(me, need)).map(([id, label]) =>
+                <button key={id} role="tab" aria-selected={reportsTab === id || !can(me, 'view_reports')} onClick={() => setReportsTab(id)} className={`rounded-full px-4 py-1.5 text-sm font-medium ${reportsTab === id || !can(me, 'view_reports') ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{label}</button>)}
+            </div>
+            {reportsTab === 'activity' && can(me, 'view_reports') ? <ReportsPanel channels={inbox.channels} refresh={refresh} /> : <MessageBrowser channels={inbox.channels} refresh={refresh} onOpen={open} />}
+          </div>}
           {view === 'Settings' && <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
-            <nav aria-label="Settings" className="crm-card flex gap-1 overflow-x-auto p-2 lg:sticky lg:top-0 lg:flex-col lg:self-start">
-              {sections.filter(s => s.allowed(me)).map(s => <button key={s.id} onClick={() => setSection(s.id)} aria-current={section === s.id ? 'page' : undefined}
-                className={`flex shrink-0 items-center justify-between gap-2 rounded-2xl px-3 py-2 text-left text-sm font-medium ${section === s.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>{s.label}<ChevronRight size={14} className="hidden lg:block" /></button>)}
+            <nav aria-label="Settings" className="crm-card flex gap-1 overflow-x-auto p-2 lg:sticky lg:top-0 lg:flex-col lg:gap-0.5 lg:self-start">
+              {(['You', 'Workspace', 'Advanced'] as const).map(group => { const items = sections.filter(s => s.group === group && s.allowed(me, replyEnabled === true)); return items.length ? <div key={group} className="flex gap-1 lg:block lg:pb-2">
+                <p className="hidden px-3 pb-1 pt-2 text-xs font-medium text-muted-foreground lg:block">{group}</p>
+                {items.map(s => <button key={s.id} onClick={() => setSection(s.id)} aria-current={section === s.id ? 'page' : undefined}
+                  className={`flex w-full shrink-0 items-center rounded-2xl px-3 py-2 text-left text-sm font-medium ${section === s.id ? 'bg-primary text-primary-foreground' : 'text-foreground/80 hover:bg-muted'}`}>{s.label}</button>)}
+              </div> : null })}
             </nav>
             <div className="min-w-0 space-y-5">
               {section === 'preferences' && <PreferencesSettings />}
@@ -218,6 +252,7 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
               {section === 'general' && me.full && <MonitoringSettings enabled={replyEnabled} onSaved={enabled => { settingsRevision.current++; setReplyEnabled(enabled); bump() }} />}
             </div>
           </div>}
+          </SectionBoundary>
         </div>
       </main>}
   </div>
