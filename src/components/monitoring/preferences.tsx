@@ -1,9 +1,10 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { Check } from 'lucide-react'
 import { DEFAULT_PREFERENCES, MAX_PINNED, sanitizePreferences, type CrmStyle, type Preferences } from '@/lib/monitoring/preferences'
 import { sendJson } from './ui'
+import { ActivePill } from './motion'
 
 type Ctx = { prefs: Preferences; update: (patch: Partial<Preferences>) => void; saving: boolean; error: string }
 const PreferencesContext = createContext<Ctx>({ prefs: DEFAULT_PREFERENCES, update: () => {}, saving: false, error: '' })
@@ -108,9 +109,11 @@ export function notificationsSupported() {
 }
 
 function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; label: string }) {
+  const id = useId()
   return <div role="radiogroup" aria-label={label} className="inline-flex flex-wrap gap-1 rounded-full bg-muted p-1">
     {options.map(o => <button key={o.value} type="button" role="radio" aria-checked={value === o.value} onClick={() => onChange(o.value)}
-      className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${value === o.value ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{o.label}</button>)}
+      className={`relative isolate rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${value === o.value ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+      {value === o.value && <ActivePill id={`${id}-pill`} className="rounded-full bg-primary shadow-sm" />}{o.label}</button>)}
   </div>
 }
 

@@ -38,3 +38,24 @@ inbox pattern: clean white + brand primary + priority red + snooze amber).
 ## Pre-delivery checklist
 Lint/tests/build pass · screenshots at 1440, 820 and 390 px · light and dark checked ·
 no emoji icons · contrast ≥ 4.5:1 for text · touch targets ≥ 36px on desktop, 44px on phone nav.
+
+## Styles (themes)
+
+Six user-selectable styles live in `src/app/globals.css` under `.monitoring-panel[data-style="…"]`, each with a `.dark` variant: `numera` (default), `lavender`, `blue`, `glass`, `mono`, `sky`. Components must use tokens, never brand hex values:
+
+| Token | Use |
+|---|---|
+| `--hl` / `--hl-fg` | Highlight: counters, active chips, focus ring |
+| `--ink` / `--ink-fg` / `--ink-accent` | Dark brand surfaces (logo, active nav, “waiting now” card) and the accent text on them |
+| `--primary` / `--primary-foreground` | Buttons, selected segments |
+| `--bubble-agent*` / `--bubble-customer*` | Chat bubbles; `--bubble-agent-label` for the agent name inside a bubble |
+| `--series-in` / `--series-out` | Chart series (each pair passed the dataviz validator, light and dark) |
+| `--card-radius` / `--card-shadow` | `.crm-card` shape per style |
+
+## Motion
+
+Motion (`motion/react`, loaded through `MotionRoot` with `LazyMotion` + `domAnimation`, `reducedMotion="user"`). Use `m.*` components only.
+
+- Animate only in answer to an action: selecting a tab or option (`ActivePill` slides), opening a menu (fade + scale from its corner, 160 ms in / 120 ms out), a counter changing (small pop), pressing a button (`active:scale-[0.97]`).
+- No entrance animations on page load, no hover lifts on every card, nothing on actions repeated all day (opening chats, scrolling).
+- Transform and opacity only; 150–250 ms; ease-out `[0.23, 1, 0.32, 1]`; exits faster than entrances; springs for interruptible movement.

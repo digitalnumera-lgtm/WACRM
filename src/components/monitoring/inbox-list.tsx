@@ -5,6 +5,8 @@ import { ArrowDownUp, CheckCheck, ChevronDown, Clock, Contact, FileText, Image a
 import { leadStatuses, type MonitoringChannel, type MonitoringThread } from '@/lib/monitoring/types'
 import type { MonitoringLabel } from '@/lib/monitoring/workflow-types'
 import { api, Avatar, buttonClass, inputClass, LabelChip, Menu, MenuItem, PriorityIcon, priorityMeta, waitingFor } from './ui'
+import { ActivePill, pop } from './motion'
+import { AnimatePresence, m } from 'motion/react'
 import { usePreferences } from './preferences'
 
 export type InboxTab = 'open' | 'waiting' | 'unread' | 'snoozed' | 'resolved' | 'all'
@@ -200,7 +202,7 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
               {thread.last_direction === 'outbound' && <CheckCheck size={13} className="mr-1 inline text-emerald-600" aria-label="Agent replied" />}
               <PreviewIcon preview={thread.last_preview} />{previewText(thread.last_preview) || 'Media message'}
             </p>
-            {pending ? <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[var(--hl)] px-1.5 text-xs font-bold text-[var(--hl-fg)]" aria-label={`${pending} not replied`}>{pending > 99 ? '99+' : pending}</span>
+            {pending ? <AnimatePresence initial={false} mode="popLayout"><m.span key={pending} initial={{ scale: 0.6 }} animate={{ scale: 1 }} transition={pop} className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[var(--hl)] px-1.5 text-xs font-bold text-[var(--hl-fg)]" aria-label={`${pending} not replied`}>{pending > 99 ? '99+' : pending}</m.span></AnimatePresence>
               : (waiting ? pending === undefined : thread.marked_unread) && <span className="size-2.5 shrink-0 rounded-full bg-[var(--hl)]" aria-label={waiting ? 'Not replied' : 'Marked unread'} />}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
@@ -242,7 +244,8 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
       <nav aria-label="Conversation status" className="-mx-4 flex gap-0.5 overflow-x-auto px-4 [scrollbar-width:none]">{visibleTabs.map(tab => {
         const active = (workflowReady === false ? 'all' : filters.tab) === tab.id
         return <button key={tab.id} type="button" title={tab.hint} aria-current={active ? 'page' : undefined} onClick={() => set({ tab: tab.id, sort: tab.id === 'waiting' && filters.tab !== 'waiting' ? 'oldest' : tab.id !== 'waiting' && filters.tab === 'waiting' ? prefs.defaultSort : filters.sort })}
-          className={`flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[13px] font-medium ${active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+          className={`relative isolate flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[13px] font-medium transition-colors ${active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+          {active && <ActivePill id="inbox-tab" className="rounded-full bg-muted" />}
           {tab.name}{counts && tab.id !== 'resolved' && tab.id !== 'all' && <span className={`text-xs ${tab.id === 'waiting' && counts.waiting > 0 ? 'font-semibold text-red-600' : 'text-muted-foreground'}`}>{counts[tab.id] > 999 ? '999+' : counts[tab.id]}</span>}
         </button>
       })}</nav>
