@@ -69,20 +69,42 @@ export function togglePinned(pinned: string[], id: string) {
   return pinned.includes(id) ? pinned.filter(x => x !== id) : [id, ...pinned].slice(0, MAX_PINNED)
 }
 
-/** Short beep for new waiting chats (Web Audio, no file needed). */
+// One shared audio context, unlocked by the first click or key press on the
+// page (browsers block sound until the user has interacted).
+let audio: AudioContext | null = null
+function audioContext() {
+  if (typeof window === 'undefined') return null
+  const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  if (!Ctx) return null
+  audio ??= new Ctx()
+  return audio
+}
+if (typeof window !== 'undefined') {
+  const unlock = () => { void audioContext()?.resume() }
+  window.addEventListener('pointerdown', unlock, { once: true })
+  window.addEventListener('keydown', unlock, { once: true })
+}
+
+/** Two short notes for a new customer message (Web Audio, no file needed). */
 export function playChime() {
-  try {
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-    const ctx = new AudioCtx()
-    const osc = ctx.createOscillator(), gain = ctx.createGain()
-    osc.type = 'sine'; osc.frequency.value = 880
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.02)
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35)
-    osc.connect(gain).connect(ctx.destination)
-    osc.start(); osc.stop(ctx.currentTime + 0.4)
-    osc.onended = () => void ctx.close()
-  } catch { /* Audio may be blocked until the user interacts with the page. */ }
+  const ctx = audioContext()
+  if (!ctx) return
+  void ctx.resume().then(() => {
+    const start = ctx.currentTime
+    for (const [offset, frequency] of [[0, 784], [0.14, 1047]] as const) {
+      const osc = ctx.createOscillator(), gain = ctx.createGain()
+      osc.type = 'sine'; osc.frequency.value = frequency
+      gain.gain.setValueAtTime(0.0001, start + offset)
+      gain.gain.exponentialRampToValueAtTime(0.18, start + offset + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + offset + 0.3)
+      osc.connect(gain).connect(ctx.destination)
+      osc.start(start + offset); osc.stop(start + offset + 0.32)
+    }
+  }).catch(() => {})
+}
+
+export function notificationsSupported() {
+  return typeof window !== 'undefined' && 'Notification' in window
 }
 
 function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; label: string }) {
@@ -115,7 +137,23 @@ export function PreferencesSettings() {
     <Row title="Open inbox on"><Segmented label="Default inbox tab" value={prefs.defaultTab} onChange={defaultTab => update({ defaultTab })} options={[{ value: 'open', label: 'Open' }, { value: 'waiting', label: 'Waiting' }, { value: 'unread', label: 'Unread' }, { value: 'all', label: 'All' }]} /></Row>
     <Row title="Sort conversations"><Segmented label="Default sort" value={prefs.defaultSort} onChange={defaultSort => update({ defaultSort })} options={[{ value: 'latest', label: 'Newest first' }, { value: 'oldest', label: 'Oldest first' }]} /></Row>
     <Row title="Time format"><Segmented label="Time format" value={prefs.timeFormat} onChange={timeFormat => update({ timeFormat })} options={[{ value: '12h', label: '12-hour' }, { value: '24h', label: '24-hour' }]} /></Row>
-    <Row title="Sound for new waiting chats"><Switch label="Sound for new waiting chats" checked={prefs.sound} onChange={sound => update({ sound })} /></Row>
+    <Row title="Sound for new messages"><div className="flex items-center gap-3"><button type="button" className="text-xs font-medium underline" onClick={playChime}>Play sound</button><Switch label="Sound for new messages" checked={prefs.sound} onChange={sound => { update({ sound }); if (sound) playChime() }} /></div></Row>
+    <Row title="Desktop notifications"><DesktopNotifications enabled={prefs.notify} onChange={notify => update({ notify })} /></Row>
     <Row title="Show contact panel"><Switch label="Show contact panel" checked={prefs.contactPanel} onChange={contactPanel => update({ contactPanel })} /></Row>
   </section>
+}
+
+const noSubscribe = () => () => {}
+function DesktopNotifications({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
+  const [note, setNote] = useState('')
+  const permission = useSyncExternalStore(noSubscribe, () => notificationsSupported() ? Notification.permission : 'unsupported', () => 'unsupported')
+  if (permission === 'unsupported') return <span className="text-xs text-muted-foreground">Not available in this browser</span>
+  async function toggle(next: boolean) {
+    setNote('')
+    if (!next) { onChange(false); return }
+    const permission = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission
+    if (permission === 'granted') { onChange(true); new Notification('Notifications are on', { body: 'You’ll be told when a customer sends a new message.', icon: '/icon' }) }
+    else setNote('Blocked by the browser. Allow notifications for this site in the address bar, then try again.')
+  }
+  return <div className="flex flex-col items-start gap-1 sm:items-end"><Switch label="Desktop notifications" checked={enabled && permission === 'granted'} onChange={v => void toggle(v)} />{note && <span className="max-w-xs text-xs text-destructive">{note}</span>}</div>
 }

@@ -11,12 +11,12 @@ export type InboxTab = 'open' | 'waiting' | 'unread' | 'snoozed' | 'resolved' | 
 export type InboxFilters = { tab: InboxTab; q: string; channel: string; agent: string; status: string; label: string; priority: string; sort: 'latest' | 'oldest' }
 export const emptyFilters: InboxFilters = { tab: 'open', q: '', channel: '', agent: '', status: '', label: '', priority: '', sort: 'latest' }
 const tabs: { id: InboxTab; name: string; hint: string }[] = [
-  { id: 'open', name: 'Open', hint: 'Conversations not resolved or snoozed' },
-  { id: 'waiting', name: 'Waiting', hint: 'Customer messaged last and the agent has not replied yet' },
-  { id: 'unread', name: 'Unread', hint: 'New activity management has not reviewed' },
+  { id: 'open', name: 'Open', hint: 'Chats you have not marked done' },
+  { id: 'waiting', name: 'Waiting', hint: 'The customer messaged last and the agent has not replied' },
+  { id: 'unread', name: 'Unread', hint: 'New messages you have not looked at' },
+  { id: 'resolved', name: 'Done', hint: 'Marked done; a new message reopens it' },
   { id: 'snoozed', name: 'Snoozed', hint: 'Hidden until the snooze ends or a new message arrives' },
-  { id: 'resolved', name: 'Resolved', hint: 'Closed; any new message reopens it' },
-  { id: 'all', name: 'All', hint: 'Every conversation' },
+  { id: 'all', name: 'All', hint: 'Every chat' },
 ]
 
 type InboxPage = { channels: MonitoringChannel[]; threads: MonitoringThread[]; total: number | null; nextCursor: string | null; workflowReady: boolean }
@@ -160,7 +160,8 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
   const rest = threads.filter(t => !pinned.includes(t.id))
 
   const activeFilters = [filters.channel, filters.status, filters.label, filters.priority].filter(Boolean).length
-  const visibleTabs = workflowReady === false ? tabs.filter(t => t.id === 'all') : tabs
+  // Snoozed only shows when something is snoozed.
+  const visibleTabs = workflowReady === false ? tabs.filter(t => t.id === 'all') : tabs.filter(t => t.id !== 'snoozed' || filters.tab === 'snoozed' || (counts?.snoozed ?? 0) > 0)
   const labelMap = new Map(labels.map(l => [l.id, l]))
   const agents = [...new Set(channels.map(c => c.label))]
   const hour12 = prefs.timeFormat === '12h'
@@ -195,7 +196,7 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
             <span className="truncate font-medium">{channel?.label ?? 'Unknown number'}</span>
             {waiting && <span className={`rounded-full px-1.5 py-0.5 font-medium ${waitMinutes > 60 ? 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400' : 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300'}`}>Waiting {waitingFor(thread.last_message_at, now)}</span>}
             {thread.state === 'snoozed' && <span className="flex items-center gap-0.5 text-amber-700"><Clock size={11} />Snoozed</span>}
-            {thread.state === 'resolved' && <span className="flex items-center gap-0.5 text-emerald-700"><CheckCheck size={11} />Resolved</span>}
+            {thread.state === 'resolved' && <span className="flex items-center gap-0.5 text-emerald-700 dark:text-emerald-400"><CheckCheck size={11} />Done</span>}
             {thread.lead_status !== 'new' && <span className="rounded-full bg-muted px-1.5 py-0.5 capitalize">{thread.lead_status}</span>}
             {threadLabels.slice(0, 2).map(l => <LabelChip key={l.id} label={l} />)}{threadLabels.length > 2 && <span>+{threadLabels.length - 2}</span>}
           </div>
@@ -208,7 +209,7 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
 
   return <section aria-label="Conversations" className={`flex h-full min-h-0 flex-col bg-card md:rounded-3xl md:border md:border-border md:shadow-sm ${hidden ? 'hidden lg:flex' : 'flex'}`}>
     <div className="space-y-3 px-4 pb-2 pt-4">
-      <div className="flex items-center justify-between gap-2"><h2 className="text-2xl font-semibold tracking-tight">Messages</h2>
+      <div className="flex items-center justify-between gap-2"><h2 className="font-display text-2xl font-semibold tracking-tight">Messages</h2>
         <div className="flex items-center gap-1">
           <button type="button" className="relative flex size-9 items-center justify-center rounded-full hover:bg-muted" aria-label="Filters" aria-expanded={showFilters} onClick={() => setShowFilters(v => !v)}><SlidersHorizontal size={17} />{activeFilters > 0 && <span className="absolute right-0 top-0 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">{activeFilters}</span>}</button>
           <button type="button" className="flex h-9 items-center gap-1 rounded-full px-2 text-xs font-medium hover:bg-muted" aria-label={filters.sort === 'latest' ? 'Newest first. Switch to oldest first' : 'Oldest first. Switch to newest first'} onClick={() => set({ sort: filters.sort === 'latest' ? 'oldest' : 'latest' })}><ArrowDownUp size={15} />{filters.sort === 'latest' ? 'Newest' : 'Oldest'}</button>
@@ -242,9 +243,9 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
     {error && <p role="alert" className="mx-4 flex items-center justify-between gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}<button className={buttonClass} onClick={inbox.retry}>Retry</button></p>}
     <ul ref={viewport} aria-label="Conversation list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2">
       {pinnedThreads.length > 0 && <>
-        <li className="px-5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Pinned</li>
+        <li className="px-5 pb-1 pt-2 text-xs font-medium text-muted-foreground">Pinned</li>
         {pinnedThreads.map(row)}
-        <li className="px-5 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">All conversations · {total.toLocaleString()}</li>
+        <li className="px-5 pb-1 pt-3 text-xs font-medium text-muted-foreground">All chats ({total.toLocaleString()})</li>
       </>}
       {!pinnedThreads.length && <li className="flex justify-between px-5 pb-1 text-[11px] text-muted-foreground"><span>{total.toLocaleString()} conversation{total === 1 ? '' : 's'}</span>{loading && <span>Updating…</span>}</li>}
       {rest.map(row)}

@@ -163,7 +163,7 @@ function RoleEditor({ role, onClose, onSaved }: { role: Role | null; onClose: ()
     <div className="flex items-center justify-between"><h4 className="text-sm font-semibold">{role ? 'Edit role' : 'New role'}</h4><button type="button" aria-label="Close" className="text-muted-foreground" onClick={onClose}><X size={16} /></button></div>
     <input className={inputClass} required maxLength={60} placeholder="Role name, e.g. Sales supervisor" aria-label="Role name" value={name} onChange={e => setName(e.target.value)} />
     <input className={inputClass} maxLength={200} placeholder="Short description (optional)" aria-label="Description" value={description} onChange={e => setDescription(e.target.value)} />
-    {PERMISSION_GROUPS.map(group => <fieldset key={group.title}><legend className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</legend>
+    {PERMISSION_GROUPS.map(group => <fieldset key={group.title}><legend className="text-xs font-medium text-muted-foreground">{group.title}</legend>
       <div className="mt-1 space-y-1">{group.items.map(item => { const always = item.key === 'view_inbox'; return <label key={item.key} title={item.hint} className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-muted/50">
         <span>{item.label}</span>
         <input type="checkbox" role="switch" className="size-4 accent-[#121316]" checked={always || permissions.includes(item.key)} disabled={always} onChange={() => toggle(item.key)} />

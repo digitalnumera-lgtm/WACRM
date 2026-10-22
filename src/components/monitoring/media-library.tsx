@@ -71,7 +71,7 @@ export function MediaLibrary({ channels, refresh, onOpen }: { channels: Monitori
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 
     {groups.map(group => <div key={group.day} className="space-y-2">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.day}</h3>
+      <h3 className="text-xs font-medium text-muted-foreground">{group.day}</h3>
       {tab === 'visual'
         ? <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">{group.items.map(({ item, index }) => <Tile key={item.id} item={item} onClick={() => setViewer(index)} />)}</div>
         : <ul className="divide-y divide-border overflow-hidden crm-card">{group.items.map(({ item }) => <li key={item.id} className="flex flex-wrap items-center gap-3 p-3">

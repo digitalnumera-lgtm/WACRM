@@ -231,7 +231,7 @@ html[data-theme="rose"] {
 /* Numera CRM workspace: tinted canvas, rounded white cards, dark pill accents. */
 .monitoring-panel {
   color-scheme: light;
-  --background: #eef1ec;
+  --background: #f0f2ec;
   --foreground: #121316;
   --card: #ffffff;
   --card-foreground: #121316;
@@ -253,9 +253,15 @@ html[data-theme="rose"] {
   --bubble-customer: #ffffff;
   --bubble-customer-fg: #121316;
   --chat-font: 14px;
+  --series-in: #2a78d6;
+  --series-out: #7f9a00;
+  font-family: var(--font-funnel-sans), var(--font-sans), system-ui, sans-serif;
   background-color: var(--background);
   background-image: radial-gradient(1100px 600px at 0% 0%, #f8f9f4 0%, transparent 70%), radial-gradient(900px 700px at 100% 100%, #e2ebe5 0%, transparent 70%);
 }
+.monitoring-panel .font-display { font-family: var(--font-funnel-display), var(--font-funnel-sans), system-ui, sans-serif; letter-spacing: -0.01em; }
+.monitoring-panel :focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .monitoring-panel *, .monitoring-panel *::before, .monitoring-panel *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }
 .monitoring-panel.dark {
   color-scheme: dark;
   --background: #0d0e10;
@@ -275,6 +281,8 @@ html[data-theme="rose"] {
   --bubble-agent-fg: #121316;
   --bubble-customer: #23252a;
   --bubble-customer-fg: #f3f3ee;
+  --series-in: #3987e5;
+  --series-out: #86a000;
   background-image: radial-gradient(1100px 600px at 0% 0%, #16181a 0%, transparent 70%), radial-gradient(900px 700px at 100% 100%, #131a16 0%, transparent 70%);
 }
 .monitoring-panel[data-chat-size="small"] { --chat-font: 13px; }
