@@ -49,6 +49,15 @@ export class UnauthorizedError extends Error {
   }
 }
 
+/** Signed in with a password, but the account uses two-step sign-in and the code was not entered. */
+export class MfaRequiredError extends UnauthorizedError {
+  readonly code = "mfa_required" as const;
+  constructor() {
+    super("Enter the 6-digit code from your authenticator app to continue.");
+    this.name = "MfaRequiredError";
+  }
+}
+
 export class ForbiddenError extends Error {
   readonly status = 403 as const;
   constructor(message = t("forbidden")) {
@@ -126,25 +135,42 @@ export function forgetAccountContext(userId: string): void {
 }
 
 export async function verifiedUserId(supabase: SupabaseClient): Promise<string | null> {
+  return (await verifiedIdentity(supabase))?.userId ?? null;
+}
+
+/**
+ * The signed-in user and whether a two-step code is still owed. The flag
+ * `app_metadata.mfa_enabled` can only be set by the server (see
+ * /api/monitoring/security), and `aal` comes from the signed session token,
+ * so neither can be changed by the browser.
+ */
+export async function verifiedIdentity(supabase: SupabaseClient): Promise<{ userId: string; mfaPending: boolean } | null> {
   const auth = supabase.auth as unknown as {
-    getClaims?: () => Promise<{ data: { claims?: { sub?: unknown } } | null; error: unknown }>;
+    getClaims?: () => Promise<{ data: { claims?: { sub?: unknown; aal?: unknown; app_metadata?: { mfa_enabled?: unknown } } } | null; error: unknown }>;
   };
   if (typeof auth.getClaims === "function") {
     const { data, error } = await auth.getClaims();
-    const sub = data?.claims?.sub;
-    return !error && typeof sub === "string" && sub ? sub : null;
+    const claims = data?.claims;
+    const sub = claims?.sub;
+    if (error || typeof sub !== "string" || !sub) return null;
+    return { userId: sub, mfaPending: claims?.app_metadata?.mfa_enabled === true && claims?.aal !== "aal2" };
   }
   const { data: { user }, error } = await supabase.auth.getUser();
-  return error || !user ? null : user.id;
+  if (error || !user) return null;
+  if (user.app_metadata?.mfa_enabled !== true) return { userId: user.id, mfaPending: false };
+  const level = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  return { userId: user.id, mfaPending: level.data?.currentLevel !== "aal2" };
 }
 
 export async function getCurrentAccount(): Promise<AccountContext> {
   const supabase = await createClient();
 
-  const userId = await verifiedUserId(supabase);
-  if (!userId) {
+  const identity = await verifiedIdentity(supabase);
+  if (!identity) {
     throw new UnauthorizedError();
   }
+  if (identity.mfaPending) throw new MfaRequiredError();
+  const userId = identity.userId;
   const user = { id: userId };
   const cached = CONTEXT_CACHE_MS ? contextCache.get(user.id) : undefined;
   if (cached && cached.expires > Date.now()) {

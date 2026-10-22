@@ -18,6 +18,8 @@ import { runStorageCleanup } from '@/lib/monitoring/storage'
 import { allowedChannels, canSeeChannel, hideNumbers, scopeChannels } from '@/lib/monitoring/team-access'
 import { PATCH as setNumber } from './channels/[id]/route'
 import { GET as counts } from './counts/route'
+import { PUT as saveContact } from './contacts/profile/route'
+import { PUT as putLabels } from './threads/[id]/labels/route'
 
 const company = '11111111-1111-4111-8111-111111111111'
 const chanA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -227,6 +229,32 @@ describe('paused or removed numbers', () => {
   it('can still be restored', async () => {
     expect((await setNumber(send(`/api/monitoring/channels/${chanB}`, 'PATCH', { active: true }), ctx(chanB))).status).toBe(200)
     expect(writes).toContainEqual({ table: 'monitoring_channels', op: 'update', value: { active: true } })
+  })
+})
+
+describe('people editing at the same time', () => {
+  const labelA = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', labelB = 'ffffffff-ffff-4fff-8fff-ffffffffffff'
+  beforeEach(() => {
+    asOwner()
+    rows.monitoring_threads = [{ id: threadA, account_id: company, channel_id: chanA, customer: '923001234567', message_count: 1 }]
+    rows.monitoring_contact_profiles = [{ account_id: company, customer: '923001234567', name: 'Bilal', email: null, company: null, city: null, notes: null, updated_at: '2026-10-22T07:00:00.000001+00:00' }]
+    rows.monitoring_labels = [{ id: labelA, account_id: company, name: 'Hot lead' }, { id: labelB, account_id: company, name: 'VIP' }]
+    rows.monitoring_thread_labels = [{ thread_id: threadA, label_id: labelB, account_id: company }]
+  })
+
+  it('refuses a contact save made from an older version instead of overwriting', async () => {
+    const stale = await saveContact(send('/api/monitoring/contacts/profile', 'PUT', { customer: '923001234567', name: 'Bilal K', expected_updated_at: '2026-10-22T06:00:00+00:00' }))
+    expect(stale.status).toBe(409)
+    expect(await stale.json()).toMatchObject({ code: 'conflict', profile: { name: 'Bilal' } })
+    const fresh = await saveContact(send('/api/monitoring/contacts/profile', 'PUT', { customer: '923001234567', name: 'Bilal K', expected_updated_at: '2026-10-22T07:00:00.000001+00:00' }))
+    expect(fresh.status).toBe(200)
+  })
+
+  it('adds one label without removing labels someone else just added', async () => {
+    const response = await putLabels(send(`/api/monitoring/threads/${threadA}/labels`, 'PUT', { add: [labelA], remove: [] }), ctx(threadA))
+    expect(response.status).toBe(200)
+    expect(writes.filter(w => w.table === 'monitoring_thread_labels').map(w => w.op)).toEqual(['upsert'])
+    expect((await response.json()).label_ids).toContain(labelB)
   })
 })
 

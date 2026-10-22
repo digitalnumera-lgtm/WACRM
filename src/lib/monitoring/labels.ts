@@ -36,6 +36,22 @@ export function check<T extends { error: unknown }>(result: T): T {
   return result
 }
 
+/**
+ * Adds and removes individual labels, so two people labelling the same
+ * conversation at once never undo each other. Returns the labels now on it.
+ */
+export async function changeThreadLabels(db: SupabaseClient, account: string, actor: string, thread: string, add: string[], remove: string[]) {
+  if (add.length) {
+    const owned = check(await db.from('monitoring_labels').select('id').eq('account_id', account).in('id', add))
+    if ((owned.data ?? []).length !== add.length) throw new MonitoringInputError('One or more labels no longer exist.')
+    check(await db.from('monitoring_thread_labels').upsert(add.map(label_id => ({ thread_id: thread, label_id, account_id: account, added_by: actor })),
+      { onConflict: 'thread_id,label_id', ignoreDuplicates: true }))
+  }
+  if (remove.length) check(await db.from('monitoring_thread_labels').delete().eq('account_id', account).eq('thread_id', thread).in('label_id', remove))
+  const now = check(await db.from('monitoring_thread_labels').select('label_id').eq('account_id', account).eq('thread_id', thread))
+  return ((now.data ?? []) as { label_id: string }[]).map(r => r.label_id).sort()
+}
+
 /** Replaces a conversation's labels with the given set (company-scoped). */
 export async function setThreadLabels(db: SupabaseClient, account: string, actor: string, thread: string, ids: string[]) {
   if (ids.length) {

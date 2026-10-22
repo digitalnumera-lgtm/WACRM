@@ -50,7 +50,15 @@ export function ContactPanel({ thread, channels, labels, workflowReady, onPatche
   }
   const setLead = (lead_status: string) => act(async () => { await api(`/api/monitoring/threads/${thread.id}`, sendJson('PATCH', { lead_status })); onPatched({ lead_status }) })
   const setPriority = (priority: ConversationPriority) => act(async () => { await api(`/api/monitoring/threads/${thread.id}/workflow`, sendJson('PATCH', { action: 'priority', priority })); onPatched({ priority }) })
-  const setLabels = (label_ids: string[]) => act(async () => { onPatched({ label_ids }); await api(`/api/monitoring/threads/${thread.id}/labels`, sendJson('PUT', { label_ids })) })
+  const setLabels = (label_ids: string[]) => act(async () => {
+    const before = thread.label_ids ?? []
+    const add = label_ids.filter(id => !before.includes(id)), remove = before.filter(id => !label_ids.includes(id))
+    onPatched({ label_ids })
+    try {
+      const data = await api<{ label_ids: string[] }>(`/api/monitoring/threads/${thread.id}/labels`, sendJson('PUT', { add, remove }))
+      onPatched({ label_ids: data.label_ids })
+    } catch (e) { onPatched({ label_ids: before }); throw e }
+  })
   const threadLabels = (thread.label_ids ?? []).map(id => labels.find(l => l.id === id)).filter((l): l is MonitoringLabel => !!l)
   const others = related.filter(r => r.id !== thread.id)
 
@@ -74,8 +82,15 @@ export function ContactPanel({ thread, channels, labels, workflowReady, onPatche
         {profile?.notes && <li className="whitespace-pre-wrap rounded-lg bg-muted/60 p-2 text-xs">{profile.notes}</li>}
         {canEdit && <li><button className={`${buttonClass} mt-1 w-full`} disabled={workflowReady === false} title={workflowReady === false ? 'Needs the inbox database update' : undefined} onClick={() => setEditing(true)}><Pencil size={14} />Edit contact</button></li>}
       </ul> : <ContactForm profile={profile} fallbackName={thread.customer_name} busy={busy} onCancel={() => setEditing(false)} onSave={values => act(async () => {
-        const data = await api<{ profile: ContactProfile }>('/api/monitoring/contacts/profile', sendJson('PUT', { customer: thread.customer, ...values }))
-        setProfile(data.profile); setEditing(false); setRevision(n => n + 1)
+        try {
+          const data = await api<{ profile: ContactProfile }>('/api/monitoring/contacts/profile', sendJson('PUT', { customer: thread.customer, ...values, expected_updated_at: profile?.updated_at ?? null }))
+          setProfile(data.profile); setEditing(false); setRevision(n => n + 1)
+        } catch (e) {
+          // Someone else saved first: show their version instead of overwriting it.
+          const body = (e as { body?: { code?: string; profile?: ContactProfile | null } }).body
+          if (body?.code === 'conflict') { setProfile(body.profile ?? null); setEditing(false) }
+          throw e
+        }
       })} />}
     </div>
 

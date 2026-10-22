@@ -11,7 +11,7 @@ export const primaryButton = 'inline-flex h-9 items-center justify-center gap-1.
 export async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { cache: 'no-store', ...options })
   const value = await response.json().catch(() => ({}))
-  if (!response.ok) throw Object.assign(new Error(value.error ?? 'Unable to load monitoring data.'), { code: value.code })
+  if (!response.ok) throw Object.assign(new Error(value.error ?? 'Unable to load monitoring data.'), { code: value.code, body: value })
   return value as T
 }
 export const sendJson = (method: string, body: unknown): RequestInit => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })

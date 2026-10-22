@@ -28,6 +28,7 @@ const ReportsPanel = dynamic(() => import('./activity-panels').then(m => m.Repor
 const MessageBrowser = dynamic(() => import('./activity-panels').then(m => m.MessageBrowser), { loading })
 const TeamSettings = dynamic(() => import('./team-settings').then(m => m.TeamSettings), { loading })
 const StorageSettings = dynamic(() => import('./storage-settings').then(m => m.StorageSettings), { loading })
+const SecuritySettings = dynamic(() => import('./security-settings').then(m => m.SecuritySettings), { loading })
 const QuickRepliesPanel = dynamic(() => import('./quick-replies').then(m => m.QuickRepliesPanel), { loading })
 const BusinessNumbers = dynamic(() => import('./business-numbers').then(m => m.BusinessNumbers), { loading })
 const ConnectNumber = dynamic(() => import('./connect-number').then(m => m.ConnectNumber), { loading })
@@ -38,7 +39,7 @@ const ChannelManager = dynamic(() => import('./admin-panels').then(m => m.Channe
 const ReviewEvents = dynamic(() => import('./admin-panels').then(m => m.ReviewEvents), { loading })
 
 type View = 'Inbox' | 'Dashboard' | 'Leads' | 'Contacts' | 'Media' | 'Reports' | 'Settings'
-export type SettingsSection = 'preferences' | 'team' | 'numbers' | 'storage' | 'labels' | 'replies' | 'import' | 'events' | 'access' | 'general'
+export type SettingsSection = 'preferences' | 'security' | 'team' | 'numbers' | 'storage' | 'labels' | 'replies' | 'import' | 'events' | 'access' | 'general'
 
 const nav: { name: View; label: string; icon: typeof Inbox; need: Permission }[] = [
   { name: 'Inbox', label: 'Inbox', icon: Inbox, need: 'view_inbox' },
@@ -51,6 +52,7 @@ const nav: { name: View; label: string; icon: typeof Inbox; need: Permission }[]
 type Section = { id: SettingsSection; label: string; group: 'You' | 'Workspace' | 'Advanced'; allowed: (me: MonitoringMe, replies: boolean) => boolean }
 const sections: Section[] = [
   { id: 'preferences', label: 'Preferences', group: 'You', allowed: () => true },
+  { id: 'security', label: 'Security', group: 'You', allowed: () => true },
   { id: 'team', label: 'Team & roles', group: 'Workspace', allowed: me => me.full },
   { id: 'numbers', label: 'Business numbers', group: 'Workspace', allowed: me => can(me, 'manage_numbers') },
   { id: 'labels', label: 'Labels', group: 'Workspace', allowed: me => can(me, 'manage_labels') },
@@ -244,6 +246,7 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
             </nav>
             <div className="min-w-0 space-y-5">
               {section === 'preferences' && <PreferencesSettings />}
+              {section === 'security' && <SecuritySettings />}
               {section === 'team' && me.full && <TeamSettings channels={liveChannels} />}
               {section === 'numbers' && can(me, 'manage_numbers') && <Panel><ConnectNumber onConnected={bump} /><BusinessNumbers channels={inbox.channels} refresh={refresh} onSaved={bump} onOpen={id => showInbox({ tab: 'all', channel: id })} />
                 <details className="crm-card p-4"><summary className="cursor-pointer text-sm font-medium text-muted-foreground">Advanced: add a number without chat history</summary>
