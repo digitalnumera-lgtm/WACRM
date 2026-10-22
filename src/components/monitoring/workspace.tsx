@@ -81,7 +81,7 @@ export function MonitoringWorkspace(props: { accountName: string; me: Monitoring
 }
 
 function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: { accountName: string; me: MonitoringMe; initialView?: 'Inbox' | 'Settings'; initialSection?: SettingsSection }) {
-  const { prefs, update } = usePreferences()
+  const { prefs } = usePreferences()
   const dark = useDarkMode(prefs.theme)
   const [view, setView] = useState<View>(initialView)
   const [section, setSection] = useState<SettingsSection>(() => initialSection && sections.some(s => s.id === initialSection && s.allowed(me, true)) ? initialSection : 'preferences')
@@ -201,7 +201,7 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
 
     {view === 'Inbox' ? <main className={`grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] md:gap-3 ${contactOpen && selectedThread ? 'lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)_320px]' : 'lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]'}`}>
       <ConversationList inbox={inbox} filters={filters} setFilters={setFilters} labels={labels} selected={selected} onSelect={setSelected}
-        onPrefetch={id => prefetchConversation(id, chatCache)} hidden={!!selected} pinned={prefs.pinned} onPin={pinned => update({ pinned })} refresh={refresh} />
+        onPrefetch={id => prefetchConversation(id, chatCache)} hidden={!!selected} pinned={prefs.pinned} refresh={refresh} />
       <section aria-label="Conversation" className={`min-h-0 min-w-0 overflow-hidden md:rounded-3xl md:border md:border-border md:shadow-sm ${selected ? 'flex flex-col' : 'hidden lg:flex lg:flex-col'}`}>
         {selected ? <SectionBoundary resetKey={selected}><Conversation key={selected} id={selected} thread={selectedThread} channels={inbox.channels} repliesEnabled={replyEnabled === true && me.full} workflowReady={workflowReady}
           cache={chatCache} contactOpen={contactOpen} onToggleContact={() => setContactOpen(v => !v)} onBack={() => setSelected(null)}
@@ -216,7 +216,7 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
       : <main className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-7xl space-y-5 p-4 lg:p-6">
           <header className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-sm text-muted-foreground">{accountName}</p><h1 className="font-display text-3xl font-semibold tracking-tight">{view === 'Leads' ? 'Leads board' : view}</h1></div>
-            <div className="flex items-center gap-2"><button className={`${buttonClass} rounded-full`} onClick={bump}>Refresh</button><span className="md:hidden"><MonitoringSignOut compact /></span></div></header>
+            <span className="md:hidden"><MonitoringSignOut compact /></span></header>
           <SectionBoundary resetKey={`${view}:${section}:${reportsTab}`}>
           {view === 'Dashboard' && <Dashboard refresh={refresh} channels={inbox.channels} onTab={tab => showInbox({ tab, sort: tab === 'waiting' ? 'oldest' : prefs.defaultSort })} onChannel={id => showInbox({ tab: 'all', channel: id })} />}
           {view === 'Leads' && <LeadsBoard channels={inbox.channels} refresh={refresh} onOpen={open} />}

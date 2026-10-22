@@ -84,7 +84,7 @@ function DailyChart({ daily }: { daily: { date: string; inbound: number; outboun
   return <div className="crm-card p-6">
     <div className="flex flex-wrap items-start justify-between gap-3"><h3 className="font-display text-lg font-semibold">Messages per day</h3><Legend /></div>
     <div className="relative mt-6 h-56 pl-10">
-      {[1, 0.5, 0].map(f => <div key={f} className="absolute inset-x-0 border-t border-border/70 pl-10" style={{ bottom: `${f * 100}%` }}><span className="absolute -top-2 left-0 w-8 text-right text-[10px] tabular-nums text-muted-foreground">{Math.round(top * f).toLocaleString()}</span></div>)}
+      {[1, 0.5, 0].map(f => <div key={f} className="absolute inset-x-0 border-t border-border/70 pl-10" style={{ bottom: `${f * 100}%` }}><span className="absolute -top-2 left-0 w-8 text-right text-[11px] tabular-nums text-muted-foreground">{Math.round(top * f).toLocaleString()}</span></div>)}
       <div className="relative flex h-full items-end" role="img" aria-label="Received and agent replies per day; exact values are in the daily table below" onMouseLeave={() => setHover(null)}>
         {daily.map((d, i) => <div key={d.date} className={`flex h-full min-w-0 flex-1 items-end justify-center gap-[2px] px-[1px] ${hover === i ? 'bg-muted/70' : ''}`} onMouseEnter={() => setHover(i)}>
           <span className="w-full max-w-3 rounded-t-[4px] bg-[var(--series-in)]" style={{ height: `${(d.inbound / top) * 100}%`, minHeight: d.inbound ? 2 : 0 }} />
@@ -95,7 +95,7 @@ function DailyChart({ daily }: { daily: { date: string; inbound: number; outboun
         </div>}
       </div>
     </div>
-    <div className="mt-2 flex justify-between pl-10 text-[11px] text-muted-foreground"><span>{daily[0] && shortDate(daily[0].date)}</span><span>{daily.at(-1) && shortDate(daily.at(-1)!.date)}</span></div>
+    <div className="mt-2 flex justify-between pl-10 text-xs text-muted-foreground"><span>{daily[0] && shortDate(daily[0].date)}</span><span>{daily.at(-1) && shortDate(daily.at(-1)!.date)}</span></div>
   </div>
 }
 
@@ -159,7 +159,7 @@ function AgentPerformance({ data, channels }: { data: Report; channels: Monitori
       </table></div>
     </div>
     <div className="crm-card p-6"><h3 className="font-display text-lg font-semibold">When customers message</h3><p className="mt-1 text-xs text-muted-foreground">By day and hour, Pakistan time. Darker means busier.</p>
-      <div className="mt-4 overflow-x-auto"><div className="grid min-w-[640px] grid-cols-[40px_repeat(24,minmax(0,1fr))] gap-0.5 text-[10px] text-muted-foreground">
+      <div className="mt-4 overflow-x-auto"><div className="grid min-w-[640px] grid-cols-[40px_repeat(24,minmax(0,1fr))] gap-0.5 text-[11px] text-muted-foreground">
         <span />{Array.from({ length: 24 }, (_, h) => <span key={h} className="text-center">{h % 3 === 0 ? h : ''}</span>)}
         {data.heatmap.map((row, d) => <Fragment key={d}><span className="pr-1 text-right leading-5">{days[d]}</span>{row.map((count, h) => <span key={`${d}-${h}`} title={`${days[d]} ${h}:00 — ${count} messages`} className="h-5 rounded-sm" style={{ backgroundColor: count ? `color-mix(in oklab, var(--series-in) ${Math.round(15 + 85 * count / peak)}%, transparent)` : 'var(--muted)' }} />)}</Fragment>)}
       </div></div>

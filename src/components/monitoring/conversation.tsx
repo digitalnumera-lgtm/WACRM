@@ -217,14 +217,14 @@ export function Conversation({ id, thread: listThread, channels, repliesEnabled,
             ? <button className={`${primaryButton} rounded-r-none`} disabled={busy} onClick={() => void update({ action: 'status', status: 'resolved' })} title="Mark as done: moves it out of Open. A new message reopens it."><CheckCheck size={16} /><span className="hidden sm:inline">Done</span></button>
             : <button className={`${primaryButton} rounded-r-none`} disabled={busy} onClick={() => void update({ action: 'status', status: 'open' })}><RotateCcw size={16} /><span className="hidden sm:inline">Reopen</span></button>}
           <Menu label="Snooze conversation" trigger={<ChevronDown size={16} />} disabled={busy} triggerClass={`${primaryButton} rounded-l-none border-l border-white/20 px-2`}>{close => <>
-            <p className="px-3 py-1.5 text-[11px] font-medium text-muted-foreground">Snooze until</p>
+            <p className="px-3 py-1.5 text-xs font-medium text-muted-foreground">Snooze until</p>
             {snoozeOptions.map(o => <MenuItem key={o.label} onClick={() => { close(); void update({ action: 'status', status: 'snoozed', until: new Date(Date.now() + o.hours * 3600000).toISOString() }) }}><AlarmClock size={14} />{o.label}</MenuItem>)}
           </>}</Menu>
         </div>
         <Menu label="More actions" trigger={<MoreVertical size={16} />} disabled={busy}>{close => <>
           <MenuItem onClick={() => { close(); updatePrefs({ pinned: togglePinned(prefs.pinned, id) }) }}>{pinned ? <><PinOff size={14} />Unpin</> : <><Pin size={14} />Pin to top</>}</MenuItem>
           <MenuItem onClick={() => { close(); void update({ action: unread ? 'read' : 'unread' }) }}>{unread ? <><MailOpen size={14} />Mark as read</> : <><Mail size={14} />Mark as unread</>}</MenuItem>
-          <p className="px-3 pb-1 pt-2 text-[11px] font-medium text-muted-foreground">Priority</p>
+          <p className="px-3 pb-1 pt-2 text-xs font-medium text-muted-foreground">Priority</p>
           {(['urgent', 'high', 'medium', 'low', 'none'] as const).map(p => { const Icon = priorityMeta[p].icon; return <MenuItem key={p} active={priority === p} onClick={() => { close(); void update({ action: 'priority', priority: p }) }}><Icon size={14} className={priorityMeta[p].className} />{priorityMeta[p].label}</MenuItem> })}
         </>}</Menu>
       </div>}
@@ -245,7 +245,7 @@ export function Conversation({ id, thread: listThread, channels, repliesEnabled,
           const day = new Date(item.at).toDateString()
           const separator = !previous || new Date(previous.at).toDateString() !== day
           return <div key={item.type + (item.type === 'message' ? item.message.id : item.note.id)}>
-            {separator && <div className="sticky top-0 z-10 my-3 text-center"><span className="rounded-full bg-card/90 px-3 py-1 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur">{dayLabel(item.at)}</span></div>}
+            {separator && <div className="sticky top-0 z-10 my-3 text-center"><span className="rounded-full bg-card/90 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur">{dayLabel(item.at)}</span></div>}
             {item.type === 'note' ? <NoteBubble note={item.note} clock={clock} /> : <MessageBubble message={item.message} messages={snapshot!.messages} agent={channel?.label} clock={clock} grouped={previous?.type === 'message' && previous.message.direction === item.message.direction && !separator} />}
           </div>
         })}
@@ -284,11 +284,11 @@ function MessageBubble({ message, messages, agent, grouped, clock }: { message: 
   const outbound = message.direction === 'outbound'
   return <div className={`flex ${outbound ? 'justify-end' : 'justify-start'} ${grouped ? '' : 'pt-2.5'}`}>
     <article data-message-id={message.id} className={`relative w-fit max-w-[85%] rounded-3xl px-4 py-2.5 shadow-sm sm:max-w-[68%] ${outbound ? 'bubble-agent' : 'bubble-customer'} ${grouped ? '' : outbound ? 'rounded-br-lg' : 'rounded-bl-lg'}`}>
-      {!grouped && <p className={`mb-0.5 text-[11px] font-semibold ${outbound ? 'text-[#C0DD11] dark:text-[#121316]/70' : 'text-muted-foreground'}`}>{outbound ? agent ?? 'Agent' : 'Customer'}</p>}
+      {!grouped && <p className={`mb-0.5 text-xs font-semibold ${outbound ? 'text-[#C0DD11] dark:text-[#121316]/70' : 'text-muted-foreground'}`}>{outbound ? agent ?? 'Agent' : 'Customer'}</p>}
       {message.reaction && <div className="text-sm"><span className="text-2xl">{message.reaction.emoji || '—'}</span><p className="text-xs opacity-60">{message.reaction.emoji ? 'Reacted to: ' : 'Reaction removed from: '}{messages.find(m => m.meta_id === message.reaction?.target)?.content || 'an earlier message'}</p></div>}
-      {!message.reaction && (message.content || !message.media_id) && <p className="bubble-text whitespace-pre-wrap break-words">{message.content || (message.kind === 'revoke' ? <i className="opacity-60">This message was deleted</i> : message.kind === 'media_placeholder' ? <i className="opacity-60">📎 Media from chat history (WhatsApp did not share the file)</i> : <i className="opacity-60">This message type isn’t shown yet</i>)}</p>}
+      {!message.reaction && (message.content || !message.media_id) && <p className="bubble-text whitespace-pre-wrap break-words">{message.content || (message.kind === 'revoke' ? <i className="opacity-60">This message was deleted</i> : message.kind === 'media_placeholder' ? <i className="opacity-60">Media from chat history (WhatsApp did not share the file)</i> : <i className="opacity-60">This message type isn’t shown yet</i>)}</p>}
       <MessageMedia message={message} />
-      <time title={new Date(message.sent_at).toLocaleString()} className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-60">{clock(message.sent_at)}{outbound && <CheckCheck size={12} />}</time>
+      <time title={new Date(message.sent_at).toLocaleString()} className="mt-1 flex items-center justify-end gap-1 text-[11px] opacity-60">{clock(message.sent_at)}{outbound && <CheckCheck size={12} />}</time>
     </article>
   </div>
 }
@@ -296,9 +296,9 @@ function MessageBubble({ message, messages, agent, grouped, clock }: { message: 
 function NoteBubble({ note, clock }: { note: InternalNote; clock: Clock }) {
   return <div className="flex justify-end pt-2.5">
     <article className="w-fit max-w-[85%] rounded-3xl rounded-br-lg border border-amber-200 bg-amber-50 px-4 py-2.5 shadow-sm sm:max-w-[68%] dark:border-amber-500/30 dark:bg-amber-500/10">
-      <p className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300"><LockKeyhole size={11} />Private note · {note.author}</p>
+      <p className="mb-0.5 flex items-center gap-1 text-xs font-semibold text-amber-800 dark:text-amber-300"><LockKeyhole size={11} />Private note · {note.author}</p>
       <p className="bubble-text whitespace-pre-wrap break-words text-amber-950 dark:text-amber-100">{note.body}</p>
-      <time className="mt-1 block text-right text-[10px] text-amber-700/80 dark:text-amber-300/70">{clock(note.created_at)}</time>
+      <time className="mt-1 block text-right text-[11px] text-amber-700/80 dark:text-amber-300/70">{clock(note.created_at)}</time>
     </article>
   </div>
 }
@@ -321,7 +321,7 @@ function NoteComposer({ endpoint, onSaved }: { endpoint: string; onSaved: () => 
       <LockKeyhole size={15} className="mb-3 shrink-0 text-amber-600" aria-hidden="true" />
       <textarea aria-label="Private note" rows={1} className="block max-h-40 min-h-10 flex-1 resize-none bg-transparent py-2.5 text-sm outline-none placeholder:text-muted-foreground" value={body} maxLength={5000} disabled={busy}
         onChange={e => setBody(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void save() } }}
-        placeholder="Write a private note (only your team sees it)" />
+        placeholder="Add a private note (team only)" />
       <button aria-label="Add note" title="Add note (Ctrl+Enter)" className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-30" disabled={busy || !body.trim()} onClick={() => void save()}>{busy ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}</button>
     </div>
     {error && <p role="alert" className="mt-1 text-xs text-red-700">{error}</p>}

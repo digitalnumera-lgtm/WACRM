@@ -81,7 +81,9 @@ export function ContactPanel({ thread, channels, labels, workflowReady, onPatche
 
     <Section title="Conversation">
       <div className="space-y-3">
-        <label className="block text-xs font-medium text-muted-foreground">Lead stage<select aria-label="Lead stage" className={`${inputClass} mt-1 capitalize`} value={thread.lead_status} disabled={busy || !canLead} onChange={e => void setLead(e.target.value)}>{!leadStatuses.includes(thread.lead_status as typeof leadStatuses[number]) && <option>{thread.lead_status}</option>}{leadStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
+        <div><p className="text-xs font-medium text-muted-foreground">Lead stage</p>
+          <div role="radiogroup" aria-label="Lead stage" className="mt-1.5 flex flex-wrap gap-1.5">{leadStatuses.map(stage => <button key={stage} type="button" role="radio" aria-checked={thread.lead_status === stage} disabled={busy || !canLead} onClick={() => void setLead(stage)}
+            className={`rounded-full border px-3 py-1 text-xs font-medium capitalize transition-colors ${thread.lead_status === stage ? 'border-transparent bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:text-foreground disabled:hover:text-muted-foreground'} disabled:cursor-not-allowed`}>{stage}</button>)}</div></div>
         <label className="block text-xs font-medium text-muted-foreground">Priority<select aria-label="Priority" className={`${inputClass} mt-1`} value={thread.priority ?? 'none'} disabled={busy || !workflowReady || !canPriority} onChange={e => void setPriority(e.target.value as ConversationPriority)}>{(['none', 'low', 'medium', 'high', 'urgent'] as const).map(p => <option key={p} value={p}>{priorityMeta[p].label}</option>)}</select></label>
         <div><p className="text-xs font-medium text-muted-foreground">Labels</p>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">{threadLabels.map(l => <LabelChip key={l.id} label={l} onRemove={busy || !canLabel ? undefined : () => void setLabels((thread.label_ids ?? []).filter(id => id !== l.id))} />)}
@@ -109,7 +111,7 @@ export function ContactPanel({ thread, channels, labels, workflowReady, onPatche
           <button className="w-full rounded-lg border border-border p-2.5 text-left hover:border-primary/50 hover:bg-muted/50" onClick={() => onOpenThread(r.id)}>
             <div className="flex items-center justify-between gap-2 text-xs"><span className="font-semibold">{c?.label ?? 'Number'}</span><span className="text-muted-foreground">{timeAgo(r.last_message_at)}</span></div>
             <p className="mt-1 truncate text-xs text-muted-foreground">{r.last_preview || 'Media message'}</p>
-            <p className="mt-1 text-[11px] capitalize text-muted-foreground">{r.lead_status} · {r.message_count} messages</p>
+            <p className="mt-1 text-xs capitalize text-muted-foreground">{r.lead_status} · {r.message_count} messages</p>
           </button></li> })}</ul>}
     </Section>}
 

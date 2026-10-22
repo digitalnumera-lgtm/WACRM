@@ -1,11 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowDownUp, CheckCheck, Clock, Image as ImageIcon, Pin, PinOff, Search, SlidersHorizontal, X } from 'lucide-react'
+import { ArrowDownUp, CheckCheck, ChevronDown, Clock, Contact, FileText, Image as ImageIcon, MapPin, Mic, Paperclip, Pin, Search, SlidersHorizontal, Smile, Sticker, Video, X } from 'lucide-react'
 import { leadStatuses, type MonitoringChannel, type MonitoringThread } from '@/lib/monitoring/types'
 import type { MonitoringLabel } from '@/lib/monitoring/workflow-types'
-import { api, Avatar, buttonClass, inputClass, LabelChip, PriorityIcon, priorityMeta, waitingFor } from './ui'
-import { togglePinned, usePreferences } from './preferences'
+import { api, Avatar, buttonClass, inputClass, LabelChip, Menu, MenuItem, PriorityIcon, priorityMeta, waitingFor } from './ui'
+import { usePreferences } from './preferences'
 
 export type InboxTab = 'open' | 'waiting' | 'unread' | 'snoozed' | 'resolved' | 'all'
 export type InboxFilters = { tab: InboxTab; q: string; channel: string; agent: string; status: string; label: string; priority: string; sort: 'latest' | 'oldest' }
@@ -93,7 +93,14 @@ export function useInbox(filters: InboxFilters, refresh: number) {
 }
 
 // Messages without text are stored with a "[kind]" preview; show friendly labels.
-const kindLabels: Record<string, string> = { image: '📷 Photo', audio: '🎤 Voice message', video: '🎥 Video', document: '📄 Document', sticker: 'Sticker', media_placeholder: '📎 Media from chat history', location: '📍 Location', contacts: '👤 Contact', reaction: 'Reaction', revoke: 'Message deleted', unsupported: 'Unsupported message' }
+const kindLabels: Record<string, string> = { image: 'Photo', audio: 'Voice message', video: 'Video', document: 'Document', sticker: 'Sticker', media_placeholder: 'Media from chat history', location: 'Location', contacts: 'Contact', reaction: 'Reaction', revoke: 'Message deleted', unsupported: 'Unsupported message' }
+const kindIcons: Record<string, typeof Mic> = { image: ImageIcon, audio: Mic, video: Video, document: FileText, sticker: Sticker, media_placeholder: Paperclip, location: MapPin, contacts: Contact, reaction: Smile }
+/** Small icon for media-only previews ("[audio]" etc.). */
+export function PreviewIcon({ preview }: { preview: string | null }) {
+  const kind = preview ? /^\[([a-z_]+)\]$/.exec(preview)?.[1] : null
+  const Icon = kind ? kindIcons[kind] : null
+  return Icon ? <Icon size={13} className="mr-1 inline -translate-y-px text-muted-foreground" aria-hidden="true" /> : null
+}
 export function previewText(preview: string | null) {
   const match = preview ? /^\[([a-z_]+)\]$/.exec(preview) : null
   return match ? kindLabels[match[1]] ?? 'Message' : preview
@@ -115,10 +122,10 @@ function listTime(value: string, now: number, hour12: boolean) {
   return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 }
 
-export function ConversationList({ inbox, filters, setFilters, labels, selected, onSelect, onPrefetch, hidden, pinned = [], onPin, refresh = 0 }: {
+export function ConversationList({ inbox, filters, setFilters, labels, selected, onSelect, onPrefetch, hidden, pinned = [], refresh = 0 }: {
   inbox: ReturnType<typeof useInbox>; filters: InboxFilters; setFilters: (f: InboxFilters) => void; labels: MonitoringLabel[];
   selected: string | null; onSelect: (id: string) => void; onPrefetch?: (id: string) => void; hidden?: boolean
-  pinned?: string[]; onPin?: (pinned: string[]) => void; refresh?: number
+  pinned?: string[]; refresh?: number
 }) {
   const { prefs } = usePreferences()
   const hoverTimer = useRef<number | null>(null)
@@ -177,22 +184,22 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
     return <li key={thread.id} className="group relative px-2">
       <button type="button" onClick={() => onSelect(thread.id)} onMouseEnter={() => hover(thread.id)} onMouseLeave={leave} onFocus={() => onPrefetch?.(thread.id)} aria-current={selected === thread.id ? 'true' : undefined}
         className={`density-row flex w-full gap-3 rounded-2xl px-3 py-3 text-left transition-colors ${selected === thread.id ? 'bg-muted' : 'hover:bg-muted/60'}`}>
-        <span className="relative shrink-0 self-start"><Avatar name={name} seed={thread.customer} />{waiting && <span title="Waiting for a reply" className={`absolute -bottom-0.5 -right-0.5 size-3 rounded-full ring-2 ring-card ${waitMinutes > 60 ? 'bg-red-500' : 'bg-amber-400'}`} />}</span>
+        <span className="shrink-0 self-start"><Avatar name={name} seed={thread.customer} /></span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             {isPinned && <Pin size={12} className="shrink-0 rotate-45 text-muted-foreground" aria-label="Pinned" />}
             <span className={`min-w-0 flex-1 truncate text-sm ${unread ? 'font-bold' : 'font-medium'}`}>{name}</span>
             <PriorityIcon priority={thread.priority} />
-            <time className={`shrink-0 text-[11px] ${unread ? 'font-semibold text-foreground' : 'text-muted-foreground'}`} dateTime={thread.last_message_at} title={new Date(thread.last_message_at).toLocaleString([], { hour12 })}>{listTime(thread.last_message_at, now, hour12)}</time>
+            <time className={`shrink-0 text-xs ${unread ? 'font-semibold text-foreground' : 'text-muted-foreground'}`} dateTime={thread.last_message_at} title={new Date(thread.last_message_at).toLocaleString([], { hour12 })}>{listTime(thread.last_message_at, now, hour12)}</time>
           </div>
           <div className="mt-0.5 flex items-center gap-2">
             <p className={`min-w-0 flex-1 truncate text-[13px] ${unread ? 'text-foreground' : 'text-muted-foreground'}`}>
               {thread.last_direction === 'outbound' && <CheckCheck size={13} className="mr-1 inline text-emerald-600" aria-label="Agent replied" />}
-              {previewText(thread.last_preview) || <span className="inline-flex items-center gap-1"><ImageIcon size={12} />Media message</span>}
+              <PreviewIcon preview={thread.last_preview} />{previewText(thread.last_preview) || 'Media message'}
             </p>
-            {unread && <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#C0DD11] px-1.5 text-[11px] font-bold text-[#121316]" aria-label={`${thread.unread_count || ''} unread`}>{thread.marked_unread && !thread.unread_count ? '' : (thread.unread_count ?? 0) > 99 ? '99+' : thread.unread_count}</span>}
+            {unread && <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#C0DD11] px-1.5 text-xs font-bold text-[#121316]" aria-label={`${thread.unread_count || ''} unread`}>{thread.marked_unread && !thread.unread_count ? '' : (thread.unread_count ?? 0) > 99 ? '99+' : thread.unread_count}</span>}
           </div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+          <div className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
             <span className="truncate font-medium">{channel?.label ?? 'Unknown number'}</span>
             {waiting && <span className={`rounded-full px-1.5 py-0.5 font-medium ${waitMinutes > 60 ? 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400' : 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300'}`}>Waiting {waitingFor(thread.last_message_at, now)}</span>}
             {thread.state === 'snoozed' && <span className="flex items-center gap-0.5 text-amber-700"><Clock size={11} />Snoozed</span>}
@@ -202,8 +209,6 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
           </div>
         </div>
       </button>
-      {onPin && <button type="button" aria-label={isPinned ? `Unpin ${name}` : `Pin ${name}`} title={isPinned ? 'Unpin' : 'Pin to top'} onClick={() => onPin(togglePinned(pinned, thread.id))}
-        className="absolute bottom-2 right-4 hidden size-7 items-center justify-center rounded-full bg-card text-muted-foreground shadow-sm hover:text-foreground focus:flex group-hover:flex">{isPinned ? <PinOff size={13} /> : <Pin size={13} />}</button>}
     </li>
   }
 
@@ -211,8 +216,11 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
     <div className="space-y-3 px-4 pb-2 pt-4">
       <div className="flex items-center justify-between gap-2"><h2 className="font-display text-2xl font-semibold tracking-tight">Messages</h2>
         <div className="flex items-center gap-1">
-          <button type="button" className="relative flex size-9 items-center justify-center rounded-full hover:bg-muted" aria-label="Filters" aria-expanded={showFilters} onClick={() => setShowFilters(v => !v)}><SlidersHorizontal size={17} />{activeFilters > 0 && <span className="absolute right-0 top-0 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">{activeFilters}</span>}</button>
-          <button type="button" className="flex h-9 items-center gap-1 rounded-full px-2 text-xs font-medium hover:bg-muted" aria-label={filters.sort === 'latest' ? 'Newest first. Switch to oldest first' : 'Oldest first. Switch to newest first'} onClick={() => set({ sort: filters.sort === 'latest' ? 'oldest' : 'latest' })}><ArrowDownUp size={15} />{filters.sort === 'latest' ? 'Newest' : 'Oldest'}</button>
+          <button type="button" className="relative flex size-9 items-center justify-center rounded-full hover:bg-muted" aria-label="Filters" aria-expanded={showFilters} onClick={() => setShowFilters(v => !v)}><SlidersHorizontal size={17} />{activeFilters > 0 && <span className="absolute right-0 top-0 flex size-4 items-center justify-center rounded-full bg-primary text-[11px] text-primary-foreground">{activeFilters}</span>}</button>
+          {agents.length > 1 && <Menu label="Filter by agent" triggerClass={`flex h-9 max-w-36 items-center gap-1 rounded-full px-3 text-xs font-medium hover:bg-muted ${filters.agent || filters.channel ? 'bg-muted' : ''}`} trigger={<><span className="truncate">{filters.agent || (filters.channel ? channels.find(c => c.id === filters.channel)?.label : '') || 'All agents'}</span><ChevronDown size={14} className="shrink-0" /></>}>{close => <>
+            {['', ...agents].map(a => <MenuItem key={a || 'all'} active={filters.agent === a && (!!a || !filters.channel)} onClick={() => { close(); set(a ? { agent: a } : { agent: '', channel: '' }) }}>{a || 'All agents'}</MenuItem>)}
+          </>}</Menu>}
+          <button type="button" className="flex size-9 items-center justify-center rounded-full hover:bg-muted" aria-label={filters.sort === 'latest' ? 'Newest first. Switch to oldest first' : 'Oldest first. Switch to newest first'} title={filters.sort === 'latest' ? 'Newest first' : 'Oldest first'} onClick={() => set({ sort: filters.sort === 'latest' ? 'oldest' : 'latest' })}><ArrowDownUp size={16} /></button>
         </div>
       </div>
       <form role="search" onSubmit={e => { e.preventDefault(); set({ q: search.trim() }) }} className="relative">
@@ -221,21 +229,17 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
         {filters.q && <button type="button" aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => { setSearch(''); set({ q: '' }) }}><X size={16} /></button>}
       </form>
       {showFilters && <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted/60 p-3">
-        <label className="text-[11px] font-medium text-muted-foreground">Business number<select className={inputClass} value={filters.channel} onChange={e => set({ channel: e.target.value })}><option value="">All numbers</option>{channels.map(c => <option key={c.id} value={c.id}>{c.label} · {c.display_number}{c.active ? '' : ' (removed)'}</option>)}</select></label>
-        <label className="text-[11px] font-medium text-muted-foreground">Lead stage<select className={inputClass} value={filters.status} onChange={e => set({ status: e.target.value })}><option value="">All stages</option>{leadStatuses.map(s => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}</select></label>
-        <label className="text-[11px] font-medium text-muted-foreground">Priority<select className={inputClass} value={filters.priority} disabled={!workflowReady} onChange={e => set({ priority: e.target.value })}><option value="">Any priority</option>{(['urgent', 'high', 'medium', 'low', 'none'] as const).map(p => <option key={p} value={p}>{priorityMeta[p].label}</option>)}</select></label>
-        <label className="text-[11px] font-medium text-muted-foreground">Label<select className={inputClass} value={filters.label} disabled={!workflowReady} onChange={e => set({ label: e.target.value })}><option value="">Any label</option>{labels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
+        <label className="text-xs font-medium text-muted-foreground">Business number<select className={inputClass} value={filters.channel} onChange={e => set({ channel: e.target.value })}><option value="">All numbers</option>{channels.map(c => <option key={c.id} value={c.id}>{c.label} · {c.display_number}{c.active ? '' : ' (removed)'}</option>)}</select></label>
+        <label className="text-xs font-medium text-muted-foreground">Lead stage<select className={inputClass} value={filters.status} onChange={e => set({ status: e.target.value })}><option value="">All stages</option>{leadStatuses.map(s => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}</select></label>
+        <label className="text-xs font-medium text-muted-foreground">Priority<select className={inputClass} value={filters.priority} disabled={!workflowReady} onChange={e => set({ priority: e.target.value })}><option value="">Any priority</option>{(['urgent', 'high', 'medium', 'low', 'none'] as const).map(p => <option key={p} value={p}>{priorityMeta[p].label}</option>)}</select></label>
+        <label className="text-xs font-medium text-muted-foreground">Label<select className={inputClass} value={filters.label} disabled={!workflowReady} onChange={e => set({ label: e.target.value })}><option value="">Any label</option>{labels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
         {activeFilters > 0 && <button type="button" className="col-span-2 text-left text-xs font-medium underline" onClick={() => setFilters({ ...emptyFilters, tab: filters.tab, q: filters.q, sort: filters.sort, agent: filters.agent })}>Clear filters</button>}
       </div>}
-      {agents.length > 1 && <div aria-label="Agents" className="-mx-4 flex gap-1.5 overflow-x-auto px-4">
-        {['', ...agents].map(a => { const on = filters.agent === a && (!!a || !filters.channel); return <button key={a || 'all'} type="button" onClick={() => set(a ? { agent: a } : { agent: '', channel: '' })} aria-pressed={on}
-          className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium ${on ? 'border-transparent bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:text-foreground'}`}>{a || 'All agents'}</button> })}
-      </div>}
-      <nav aria-label="Conversation status" className="-mx-4 flex gap-1 overflow-x-auto px-4">{visibleTabs.map(tab => {
+      <nav aria-label="Conversation status" className="-mx-4 flex gap-0.5 overflow-x-auto px-4 [scrollbar-width:none]">{visibleTabs.map(tab => {
         const active = (workflowReady === false ? 'all' : filters.tab) === tab.id
         return <button key={tab.id} type="button" title={tab.hint} aria-current={active ? 'page' : undefined} onClick={() => set({ tab: tab.id, sort: tab.id === 'waiting' && filters.tab !== 'waiting' ? 'oldest' : tab.id !== 'waiting' && filters.tab === 'waiting' ? prefs.defaultSort : filters.sort })}
-          className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium ${active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-          {tab.name}{counts && <span className={`text-[11px] ${tab.id === 'waiting' && counts.waiting > 0 ? 'font-semibold text-red-600' : 'text-muted-foreground'}`}>{counts[tab.id] > 999 ? '999+' : counts[tab.id]}</span>}
+          className={`flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[13px] font-medium ${active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+          {tab.name}{counts && tab.id !== 'resolved' && tab.id !== 'all' && <span className={`text-xs ${tab.id === 'waiting' && counts.waiting > 0 ? 'font-semibold text-red-600' : 'text-muted-foreground'}`}>{counts[tab.id] > 999 ? '999+' : counts[tab.id]}</span>}
         </button>
       })}</nav>
     </div>
@@ -247,9 +251,9 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
         {pinnedThreads.map(row)}
         <li className="px-5 pb-1 pt-3 text-xs font-medium text-muted-foreground">All chats ({total.toLocaleString()})</li>
       </>}
-      {!pinnedThreads.length && <li className="flex justify-between px-5 pb-1 text-[11px] text-muted-foreground"><span>{total.toLocaleString()} conversation{total === 1 ? '' : 's'}</span>{loading && <span>Updating…</span>}</li>}
+      {!pinnedThreads.length && <li className="flex justify-between px-5 pb-1 text-xs text-muted-foreground"><span>{total.toLocaleString()} conversation{total === 1 ? '' : 's'}</span>{loading && <span>Updating…</span>}</li>}
       {rest.map(row)}
-      {!loading && !error && threads.length === 0 && <li className="p-8 text-center text-sm text-muted-foreground">{channels.length ? filters.tab === 'waiting' ? 'Nobody is waiting for a reply. 🎉' : 'No conversations here.' : 'Add a business number to start monitoring.'}</li>}
+      {!loading && !error && threads.length === 0 && <li className="p-8 text-center text-sm text-muted-foreground">{channels.length ? filters.tab === 'waiting' ? 'Nobody is waiting for a reply.' : 'No chats here.' : 'Add an agent’s number in Settings to start.'}</li>}
       {loading && threads.length === 0 && [0, 1, 2, 3, 4].map(i => <li key={i} className="flex gap-3 px-5 py-3"><span className="size-10 animate-pulse rounded-full bg-muted" /><span className="flex-1 space-y-2"><span className="block h-3 w-2/3 animate-pulse rounded bg-muted" /><span className="block h-3 w-full animate-pulse rounded bg-muted" /></span></li>)}
       <li ref={sentinel} className="p-3 text-center text-xs text-muted-foreground">{loadingMore ? 'Loading more…' : !more && threads.length > 0 ? 'End of list' : ''}</li>
     </ul>
