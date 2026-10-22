@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { readJson } from './ui'
 
 export function MonitoringSettings({ enabled, onSaved }: { enabled: boolean | null; onSaved: (enabled: boolean) => void }) {
   const [saving, setSaving] = useState(false)
@@ -13,7 +14,7 @@ export function MonitoringSettings({ enabled, onSaved }: { enabled: boolean | nu
       setSaving(true); setSaved(false); setError('')
       try {
         const response = await fetch('/api/monitoring/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ management_replies_enabled: !enabled }) })
-        const data = await response.json()
+        const data = await readJson(response)
         if (!response.ok) throw new Error(data.error || 'Unable to save settings.')
         onSaved(data.management_replies_enabled); setSaved(true)
       } catch (e) { setError((e as Error).message) } finally { setSaving(false) }

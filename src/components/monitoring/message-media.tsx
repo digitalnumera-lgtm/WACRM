@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Lock, Pause, Play } from 'lucide-react'
 import type { MonitoringMessage } from '@/lib/monitoring/types'
 import { useCan } from './access'
+import { readJson } from './ui'
 
 export function MessageMedia({ message }: { message: MonitoringMessage }) {
   const allowed = useCan('view_media')
@@ -16,7 +17,7 @@ export function MessageMedia({ message }: { message: MonitoringMessage }) {
     const controller = new AbortController()
     fetch(`${src}&diagnose=1`, { cache: 'no-store', signal: controller.signal }).then(async response => {
       if (response.status === 401) { if (!controller.signal.aborted) setProblem({ message: 'Your CRM session expired. Sign in again to load this attachment.', login: true }); return }
-      const data = await response.json()
+      const data = await readJson(response)
       if (controller.signal.aborted) return
       if (response.ok && data.available) setProblem({ message: 'This browser could not preview the attachment. Download it to open in a compatible app.', download: true })
       else setProblem({ message: data.error || 'The CRM could not load this attachment. Please retry.', renew: ['meta_access_invalid', 'meta_access_denied', 'credential_unavailable'].includes(data.code) })

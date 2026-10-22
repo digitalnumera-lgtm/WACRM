@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Search, Zap } from 'lucide-react'
 import type { QuickReply } from '@/lib/monitoring/workflow-types'
+import { readJson } from './ui'
 
 const input = 'w-full rounded-lg border border-border bg-background p-3 text-sm'
 const button = 'rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-40'
@@ -14,7 +15,7 @@ function useReplies(search: string, revision: number, enabled = true) {
     const controller = new AbortController()
     const timer = setTimeout(() => {
       fetch(`/api/monitoring/quick-replies?q=${encodeURIComponent(search)}`, { cache: 'no-store', signal: controller.signal }).then(async response => {
-        const result = await response.json()
+        const result = await readJson(response)
         if (!response.ok) throw new Error(result.error || 'Unable to load saved replies.')
         if (!controller.signal.aborted) { setData(result); setError('') }
       }).catch(e => { if (!controller.signal.aborted) setError(e.message) })
@@ -61,7 +62,7 @@ export function QuickRepliesPanel() {
     if (pending.current?.key !== key) pending.current = { key, request_id: crypto.randomUUID() }
     try {
       const response = await fetch('/api/monitoring/quick-replies', { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, body, ...(editing ? { action: 'update', id: editing.id, version: editing.version } : { request_id: pending.current.request_id }) }) })
-      const result = await response.json()
+      const result = await readJson(response)
       if (!response.ok) throw new Error(result.error || 'Unable to save reply.')
       setEditing(null); setTitle(''); setBody(''); pending.current = null; setRevision(n => n + 1); setNotice('Saved reply ready for management.')
     } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
@@ -70,7 +71,7 @@ export function QuickRepliesPanel() {
     setBusy(true); setError(''); setNotice('')
     try {
       const response = await fetch('/api/monitoring/quick-replies', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', id: reply.id, version: reply.version }) })
-      const result = await response.json()
+      const result = await readJson(response)
       if (!response.ok) throw new Error(result.error || 'Unable to remove reply.')
       setRemove(null); setRevision(n => n + 1); setNotice('Saved reply removed.')
       if (editing?.id === reply.id) { setEditing(null); setTitle(''); setBody('') }

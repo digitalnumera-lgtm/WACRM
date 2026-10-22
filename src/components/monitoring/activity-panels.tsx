@@ -6,6 +6,7 @@ import type { activityReport } from '@/lib/monitoring/activity-report'
 import { formatDuration, type agentReport } from '@/lib/monitoring/agent-report'
 import { useCan } from './access'
 import { csvCell } from '@/lib/monitoring/csv'
+import { readJson } from './ui'
 
 const input = 'min-w-0 rounded-xl border border-border bg-card px-3 py-2 text-sm'
 const button = 'rounded-full border border-border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted disabled:opacity-40'
@@ -25,7 +26,7 @@ function useRemote<T>(url: string, refresh: number) {
   useEffect(() => {
     const abort = new AbortController()
     fetch(url, { signal: abort.signal, cache: 'no-store' }).then(async response => {
-      const body = await response.json()
+      const body = await readJson(response)
       if (!response.ok) throw new Error(body.error || 'Unable to load data')
       if (!abort.signal.aborted) setResult({ key, data: body, error: '' })
     }).catch(err => { if (!abort.signal.aborted) setResult({ key, data: null, error: err.message }) })

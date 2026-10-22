@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Archive, MessageSquare, RotateCcw, Phone } from 'lucide-react'
 import type { MonitoringChannel } from '@/lib/monitoring/types'
 import { HistoryStatus, type ConnectStatus } from './connect-number'
+import { readJson } from './ui'
 
 export function BusinessNumbers({ channels, onSaved, onOpen, refresh = 0 }: { channels: MonitoringChannel[]; onSaved: () => void; onOpen: (id: string) => void; refresh?: number }) {
   const [statuses, setStatuses] = useState<Record<string, ConnectStatus>>({})
@@ -28,7 +29,7 @@ export function BusinessNumbers({ channels, onSaved, onOpen, refresh = 0 }: { ch
     setBusy(channel.id); setError(''); setNotice('')
     try {
       const response = await fetch(`/api/monitoring/channels/${channel.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ active }) })
-      const body = await response.json()
+      const body = await readJson(response)
       if (!response.ok) throw new Error(body.error || 'Unable to update this number.')
       setConfirm(null); setNotice(active ? `${channel.label}: restored. Its saved chats are back in the inbox; messages sent while it was removed are not recovered.` : `${channel.label}: removed. Its chats and stats are hidden until you restore it.`)
       onSaved()

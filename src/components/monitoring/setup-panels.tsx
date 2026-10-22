@@ -1,11 +1,12 @@
 'use client'
 import { useState } from 'react'
 import { parseImportFile } from '@/lib/monitoring/import-file'
+import { readJson } from './ui'
 const field = 'w-full rounded-lg border border-border bg-background p-3 text-sm'
 const button = 'rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-50'
 async function post(url: string, body: unknown) {
   const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-  const data = await r.json(); if (!r.ok) throw new Error(data.error); return data
+  const data = await readJson(r); if (!r.ok) throw new Error(data.error); return data
 }
 export function PortfolioPicker({ onSaved }: { onSaved: () => void }) {
   const [token, setToken] = useState(''); const [business, setBusiness] = useState('')

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { QuickReplyPicker } from './quick-replies'
 import { expandQuickReply } from '@/lib/monitoring/workflow-types'
+import { readJson } from './ui'
 
 type Pending = { request_id: string; text: string }
 type SendResult = { state?: 'accepted' | 'rejected' | 'uncertain'; message?: string; error?: string }
@@ -33,7 +34,7 @@ export function ReplyComposer({ threadId, variables, onSent }: { threadId: strin
     })
     const abort = new AbortController()
     const load = () => fetch(endpoint, { signal: abort.signal, cache: 'no-store' }).then(async response => {
-      const body = await response.json(); if (!response.ok) throw new Error(body.error || 'Unable to check reply availability.')
+      const body = await readJson(response); if (!response.ok) throw new Error(body.error || 'Unable to check reply availability.')
       if (!cancelled) setInfo(body)
     }).catch(error => { if (!cancelled) setNotice(error.message) })
     void load()
@@ -54,7 +55,7 @@ export function ReplyComposer({ threadId, variables, onSent }: { threadId: strin
     remember(attempt); setBusy(true)
     try {
       const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(attempt) })
-      const result = await response.json()
+      const result = await readJson(response)
       finish(result)
       // These responses are emitted before a reservation/send. Server failures
       // remain pending because they may have occurred after Meta acceptance.
@@ -67,7 +68,7 @@ export function ReplyComposer({ threadId, variables, onSent }: { threadId: strin
     setBusy(true)
     try {
       const response = await fetch(`${endpoint}?request_id=${pending.request_id}`, { cache: 'no-store' })
-      const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Unable to check send status.')
+      const result = await readJson(response); if (!response.ok) throw new Error(result.error || 'Unable to check send status.')
       setInfo(result)
       if (result.attempt) finish(result.attempt)
       else setNotice('This request has not been recorded. Use Retry same request to continue without creating a duplicate.')

@@ -8,7 +8,7 @@ import { togglePinned, useClock, usePreferences } from './preferences'
 import { ReplyComposer } from './reply-composer'
 import type { MonitoringChannel, MonitoringMessage, MonitoringThread, ThreadDetail } from '@/lib/monitoring/types'
 import type { ConversationPriority, InternalNote, ThreadWorkflow } from '@/lib/monitoring/workflow-types'
-import { api, Avatar, buttonClass, Menu, MenuItem, primaryButton, priorityMeta, PriorityIcon, sendJson } from './ui'
+import { api, Avatar, buttonClass, Menu, MenuItem, primaryButton, priorityMeta, PriorityIcon, sendJson, readJson } from './ui'
 
 export type ChatSnapshot = ThreadDetail & { nextCursor: string | null }
 const cursor = (m: MonitoringMessage) => `${m.sent_at}|${m.id}`
@@ -28,14 +28,14 @@ function remember(cache: Map<string, ChatSnapshot>, id: string, value: ChatSnaps
 export function prefetchConversation(id: string, cache: Map<string, ChatSnapshot>) {
   if (cache.has(id) || inflight.has(id) || inflight.size >= 3) return
   const job = fetch(`/api/monitoring/threads/${id}?scroll=1`, { cache: 'no-store' })
-    .then(async response => { if (response.ok && !cache.has(id)) remember(cache, id, await response.json()) })
+    .then(async response => { if (response.ok && !cache.has(id)) remember(cache, id, await readJson(response)) })
     .catch(() => { /* Prefetch is best-effort. */ })
     .finally(() => inflight.delete(id))
   inflight.set(id, job)
 }
 async function read(url: string, signal: AbortSignal): Promise<ChatSnapshot> {
   const response = await fetch(url, { cache: 'no-store', signal })
-  const data = await response.json()
+  const data = await readJson(response)
   if (!response.ok) throw new Error(data.error || 'Unable to load messages.')
   return data
 }

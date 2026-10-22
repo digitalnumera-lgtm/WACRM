@@ -10,6 +10,20 @@ export const inputClass = 'w-full rounded-xl border border-border bg-card px-3 p
 export const buttonClass = 'inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-border bg-card px-3.5 text-sm font-medium transition-[color,background-color,transform] duration-150 hover:bg-muted active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40'
 export const primaryButton = 'inline-flex h-9 items-center justify-center gap-1.5 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground transition-[opacity,transform] duration-150 hover:opacity-90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40'
 
+/**
+ * Reads a JSON response. When the server or hosting gateway answers with an
+ * HTML error page instead (for example after a timeout), this throws a clear
+ * message rather than "Unexpected token '<'".
+ */
+export async function readJson<T = any>(response: Response): Promise<T> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const text = await response.text()
+  try { return (text ? JSON.parse(text) : {}) as T }
+  catch {
+    const busy = response.status === 502 || response.status === 503 || response.status === 504 || response.status === 0
+    throw Object.assign(new Error(busy || !response.ok ? 'The server took too long to answer. Please try again in a moment.' : 'Unexpected reply from the server. Please reload the page.'), { status: response.status })
+  }
+}
+
 export async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { cache: 'no-store', ...options })
   const value = await response.json().catch(() => ({}))

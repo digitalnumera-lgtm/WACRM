@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { MonitoringChannel } from '@/lib/monitoring/types'
+import { readJson } from './ui'
 
 export function RenewMetaAccess({ channels }: { channels: MonitoringChannel[] }) {
   const [token, setToken] = useState('')
@@ -13,7 +14,7 @@ export function RenewMetaAccess({ channels }: { channels: MonitoringChannel[] })
     setBusy(true); setError(''); setNotice('')
     try {
       const response = await fetch('/api/monitoring/access', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ access_token: token.trim(), channel_ids: selected }) })
-      const result = await response.json()
+      const result = await readJson(response)
       if (!response.ok) throw new Error(result.error || 'Unable to renew access.')
       setToken(''); setNotice(`Access renewed for ${result.updated} ${result.updated === 1 ? 'number' : 'numbers'}. Return to the chat and retry the attachment. Files Meta no longer retains cannot be restored by renewing access.`)
     } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
