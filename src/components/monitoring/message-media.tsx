@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Pause, Play } from 'lucide-react'
+import { Lock, Pause, Play } from 'lucide-react'
 import type { MonitoringMessage } from '@/lib/monitoring/types'
 import { useCan } from './access'
 
@@ -24,7 +24,7 @@ export function MessageMedia({ message }: { message: MonitoringMessage }) {
     return () => controller.abort()
   }, [failed, src, message.media_id])
   if (!message.media_id) return null
-  if (!allowed) return <p className="mt-1 text-xs italic text-slate-500">🔒 {mediaLabel(message.kind)} · your role cannot open media</p>
+  if (!allowed) return <p className="mt-1 flex items-center gap-1 text-xs opacity-70"><Lock size={12} aria-hidden="true" />{mediaLabel(message.kind)} hidden for your role</p>
   if (failed) return <div className="mt-2 space-y-2 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100" role="status"><p>{problem?.message || 'Checking attachment access…'}</p><div className="flex flex-wrap gap-3"><button className="underline" onClick={() => { setProblem(null); setFailed(false); setAttempt(attempt + 1) }}>Retry</button>{problem?.renew && <a className="underline" href="/monitoring?view=settings&section=access">Renew Meta access</a>}{problem?.download && <a className="underline" href={src} download>Download attachment</a>}{problem?.login && <a className="underline" href="/login">Sign in</a>}</div></div>
   const error = () => setFailed(true)
   if (message.kind === 'image' || message.kind === 'sticker') {
@@ -42,7 +42,7 @@ export function mediaLabel(kind: string) {
   return ({ image: 'Photo', sticker: 'Sticker', audio: 'Voice note', video: 'Video', document: 'Document' } as Record<string, string>)[kind] ?? 'Attachment'
 }
 
-const bars = (seed: string) => Array.from({ length: 36 }, (_, i) => {
+const bars = (seed: string) => Array.from({ length: 30 }, (_, i) => {
   const code = seed.charCodeAt(i % seed.length) + i * 31
   return 25 + ((code * 9301 + 49297) % 233280) / 233280 * 75
 })
@@ -58,19 +58,19 @@ function VoicePlayer({ src, seed, onError }: { src: string; seed: string; onErro
   const heights = bars(seed)
   const progress = duration ? time / duration : 0
   const toggle = () => { const el = audio.current; if (!el) return; if (el.paused) void el.play().catch(onError); else el.pause() }
-  return <div className="mt-1.5 flex w-64 max-w-full items-center gap-2.5">
+  return <div className="mt-1.5 flex w-[15.5rem] max-w-full items-center gap-2">
     <audio ref={audio} src={src} preload="none" onError={onError} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => { setPlaying(false); setTime(0) }}
       onTimeUpdate={e => setTime(e.currentTarget.currentTime)} onLoadedMetadata={e => setDuration(e.currentTarget.duration)} />
     <button type="button" onClick={toggle} aria-label={playing ? 'Pause voice note' : 'Play voice note'} className="flex size-9 shrink-0 items-center justify-center rounded-full bg-current">
       {playing ? <Pause size={15} className="fill-current text-[var(--bubble-icon)]" /> : <Play size={15} className="ml-0.5 fill-current text-[var(--bubble-icon)]" />}
     </button>
     <div role="slider" aria-label="Voice note position" aria-valuemin={0} aria-valuemax={Math.round(duration)} aria-valuenow={Math.round(time)} tabIndex={0}
-      className="flex h-8 flex-1 cursor-pointer items-center gap-[2px]"
+      className="flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-[2px] overflow-hidden"
       onClick={e => { const el = audio.current; if (!el || !duration) { toggle(); return } const box = e.currentTarget.getBoundingClientRect(); el.currentTime = ((e.clientX - box.left) / box.width) * duration }}
       onKeyDown={e => { const el = audio.current; if (!el) return; if (e.key === 'ArrowRight') el.currentTime += 5; if (e.key === 'ArrowLeft') el.currentTime -= 5; if (e.key === ' ') { e.preventDefault(); toggle() } }}>
       {heights.map((h, i) => <span key={i} className="wave-bar" data-played={i / heights.length < progress} style={{ height: `${h}%` }} />)}
     </div>
-    <span className="w-8 shrink-0 text-right text-[11px] tabular-nums opacity-70">{mmss(playing || time ? time : duration)}</span>
-    <button type="button" onClick={() => { const next = rate === 1 ? 1.5 : rate === 1.5 ? 2 : 1; setRate(next); if (audio.current) audio.current.playbackRate = next }} className="shrink-0 rounded-full border border-current/30 px-1.5 text-[10px] font-semibold opacity-70 hover:opacity-100" aria-label={`Playback speed ${rate}×`}>{rate}×</button>
+    <span className="w-8 shrink-0 text-right text-xs tabular-nums opacity-70">{mmss(playing || time ? time : duration)}</span>
+    <button type="button" onClick={() => { const next = rate === 1 ? 1.5 : rate === 1.5 ? 2 : 1; setRate(next); if (audio.current) audio.current.playbackRate = next }} className="shrink-0 rounded-full border border-current/30 px-1.5 text-[11px] font-semibold opacity-70 hover:opacity-100" aria-label={`Playback speed ${rate}×`}>{rate}×</button>
   </div>
 }

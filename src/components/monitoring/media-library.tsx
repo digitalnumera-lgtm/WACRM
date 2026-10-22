@@ -98,11 +98,11 @@ function Tile({ item, onClick }: { item: Item; onClick: () => void }) {
   const [broken, setBroken] = useState(false)
   const video = item.kind === 'video'
   return <button onClick={onClick} aria-label={`Open ${video ? 'video' : 'photo'} from ${item.customer_name || item.customer}`} className="group relative aspect-square overflow-hidden rounded-xl bg-muted">
-    {video ? <span className="flex h-full w-full flex-col items-center justify-center gap-1 bg-[#121316] text-white/80"><Play size={28} className="fill-current" /><span className="text-[11px]">Video</span></span>
-      : broken ? <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground"><ImageOff size={22} /><span className="px-2 text-center text-[11px]">No longer available</span></span>
+    {video ? <span className="flex h-full w-full flex-col items-center justify-center gap-1 bg-[#121316] text-white/80"><Play size={28} className="fill-current" /><span className="text-xs">Video</span></span>
+      : broken ? <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground"><ImageOff size={22} /><span className="px-2 text-center text-xs">No longer available</span></span>
         // eslint-disable-next-line @next/next/no-img-element
         : <img src={src(item.id)} alt="" loading="lazy" onError={() => setBroken(true)} className="h-full w-full object-cover transition-transform group-hover:scale-105" />}
-    <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-4 text-left text-[11px] text-white opacity-0 group-hover:opacity-100">{item.customer_name || `+${item.customer}`}</span>
+    <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-4 text-left text-xs text-white opacity-0 group-hover:opacity-100">{item.customer_name || `+${item.customer}`}</span>
   </button>
 }
 

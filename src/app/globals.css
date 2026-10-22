@@ -261,6 +261,8 @@ html[data-theme="rose"] {
 }
 .monitoring-panel .font-display { font-family: var(--font-funnel-display), var(--font-funnel-sans), system-ui, sans-serif; letter-spacing: -0.01em; }
 .monitoring-panel :focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
+.monitoring-panel button:not(:disabled), .monitoring-panel [role="button"], .monitoring-panel summary, .monitoring-panel label:has(input[type="checkbox"]) { cursor: pointer; }
+.monitoring-panel ::selection { background: color-mix(in oklab, var(--lime) 55%, transparent); }
 @media (prefers-reduced-motion: reduce) { .monitoring-panel *, .monitoring-panel *::before, .monitoring-panel *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }
 .monitoring-panel.dark {
   color-scheme: dark;
@@ -301,3 +303,32 @@ html[data-theme="rose"] {
 .monitoring-panel[data-density="compact"] .density-row { padding-top: 0.5rem; padding-bottom: 0.5rem; }
 .monitoring-panel .wave-bar { width: 3px; border-radius: 9999px; background: currentColor; opacity: 0.35; transition: opacity 0.15s; }
 .monitoring-panel .wave-bar[data-played="true"] { opacity: 1; }
+
+/* Sign-in pages: Numera brand surfaces regardless of the app theme. */
+.numera-auth {
+  color-scheme: light;
+  --background: #f0f2ec;
+  --foreground: #121316;
+  --card: #ffffff;
+  --card-foreground: #121316;
+  --popover: #ffffff;
+  --popover-foreground: #121316;
+  --muted: #f3f5f1;
+  --muted-foreground: #5f645d;
+  --border: #e4e7e1;
+  --input: #e4e7e1;
+  --primary: #121316;
+  --primary-foreground: #ffffff;
+  --ring: #c0dd11;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-funnel-sans), var(--font-sans), system-ui, sans-serif;
+}
+.numera-auth .font-display { font-family: var(--font-funnel-display), var(--font-funnel-sans), system-ui, sans-serif; }
+.numera-auth main [data-slot="card-header"] > div:first-child:not([data-slot]) { display: none; }
+.numera-auth main [data-slot="card"] { border-radius: 1.75rem; box-shadow: 0 1px 2px rgb(18 19 22 / 0.04), 0 16px 40px -20px rgb(18 19 22 / 0.18); }
+.numera-auth main [data-slot="card-title"] { font-family: var(--font-funnel-display), var(--font-funnel-sans), system-ui, sans-serif; font-size: 1.6rem; letter-spacing: -0.01em; }
+.numera-auth main input { height: 2.75rem; border-radius: 0.9rem; background: var(--card); }
+.numera-auth main button[type="submit"] { height: 2.75rem; border-radius: 9999px; }
+.numera-auth main .min-h-screen { min-height: calc(100dvh - 4rem); background: transparent; }
+@media (min-width: 1024px) { .numera-auth main .min-h-screen { min-height: 100dvh; } }

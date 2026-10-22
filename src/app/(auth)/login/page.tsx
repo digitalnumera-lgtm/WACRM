@@ -79,7 +79,7 @@ function LoginPageInner() {
     // reload the invite-accept flow already uses in join/[token].
     const destination = inviteToken
       ? `/join/${encodeURIComponent(inviteToken)}`
-      : "/dashboard";
+      : "/monitoring";
     window.location.href = destination;
   };
 
@@ -106,12 +106,12 @@ function LoginPageInner() {
         <CardContent>
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
             {linkErrorMessage && !error && (
-              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-800">
                 {linkErrorMessage}
               </div>
             )}
             {error && (
-              <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+              <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700">
                 {error}
               </div>
             )}
@@ -138,7 +138,7 @@ function LoginPageInner() {
                 </Label>
                 <Link
                   href="/forgot-password"
-                  className="text-sm text-primary hover:text-primary/80"
+                  className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
                 >
                   {t('forgotPassword')}
                 </Link>
@@ -163,7 +163,8 @@ function LoginPageInner() {
             </Button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-muted-foreground">
+          {/* Accounts are created from a team invitation link. */}
+          {inviteToken && <p className="mt-6 text-center text-sm text-muted-foreground">
             {t('noAccount')}{" "}
             <Link
               href={
@@ -175,7 +176,7 @@ function LoginPageInner() {
             >
               {t('createAccount')}
             </Link>
-          </p>
+          </p>}
         </CardContent>
       </Card>
     </div>

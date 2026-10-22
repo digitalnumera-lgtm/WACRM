@@ -5,8 +5,8 @@ import { ArrowDown, ArrowUp, ChevronsUp, Minus, SignalHigh } from 'lucide-react'
 import type { ConversationPriority, MonitoringLabel } from '@/lib/monitoring/workflow-types'
 
 export const inputClass = 'w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none focus:border-foreground/30 focus:ring-2 focus:ring-[#C0DD11]/60'
-export const buttonClass = 'inline-flex items-center justify-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40'
-export const primaryButton = 'inline-flex items-center justify-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40'
+export const buttonClass = 'inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-border bg-card px-3.5 text-sm font-medium transition-colors duration-150 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40'
+export const primaryButton = 'inline-flex h-9 items-center justify-center gap-1.5 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40'
 
 export async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { cache: 'no-store', ...options })
@@ -40,7 +40,7 @@ export function waitingFor(value: string, now = Date.now()) {
   return `${Math.floor(minutes / 1440)}d`
 }
 
-const avatarColors = ['bg-sky-100 text-sky-700', 'bg-violet-100 text-violet-700', 'bg-amber-100 text-amber-800', 'bg-teal-100 text-teal-700', 'bg-rose-100 text-rose-700', 'bg-indigo-100 text-indigo-700', 'bg-lime-100 text-lime-800']
+const avatarColors = ['bg-[#E9F0C2] text-[#4A5A00]', 'bg-[#E3E8EF] text-[#334155]', 'bg-[#EFE7DA] text-[#6B4F1D]', 'bg-[#DDEEE6] text-[#1F5C45]', 'bg-[#E8E3F1] text-[#4B3F72]'].map(c => `${c} dark:bg-white/10 dark:text-[#E6E7E3]`)
 export const colorFor = (seed: string) => avatarColors[Array.from(seed).reduce((sum, char) => sum + char.charCodeAt(0), 0) % avatarColors.length]
 export function initials(name: string) {
   const words = name.replace(/[^\p{L}\p{N} ]/gu, ' ').trim().split(/\s+/).filter(Boolean)
@@ -48,12 +48,12 @@ export function initials(name: string) {
   return (words.length > 1 ? words[0][0] + words[1][0] : words[0].slice(0, 2)).toUpperCase()
 }
 export function Avatar({ name, seed, size = 'md' }: { name: string; seed: string; size?: 'sm' | 'md' | 'lg' }) {
-  const sizes = { sm: 'size-7 text-[11px]', md: 'size-10 text-sm', lg: 'size-16 text-xl' }
+  const sizes = { sm: 'size-7 text-xs', md: 'size-10 text-sm', lg: 'size-16 text-xl' }
   return <span aria-hidden="true" className={`flex shrink-0 items-center justify-center rounded-full font-semibold ${sizes[size]} ${colorFor(seed)}`}>{initials(name)}</span>
 }
 
 export function LabelChip({ label, onRemove }: { label: MonitoringLabel; onRemove?: () => void }) {
-  return <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-border bg-card px-1.5 py-0.5 text-[11px] font-medium text-foreground">
+  return <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-border bg-card px-1.5 py-0.5 text-xs font-medium text-foreground">
     <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: label.color }} /><span className="truncate">{label.name}</span>
     {onRemove && <button type="button" aria-label={`Remove label ${label.name}`} className="ml-0.5 text-muted-foreground hover:text-foreground" onClick={onRemove}>×</button>}
   </span>

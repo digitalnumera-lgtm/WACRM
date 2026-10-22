@@ -142,7 +142,7 @@ function Roles({ roles, onDone }: { roles: Role[]; onDone: () => void }) {
         <button className={`${buttonClass} px-2`} aria-label={`Edit role ${r.name}`} onClick={() => setEditing(r)}><Pencil size={14} /></button>
         <button className={`${buttonClass} px-2`} aria-label={`Delete role ${r.name}`} onClick={async () => { if (!window.confirm(`Delete the role “${r.name}”?`)) return; try { await api(`/api/monitoring/team/roles/${r.id}`, { method: 'DELETE' }); setError(''); onDone() } catch (e) { setError((e as Error).message) } }}><Trash2 size={14} /></button>
       </div>
-      <div className="mt-2 flex flex-wrap gap-1">{PERMISSION_GROUPS.flatMap(g => g.items).filter(i => r.permissions.includes(i.key)).map(i => <span key={i.key} className="rounded-md bg-muted px-1.5 py-0.5 text-[11px]">{i.label}</span>)}</div>
+      <div className="mt-2 flex flex-wrap gap-1">{PERMISSION_GROUPS.flatMap(g => g.items).filter(i => r.permissions.includes(i.key)).map(i => <span key={i.key} className="rounded-md bg-muted px-1.5 py-0.5 text-xs">{i.label}</span>)}</div>
     </li>)}</ul>
     {!roles.length && <p className="text-sm text-muted-foreground">Create a role, then invite people with it.</p>}
   </div>
