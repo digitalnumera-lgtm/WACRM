@@ -62,7 +62,7 @@ describe('history ingest batches', () => {
     const db = {
       from: (table: string) => {
         const q: Record<string, unknown> = {}
-        for (const m of ['select', 'eq', 'in', 'is', 'not', 'order', 'limit']) q[m] = () => q
+        for (const m of ['select', 'eq', 'in', 'is', 'not', 'order', 'limit', 'gte', 'lte']) q[m] = () => q
         q.update = () => q
         q.upsert = (rows: unknown) => { upserts.push({ table, rows }); return Promise.resolve({ error: null }) }
         q.then = (resolve: (v: unknown) => unknown) => Promise.resolve(

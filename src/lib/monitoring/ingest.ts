@@ -4,6 +4,7 @@ import { normalizeMonitoringEvents } from './events'
 import { messageText } from './rich-message'
 import { parseContactSync, parseHistory, type PhoneContact } from './history-sync'
 import { applyHistoryReview, savePhoneContacts, upgradeMediaPlaceholders } from './history-store'
+import { dropImportedCopies } from './history-dedupe'
 import type { ArchiveJob } from './media-archive'
 
 type Json = Record<string, unknown>
@@ -133,11 +134,13 @@ export async function persistMonitoringBatches(db: SupabaseClient, batches: Chan
     }
     for (const channel of channels.data) {
       if (!channel.active) { diagnose('channel_paused'); continue } // Deliberately paused numbers stay paused.
-      const messages = batch.phone ? batch.messages : []
+      let messages = batch.phone ? batch.messages : []
       const before = batch.historical && messages.length ? await threadCounts(db, channel.id, messages) : null
+      // Shared history repeats messages imported earlier from other tools; keep one copy.
+      if (before) messages = await dropImportedCopies(db, before, messages)
       const result = await db.rpc('ingest_monitoring_event', {
         p_channel: channel.id, p_hash: batch.hash, p_field: batch.field,
-        p_payload: batch.payload, p_messages: batch.phone ? batch.messages : [],
+        p_payload: batch.payload, p_messages: messages,
         p_review: batch.review || !batch.phone,
       })
       if (result.error) { diagnose('transaction_failed'); throw new Error('Monitoring transaction failed') }
