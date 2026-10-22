@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, type ReactNode } from 'react'
-import { ArrowDownRight, ArrowUpRight, CheckCheck, Clock, Inbox, MailWarning, MessageCircle, Reply, Users } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, CheckCheck, Clock, Inbox, MailWarning, MessageCircle, Reply, UserPlus, Users } from 'lucide-react'
 import type { MonitoringChannel } from '@/lib/monitoring/types'
 import type { InboxTab } from './inbox-list'
 import { api, waitingFor } from './ui'
@@ -12,6 +12,7 @@ type Overview = {
   waiting: Record<string, { count: number; oldest: string }>
   volume: { inbound: [number, number]; outbound: [number, number] }
   activeConversations: number
+  newNumbers?: { today: number; yesterday: number; byChannel: Record<string, number> } | null
 }
 const periods = [{ days: 1, label: 'Today' }, { days: 7, label: '7 days' }, { days: 30, label: '30 days' }]
 
@@ -24,7 +25,7 @@ function Delta({ now, before }: { now: number; before: number }) {
 }
 
 function Kpi({ label, value, icon: Icon, children, dark }: { label: string; value: number | undefined; icon: typeof Inbox; children?: ReactNode; dark?: boolean }) {
-  return <div className={`rounded-3xl p-5 ${dark ? 'bg-[#121316] text-white dark:bg-[#C0DD11] dark:text-[#121316]' : 'crm-card'}`}>
+  return <div className={`rounded-3xl p-5 ${dark ? 'bg-[var(--ink)] text-[var(--ink-fg)] dark:bg-[var(--hl)] dark:text-[var(--hl-fg)]' : 'crm-card'}`}>
     <div className="flex items-center justify-between"><span className={`flex size-9 items-center justify-center rounded-full ${dark ? 'bg-white/10 dark:bg-black/10' : 'bg-muted'}`}><Icon size={17} /></span>{children}</div>
     <p className={`mt-5 text-sm ${dark ? 'opacity-70' : 'text-muted-foreground'}`}>{label}</p>
     <p className="font-display mt-1 text-4xl font-semibold tracking-tight">{value === undefined ? '—' : value.toLocaleString()}</p>
@@ -37,7 +38,8 @@ export function Dashboard({ refresh, channels, onTab, onChannel }: { refresh: nu
   const [error, setError] = useState('')
   useEffect(() => {
     const controller = new AbortController()
-    api<Overview>(`/api/monitoring/overview?days=${days}`, { signal: controller.signal }).then(d => { setData(d); setError('') }).catch(e => { if (!controller.signal.aborted) setError(e.message) })
+    const midnight = new Date(); midnight.setHours(0, 0, 0, 0)
+    api<Overview>(`/api/monitoring/overview?days=${days}&today=${encodeURIComponent(midnight.toISOString())}`, { signal: controller.signal }).then(d => { setData(d); setError('') }).catch(e => { if (!controller.signal.aborted) setError(e.message) })
     return () => controller.abort()
   }, [days, refresh])
   const counts = data?.counts
@@ -53,8 +55,9 @@ export function Dashboard({ refresh, channels, onTab, onChannel }: { refresh: nu
     <div role="radiogroup" aria-label="Period" className="inline-flex gap-1 rounded-full bg-card p-1 shadow-sm">
       {periods.map(p => <button key={p.days} role="radio" aria-checked={days === p.days} onClick={() => setDays(p.days)} className={`rounded-full px-4 py-1.5 text-sm font-medium ${days === p.days ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{p.label}</button>)}
     </div>
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       <Kpi dark label="Waiting for an agent now" value={counts?.waiting} icon={Clock} />
+      <Kpi label="New numbers today" value={data?.newNumbers?.today} icon={UserPlus}>{data?.newNumbers && <span className="text-xs text-muted-foreground">Yesterday {data.newNumbers.yesterday}</span>}</Kpi>
       <Kpi label={`Messages received · ${period}`} value={data?.volume.inbound[0]} icon={MessageCircle}>{data && <Delta now={data.volume.inbound[0]} before={data.volume.inbound[1]} />}</Kpi>
       <Kpi label={`Agent replies · ${period}`} value={data?.volume.outbound[0]} icon={Reply}>{data && <Delta now={data.volume.outbound[0]} before={data.volume.outbound[1]} />}</Kpi>
       <Kpi label={`Active conversations · ${period}`} value={data?.activeConversations} icon={Users} />
@@ -68,10 +71,11 @@ export function Dashboard({ refresh, channels, onTab, onChannel }: { refresh: nu
     <section>
       <h2 className="font-display mb-3 text-lg font-semibold">Agents</h2>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{channels.map(channel => { const w = data?.waiting[channel.id]; return <button key={channel.id} onClick={() => onChannel(channel.id)} className="crm-card p-5 text-left transition-shadow hover:shadow-md">
-        <div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-full bg-[#121316] text-sm font-bold text-[#C0DD11]">{channel.label.slice(0, 2).toUpperCase()}</span>
+        <div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-full bg-[var(--ink)] text-sm font-bold text-[var(--ink-accent)]">{channel.label.slice(0, 2).toUpperCase()}</span>
           <div className="min-w-0 flex-1"><p className="truncate font-semibold">{channel.label}</p><p className="truncate text-xs text-muted-foreground">{channel.display_number}</p></div></div>
         <div className="mt-4 flex items-end justify-between">
-          <div><p className="text-xs text-muted-foreground">Waiting</p><p className={`text-2xl font-semibold ${w?.count ? 'text-red-600 dark:text-red-400' : ''}`}>{w?.count ?? 0}</p></div>
+          <div className="flex gap-6"><div><p className="text-xs text-muted-foreground">Waiting</p><p className={`text-2xl font-semibold ${w?.count ? 'text-red-600 dark:text-red-400' : ''}`}>{w?.count ?? 0}</p></div>
+            <div><p className="text-xs text-muted-foreground">New today</p><p className="text-2xl font-semibold">{data?.newNumbers?.byChannel[channel.id] ?? 0}</p></div></div>
           <p className="text-right text-xs text-muted-foreground">{w ? `Longest ${waitingFor(w.oldest)}` : 'Nobody waiting'}<br />Last activity {channel.last_event_at ? new Date(channel.last_event_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '—'}</p>
         </div>
       </button> })}</div>

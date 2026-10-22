@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { Check } from 'lucide-react'
-import { DEFAULT_PREFERENCES, MAX_PINNED, sanitizePreferences, type Preferences } from '@/lib/monitoring/preferences'
+import { DEFAULT_PREFERENCES, MAX_PINNED, sanitizePreferences, type CrmStyle, type Preferences } from '@/lib/monitoring/preferences'
 import { sendJson } from './ui'
 
 type Ctx = { prefs: Preferences; update: (patch: Partial<Preferences>) => void; saving: boolean; error: string }
@@ -125,13 +125,41 @@ function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: 
   </button>
 }
 
+// Swatch colours only; the real palettes live in globals.css ([data-style]).
+const styleSwatches: { id: CrmStyle; name: string; canvas: string; card: string; ink: string; accent: string }[] = [
+  { id: 'numera', name: 'Numera', canvas: '#f0f2ec', card: '#ffffff', ink: '#121316', accent: '#c0dd11' },
+  { id: 'lavender', name: 'Lavender', canvas: 'linear-gradient(135deg, #dfe5ff, #f7e4f5)', card: '#ffffff', ink: '#1d1a3a', accent: '#5b3df5' },
+  { id: 'blue', name: 'Clear blue', canvas: '#eef2f9', card: '#ffffff', ink: '#0f172a', accent: '#2563eb' },
+  { id: 'glass', name: 'Glass', canvas: 'linear-gradient(135deg, #d4e1f3, #edf0d8)', card: 'rgb(255 255 255 / 0.6)', ink: '#0e1116', accent: '#f2e64d' },
+  { id: 'mono', name: 'Mono', canvas: '#f3f2ee', card: '#ffffff', ink: '#151515', accent: '#151515' },
+  { id: 'sky', name: 'Sky', canvas: 'linear-gradient(180deg, #c6daf1, #edf3f9)', card: '#ffffff', ink: '#1c2633', accent: '#2f7fe0' },
+]
+
+function StylePicker({ value, onChange }: { value: CrmStyle; onChange: (v: CrmStyle) => void }) {
+  return <div role="radiogroup" aria-label="Style" className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+    {styleSwatches.map(s => <button key={s.id} type="button" role="radio" aria-checked={value === s.id} onClick={() => onChange(s.id)}
+      className={`group rounded-2xl p-1.5 text-left transition-shadow ${value === s.id ? 'ring-2 ring-primary' : 'ring-1 ring-border hover:ring-muted-foreground/40'}`}>
+      <span aria-hidden="true" className="flex h-20 gap-1.5 rounded-xl p-2" style={{ background: s.canvas }}>
+        <span className="flex w-4 flex-col items-center gap-1 rounded-md py-1" style={{ background: s.ink }}><span className="size-2 rounded-full" style={{ background: s.accent === s.ink ? '#ffffff' : s.accent }} /></span>
+        <span className="flex flex-1 flex-col justify-between rounded-md p-1.5 shadow-sm" style={{ background: s.card }}>
+          <span className="h-1.5 w-3/4 rounded-full" style={{ background: s.ink, opacity: 0.8 }} />
+          <span className="h-1.5 w-1/2 rounded-full" style={{ background: s.ink, opacity: 0.25 }} />
+          <span className="h-3 w-8 self-end rounded-full" style={{ background: s.accent }} />
+        </span>
+      </span>
+      <span className="flex items-center justify-between px-1 pb-0.5 pt-2 text-sm font-medium">{s.name}{value === s.id && <Check size={14} />}</span>
+    </button>)}
+  </div>
+}
+
 /** Settings → Preferences (each user's own). */
 export function PreferencesSettings() {
   const { prefs, update, saving, error } = usePreferences()
   return <section className="crm-card p-6">
     <div className="flex items-center justify-between"><h2 className="text-lg font-semibold">Preferences</h2>
       <span className="text-xs text-muted-foreground" role="status">{error || (saving ? 'Saving…' : <span className="inline-flex items-center gap-1"><Check size={13} />Saved to your account</span>)}</span></div>
-    <Row title="Theme"><Segmented label="Theme" value={prefs.theme} onChange={theme => update({ theme })} options={[{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, { value: 'system', label: 'System' }]} /></Row>
+    <div className="border-b border-border py-4"><p className="mb-3 text-sm font-medium">Style</p><StylePicker value={prefs.style} onChange={style => update({ style })} /></div>
+    <Row title="Light or dark"><Segmented label="Light or dark" value={prefs.theme} onChange={theme => update({ theme })} options={[{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, { value: 'system', label: 'System' }]} /></Row>
     <Row title="Density"><Segmented label="Density" value={prefs.density} onChange={density => update({ density })} options={[{ value: 'comfortable', label: 'Comfortable' }, { value: 'compact', label: 'Compact' }]} /></Row>
     <Row title="Chat text size"><Segmented label="Chat text size" value={prefs.chatSize} onChange={chatSize => update({ chatSize })} options={[{ value: 'small', label: 'Small' }, { value: 'medium', label: 'Medium' }, { value: 'large', label: 'Large' }]} /></Row>
     <Row title="Open inbox on"><Segmented label="Default inbox tab" value={prefs.defaultTab} onChange={defaultTab => update({ defaultTab })} options={[{ value: 'open', label: 'Open' }, { value: 'waiting', label: 'Waiting' }, { value: 'unread', label: 'Unread' }, { value: 'all', label: 'All' }]} /></Row>

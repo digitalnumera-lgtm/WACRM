@@ -6,6 +6,10 @@ describe('sanitizePreferences', () => {
     expect(sanitizePreferences(null)).toEqual(DEFAULT_PREFERENCES)
     expect(sanitizePreferences({ theme: 'neon', density: 'compact', sound: 'yes', notify: 1, admin: true })).toEqual({ ...DEFAULT_PREFERENCES, density: 'compact' })
   })
+  it('accepts only known styles', () => {
+    expect(sanitizePreferences({ style: 'lavender' }).style).toBe('lavender')
+    expect(sanitizePreferences({ style: 'url(javascript:alert(1))' }).style).toBe('numera')
+  })
   it('keeps valid choices and de-duplicates pinned conversation IDs', () => {
     const id = '11111111-1111-4111-8111-111111111111'
     const prefs = sanitizePreferences({ theme: 'dark', timeFormat: '24h', chatSize: 'large', sound: false, notify: true, contactPanel: false, pinned: [id, id, 'not-an-id'] })

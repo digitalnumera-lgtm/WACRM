@@ -200,8 +200,8 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
               {thread.last_direction === 'outbound' && <CheckCheck size={13} className="mr-1 inline text-emerald-600" aria-label="Agent replied" />}
               <PreviewIcon preview={thread.last_preview} />{previewText(thread.last_preview) || 'Media message'}
             </p>
-            {pending ? <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#C0DD11] px-1.5 text-xs font-bold text-[#121316]" aria-label={`${pending} not replied`}>{pending > 99 ? '99+' : pending}</span>
-              : (waiting ? pending === undefined : thread.marked_unread) && <span className="size-2.5 shrink-0 rounded-full bg-[#C0DD11]" aria-label={waiting ? 'Not replied' : 'Marked unread'} />}
+            {pending ? <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[var(--hl)] px-1.5 text-xs font-bold text-[var(--hl-fg)]" aria-label={`${pending} not replied`}>{pending > 99 ? '99+' : pending}</span>
+              : (waiting ? pending === undefined : thread.marked_unread) && <span className="size-2.5 shrink-0 rounded-full bg-[var(--hl)]" aria-label={waiting ? 'Not replied' : 'Marked unread'} />}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
             <span className="truncate font-medium">{channel?.label ?? 'Unknown number'}</span>
@@ -229,7 +229,7 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
       </div>
       <form role="search" onSubmit={e => { e.preventDefault(); set({ q: search.trim() }) }} className="relative">
         <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input id="inbox-search" aria-label="Search conversations" className="w-full rounded-full bg-muted py-2.5 pl-10 pr-9 text-sm outline-none focus:ring-2 focus:ring-[#C0DD11]" placeholder="Search" maxLength={120} value={search} onChange={e => setSearch(e.target.value)} />
+        <input id="inbox-search" aria-label="Search conversations" className="w-full rounded-full bg-muted py-2.5 pl-10 pr-9 text-sm outline-none focus:ring-2 focus:ring-[var(--hl)]" placeholder="Search" maxLength={120} value={search} onChange={e => setSearch(e.target.value)} />
         {filters.q && <button type="button" aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => { setSearch(''); set({ q: '' }) }}><X size={16} /></button>}
       </form>
       {showFilters && <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted/60 p-3">

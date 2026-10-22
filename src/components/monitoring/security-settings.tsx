@@ -80,7 +80,7 @@ export function SecuritySettings() {
     <h2 className="text-lg font-semibold">Security</h2>
     <div className="flex flex-col gap-3 border-b border-border py-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-3">
-        <span className={`flex size-9 items-center justify-center rounded-full ${on ? 'bg-[#C0DD11] text-[#121316]' : 'bg-muted text-muted-foreground'}`}><ShieldCheck size={17} /></span>
+        <span className={`flex size-9 items-center justify-center rounded-full ${on ? 'bg-[var(--hl)] text-[var(--hl-fg)]' : 'bg-muted text-muted-foreground'}`}><ShieldCheck size={17} /></span>
         <div><p className="text-sm font-medium">Two-step sign-in</p><p className="text-xs text-muted-foreground">{factorId === undefined ? 'Checking…' : on ? 'On: a code from your authenticator app is needed after your password' : 'Off'}</p></div>
       </div>
       {factorId !== undefined && !setup && (on

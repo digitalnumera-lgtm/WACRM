@@ -209,7 +209,7 @@ export function Conversation({ id, thread: listThread, channels, repliesEnabled,
       {thread && <span className="hidden sm:block"><Avatar name={name} seed={thread.customer} /></span>}
       <div className="min-w-0 flex-1">
         <h3 className="font-display flex items-center gap-2 truncate text-lg font-semibold tracking-tight">{name}<PriorityIcon priority={priority} /></h3>
-        <p className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"><span className="truncate">{thread && `+${thread.customer}`}</span>{channel && <span title={`Agent number ${channel.display_number}`} className="hidden shrink-0 rounded-full bg-[#C0DD11]/25 px-2 py-0.5 font-medium text-foreground sm:inline">{channel.label}</span>}</p>
+        <p className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"><span className="truncate">{thread && `+${thread.customer}`}</span>{channel && <span title={`Agent number ${channel.display_number}`} className="hidden shrink-0 rounded-full bg-[var(--hl)]/25 px-2 py-0.5 font-medium text-foreground sm:inline">{channel.label}</span>}</p>
       </div>
       {canManage && workflowReady && thread?.state && <div className="flex items-center gap-1.5">
         <div className="flex">
@@ -284,7 +284,7 @@ function MessageBubble({ message, messages, agent, grouped, clock }: { message: 
   const outbound = message.direction === 'outbound'
   return <div className={`flex ${outbound ? 'justify-end' : 'justify-start'} ${grouped ? '' : 'pt-2.5'}`}>
     <article data-message-id={message.id} className={`relative w-fit max-w-[85%] rounded-3xl px-4 py-2.5 shadow-sm sm:max-w-[68%] ${outbound ? 'bubble-agent' : 'bubble-customer'} ${grouped ? '' : outbound ? 'rounded-br-lg' : 'rounded-bl-lg'}`}>
-      {!grouped && <p className={`mb-0.5 text-xs font-semibold ${outbound ? 'text-[#C0DD11] dark:text-[#121316]/70' : 'text-muted-foreground'}`}>{outbound ? agent ?? 'Agent' : 'Customer'}</p>}
+      {!grouped && <p className={`mb-0.5 text-xs font-semibold ${outbound ? 'text-[var(--bubble-agent-label)]' : 'text-muted-foreground'}`}>{outbound ? agent ?? 'Agent' : 'Customer'}</p>}
       {message.reaction && <div className="text-sm"><span className="text-2xl">{message.reaction.emoji || '—'}</span><p className="text-xs opacity-60">{message.reaction.emoji ? 'Reacted to: ' : 'Reaction removed from: '}{messages.find(m => m.meta_id === message.reaction?.target)?.content || 'an earlier message'}</p></div>}
       {!message.reaction && (message.content || !message.media_id) && <p className="bubble-text whitespace-pre-wrap break-words">{message.content || (message.kind === 'revoke' ? <i className="opacity-60">This message was deleted</i> : message.kind === 'media_placeholder' ? <i className="opacity-60">Media from chat history (WhatsApp did not share the file)</i> : <i className="opacity-60">This message type isn’t shown yet</i>)}</p>}
       <MessageMedia message={message} />

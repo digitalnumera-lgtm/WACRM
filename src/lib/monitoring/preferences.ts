@@ -1,7 +1,11 @@
 // Per-user CRM preferences, stored in the user's Supabase Auth metadata.
 
+export const STYLES = ['numera', 'lavender', 'blue', 'glass', 'mono', 'sky'] as const
+export type CrmStyle = typeof STYLES[number]
+
 export interface Preferences {
   theme: 'light' | 'dark' | 'system'
+  style: CrmStyle
   density: 'comfortable' | 'compact'
   defaultTab: 'open' | 'waiting' | 'unread' | 'all'
   defaultSort: 'latest' | 'oldest'
@@ -14,12 +18,12 @@ export interface Preferences {
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
-  theme: 'light', density: 'comfortable', defaultTab: 'open', defaultSort: 'latest',
+  theme: 'light', style: 'numera', density: 'comfortable', defaultTab: 'open', defaultSort: 'latest',
   timeFormat: '12h', chatSize: 'medium', sound: true, notify: false, contactPanel: true, pinned: [],
 }
 
 const choices: { [K in keyof Preferences]?: readonly Preferences[K][] } = {
-  theme: ['light', 'dark', 'system'], density: ['comfortable', 'compact'], defaultTab: ['open', 'waiting', 'unread', 'all'],
+  theme: ['light', 'dark', 'system'], style: STYLES, density: ['comfortable', 'compact'], defaultTab: ['open', 'waiting', 'unread', 'all'],
   defaultSort: ['latest', 'oldest'], timeFormat: ['12h', '24h'], chatSize: ['small', 'medium', 'large'],
 }
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

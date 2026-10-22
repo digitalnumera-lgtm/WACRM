@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowDown, ArrowUp, ChevronsUp, Minus, SignalHigh } from 'lucide-react'
 import type { ConversationPriority, MonitoringLabel } from '@/lib/monitoring/workflow-types'
 
-export const inputClass = 'w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none focus:border-foreground/30 focus:ring-2 focus:ring-[#C0DD11]/60'
+export const inputClass = 'w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none focus:border-foreground/30 focus:ring-2 focus:ring-[var(--hl)]/60'
 export const buttonClass = 'inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-border bg-card px-3.5 text-sm font-medium transition-colors duration-150 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40'
 export const primaryButton = 'inline-flex h-9 items-center justify-center gap-1.5 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40'
 
