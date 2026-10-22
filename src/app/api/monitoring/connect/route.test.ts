@@ -82,7 +82,7 @@ describe('Connect number', () => {
     exchange = { ok: false, body: { error: { code: 100, message: 'expired' } } }
     const response = await connect(json(input))
     expect(response.status).toBe(400)
-    expect((await response.json()).error).toMatch(/30 seconds/)
+    expect((await response.json()).error).toBe('Meta rejected the sign-in: expired (code 100). Please run Connect again.')
     expect(rpc).not.toHaveBeenCalled(); expect(mocks.subscribe).not.toHaveBeenCalled()
   })
   it('refuses a number owned by another workspace and ambiguous multi-number accounts', async () => {

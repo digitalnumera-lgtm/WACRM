@@ -46,9 +46,11 @@ export async function exchangeSignupCode(code: string): Promise<string> {
   const response = await fetch(url, options())
   if (!response.ok) {
     const error = await metaError(response)
-    throw new ConnectError(error.code === 100 || error.code === 190
-      ? 'Meta rejected the sign-in code (it expires after about 30 seconds). Please run Connect again.'
-      : 'Meta could not complete the connection. Please run Connect again.', 400)
+    // Meta's error text names the problem (expired, already used, wrong secret)
+    // and contains no secrets; show it so a failed connection can be diagnosed.
+    const detail = `${typeof error.message === 'string' ? error.message.slice(0, 200) : `HTTP ${response.status}`} (code ${error.code ?? '?'}${error.error_subcode ? `/${error.error_subcode}` : ''})`
+    console.error('[connect] code exchange failed:', detail)
+    throw new ConnectError(`Meta rejected the sign-in: ${detail}. Please run Connect again.`, 400)
   }
   const data = await response.json() as { access_token?: unknown }
   if (typeof data.access_token !== 'string' || !data.access_token) throw new ConnectError('Meta did not return an access token. Please run Connect again.', 502)
