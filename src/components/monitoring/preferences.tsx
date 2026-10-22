@@ -159,7 +159,7 @@ function StylePicker({ value, onChange }: { value: CrmStyle; onChange: (v: CrmSt
 export function PreferencesSettings() {
   const { prefs, update, saving, error } = usePreferences()
   return <section className="crm-card p-6">
-    <div className="flex items-center justify-between"><h2 className="text-lg font-semibold">Preferences</h2>
+    <div className="flex items-center justify-end">
       <span className="text-xs text-muted-foreground" role="status">{error || (saving ? 'Saving…' : <span className="inline-flex items-center gap-1"><Check size={13} />Saved to your account</span>)}</span></div>
     <div className="border-b border-border py-4"><p className="mb-3 text-sm font-medium">Style</p><StylePicker value={prefs.style} onChange={style => update({ style })} /></div>
     <Row title="Light or dark"><Segmented label="Light or dark" value={prefs.theme} onChange={theme => update({ theme })} options={[{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, { value: 'system', label: 'System' }]} /></Row>

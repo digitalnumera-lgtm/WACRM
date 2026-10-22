@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import dynamic from 'next/dynamic'
-import { ChartNoAxesCombined, CircleHelp, Columns3, Image as ImageIcon, Inbox, LayoutDashboard, LogOut, MessageSquare, Settings, Users } from 'lucide-react'
+import { ChartNoAxesCombined, CircleHelp, Columns3, Image as ImageIcon, Inbox, LayoutDashboard, LogOut, Settings, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { MonitoringThread } from '@/lib/monitoring/types'
@@ -245,7 +245,7 @@ function Workspace({ accountName, me, initialView, initialSection, tracker = fal
         {selected ? <SectionBoundary resetKey={selected}><Conversation key={selected} id={selected} thread={selectedThread} channels={inbox.channels} repliesEnabled={replyEnabled === true && me.full} workflowReady={workflowReady}
           cache={chatCache} contactOpen={contactOpen} onToggleContact={() => setContactOpen(v => !v)} onBack={() => setSelected(null)}
           onPatched={value => patch(selected, value)} onLoaded={onLoaded} onChanged={bump} /></SectionBoundary>
-          : <div className="chat-wallpaper flex h-full flex-col items-center justify-center gap-3 p-10 text-center text-muted-foreground"><span className="flex size-16 items-center justify-center rounded-3xl bg-card shadow-sm"><MessageSquare size={28} /></span><p className="font-medium text-foreground">Select a conversation</p><p className="max-w-xs text-sm"><kbd className="rounded border border-border bg-card px-1">j</kbd> / <kbd className="rounded border border-border bg-card px-1">k</kbd> to move, <kbd className="rounded border border-border bg-card px-1">/</kbd> to search</p></div>}
+          : <div className="chat-wallpaper flex h-full flex-col items-center justify-center gap-3 p-10 text-center text-muted-foreground"><Icon3D name="chat" size={72} /><p className="font-medium text-foreground">Select a conversation</p><p className="max-w-xs text-sm"><kbd className="rounded border border-border bg-card px-1">j</kbd> / <kbd className="rounded border border-border bg-card px-1">k</kbd> to move, <kbd className="rounded border border-border bg-card px-1">/</kbd> to search</p></div>}
       </section>
       {contactOpen && selectedThread && <div className="fixed inset-0 z-40 bg-black/30 xl:static xl:z-auto xl:bg-transparent" onClick={e => { if (e.target === e.currentTarget) setContactOpen(false) }}>
         <div className="ml-auto h-full w-[min(340px,92vw)] overflow-hidden xl:w-auto xl:rounded-3xl xl:border xl:border-border xl:shadow-sm"><ContactPanel key={selectedThread.id} thread={selectedThread} channels={inbox.channels} labels={labels} workflowReady={workflowReady}

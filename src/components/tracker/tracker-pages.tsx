@@ -31,8 +31,8 @@ function PaymentBadge({ status }: { status: string }) {
 
 function Kpi({ label, value, money, dark, hint, icon }: { label: string; value: number; money?: boolean; dark?: boolean; hint?: ReactNode; icon: string }) {
   return <div className={`relative overflow-hidden rounded-3xl p-5 ${dark ? 'bg-[var(--ink)] text-[var(--ink-fg)] dark:bg-[var(--hl)] dark:text-[var(--hl-fg)]' : 'crm-card'}`}>
-    <Icon3D name={icon} size={52} className="absolute right-4 top-4" />
-    <p className={`pr-14 text-sm ${dark ? 'opacity-70' : 'text-muted-foreground'}`}>{label}</p>
+    <Icon3D name={icon} size={40} className="absolute right-4 top-4" />
+    <p className={`pr-12 text-sm ${dark ? 'opacity-70' : 'text-muted-foreground'}`}>{label}</p>
     <p className="font-display mt-2 text-3xl font-semibold tracking-tight">{money && <span className="mr-1 text-lg opacity-60">Rs</span>}<CountUp value={value} /></p>
     {hint && <p className={`mt-1 text-xs ${dark ? 'opacity-70' : 'text-muted-foreground'}`}>{hint}</p>}
   </div>

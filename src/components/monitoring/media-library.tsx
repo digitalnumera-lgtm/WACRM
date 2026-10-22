@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, Download, FileText, ImageOff, MessageSquare, Mic, Play, X } from 'lucide-react'
 import type { MonitoringChannel, MonitoringMessage } from '@/lib/monitoring/types'
 import { MessageMedia } from './message-media'
-import { api, Avatar, buttonClass } from './ui'
+import { api, Avatar, buttonClass, Icon3D } from './ui'
 
 const field = 'min-w-0 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary'
 
@@ -86,7 +86,7 @@ export function MediaLibrary({ channels, refresh, onOpen }: { channels: Monitori
         </li>)}</ul>}
     </div>)}
 
-    {!loading && !error && items.length === 0 && <p className="rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">Nothing here for these filters.</p>}
+    {!loading && !error && items.length === 0 && <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground"><Icon3D name="picture" size={56} />Nothing here for these filters.</div>}
     {items.length < total && <div className="flex justify-center"><button className={buttonClass} disabled={loading} onClick={() => setPage(p => p + 1)}>{loading ? 'Loading…' : 'Load more'}</button></div>}
     {viewer !== null && items[viewer] && <Viewer item={items[viewer]} agent={agent(items[viewer].channel_id)} hasPrev={viewer > 0} hasNext={viewer < items.length - 1}
       onPrev={() => setViewer(v => Math.max(0, (v ?? 0) - 1))} onNext={() => setViewer(v => Math.min(items.length - 1, (v ?? 0) + 1))} onClose={() => setViewer(null)} onOpen={() => onOpen(items[viewer].thread_id)} />}

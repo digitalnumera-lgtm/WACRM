@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { Check, Copy, Pencil, Plus, ShieldCheck, Trash2, UserPlus, X } from 'lucide-react'
+import { Check, Copy, Pencil, Plus, Trash2, UserPlus, X } from 'lucide-react'
 import type { MonitoringChannel } from '@/lib/monitoring/types'
 import { PERMISSION_GROUPS, type Permission } from '@/lib/monitoring/permissions'
 import { api, Avatar, buttonClass, inputClass, primaryButton, sendJson } from './ui'
@@ -30,7 +30,6 @@ export function TeamSettings({ channels }: { channels: MonitoringChannel[] }) {
       : ids.map(id => channels.find(c => c.id === id)?.label ?? 'Removed number').join(', ') || 'No numbers'
 
   return <section className="crm-card p-5">
-    <div className="flex items-center gap-2"><ShieldCheck size={18} className="text-primary" /><h2 className="text-lg font-semibold">Team &amp; roles</h2></div>
     {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
     {team && !team.ready && <p className="mt-3 text-sm text-amber-700">Team access needs the latest database update.</p>}
     {team?.ready && <div className="mt-4 grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">

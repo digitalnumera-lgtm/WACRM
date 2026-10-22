@@ -2,19 +2,128 @@
   "version": 2,
   "icons": {
     "pack": "3d-fluency",
-    "sizes": [40, 48, 56, 64],
+    "sizes": [
+      36,
+      40,
+      44,
+      56,
+      72
+    ],
     "color": "full color (PNG, self-hosted in public/icons/3d at 128px)",
     "note": "Feature and section icons only. Navigation and inline UI icons stay on lucide-react (mono); 3D icons turn to mud below ~32px.",
     "items": {
-      "client-tracker": { "commonName": "accounting" }, "whatsapp": { "commonName": "whatsapp" }, "meta": { "commonName": "meta" },
-      "numbers": { "commonName": "phone" }, "security": { "commonName": "security-checked" }, "team": { "commonName": "conference-call" },
-      "storage": { "commonName": "cloud-storage" }, "labels": { "commonName": "price-tag" }, "import": { "commonName": "archive" },
-      "events": { "commonName": "document" }, "preferences": { "commonName": "gear" }, "key": { "commonName": "key" },
-      "connect": { "commonName": "plug" }, "approve": { "commonName": "approval" }, "deals": { "commonName": "handshake" },
-      "collected": { "commonName": "money-bag" }, "owed": { "commonName": "wallet" }, "sales": { "commonName": "positive-dynamic" },
-      "clients": { "commonName": "people" }, "active": { "commonName": "verified-account" }, "payments": { "commonName": "cash-in-hand" },
-      "commission": { "commonName": "coins" }, "notifications": { "commonName": "bell" }, "reports": { "commonName": "combo-chart" }
+      "client-tracker": {
+        "commonName": "accounting"
+      },
+      "whatsapp": {
+        "commonName": "whatsapp"
+      },
+      "meta": {
+        "commonName": "meta"
+      },
+      "numbers": {
+        "commonName": "phone"
+      },
+      "security": {
+        "commonName": "security-checked"
+      },
+      "team": {
+        "commonName": "conference-call"
+      },
+      "storage": {
+        "commonName": "cloud-storage"
+      },
+      "labels": {
+        "commonName": "price-tag"
+      },
+      "import": {
+        "commonName": "archive"
+      },
+      "events": {
+        "commonName": "document"
+      },
+      "preferences": {
+        "commonName": "gear"
+      },
+      "key": {
+        "commonName": "key"
+      },
+      "connect": {
+        "commonName": "plug"
+      },
+      "approve": {
+        "commonName": "approval"
+      },
+      "deals": {
+        "commonName": "handshake"
+      },
+      "collected": {
+        "commonName": "money-bag"
+      },
+      "owed": {
+        "commonName": "wallet"
+      },
+      "sales": {
+        "commonName": "positive-dynamic"
+      },
+      "clients": {
+        "commonName": "people"
+      },
+      "active": {
+        "commonName": "verified-account"
+      },
+      "payments": {
+        "commonName": "cash-in-hand"
+      },
+      "commission": {
+        "commonName": "coins"
+      },
+      "notifications": {
+        "commonName": "bell"
+      },
+      "reports": {
+        "commonName": "bar-chart"
+      },
+      "waiting": {
+        "commonName": "hourglass"
+      },
+      "new-numbers": {
+        "commonName": "add-user-male"
+      },
+      "received": {
+        "commonName": "chat"
+      },
+      "replies": {
+        "commonName": "comments"
+      },
+      "empty-inbox": {
+        "commonName": "inbox"
+      },
+      "all-answered": {
+        "commonName": "checkmark"
+      },
+      "media": {
+        "commonName": "picture"
+      },
+      "help": {
+        "commonName": "help"
+      },
+      "guide-search": {
+        "commonName": "search"
+      },
+      "tools": {
+        "commonName": "tools"
+      },
+      "wrench": {
+        "commonName": "wrench"
+      },
+      "calendar": {
+        "commonName": "calendar"
+      },
+      "contacts": {
+        "commonName": "contacts"
+      }
     }
   },
-  "license": "Icons8 free license: keep the 'Icons by Icons8' link (Settings → Preferences)."
+  "license": "Icons8 free license: keep the 'Icons by Icons8' link (Settings \u2192 Preferences)."
 }

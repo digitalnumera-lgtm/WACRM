@@ -77,7 +77,6 @@ export function SecuritySettings() {
 
   const on = !!factorId
   return <section className="crm-card p-6">
-    <h2 className="text-lg font-semibold">Security</h2>
     <div className="flex flex-col gap-3 border-b border-border py-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-3">
         <span className={`flex size-9 items-center justify-center rounded-full ${on ? 'bg-[var(--hl)] text-[var(--hl-fg)]' : 'bg-muted text-muted-foreground'}`}><ShieldCheck size={17} /></span>

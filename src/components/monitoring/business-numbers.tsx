@@ -38,7 +38,7 @@ export function BusinessNumbers({ channels, onSaved, onOpen, refresh = 0 }: { ch
   }
   const visible = channels.filter(channel => channel.active === (tab === 'active'))
   return <section className="space-y-4" aria-label="Manage business numbers">
-    <div><h3 className="text-lg font-semibold">Your numbers</h3><p className="mt-1 text-sm text-muted-foreground">Agent numbers this CRM monitors.</p></div>
+    <h3 className="text-lg font-semibold">Your numbers</h3>
     <div className="flex gap-2" aria-label="Number status">{(['active', 'removed'] as const).map(value => <button key={value} onClick={() => { setTab(value); setConfirm(null) }} aria-pressed={tab === value} className={`rounded-lg px-4 py-2 text-sm font-medium ${tab === value ? 'bg-primary text-primary-foreground' : 'border border-border hover:bg-muted'}`}>{value === 'active' ? 'Active' : 'Removed'} ({channels.filter(c => c.active === (value === 'active')).length})</button>)}</div>
     {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
     {notice && <p role="status" className="rounded-lg bg-muted p-3 text-sm">{notice}</p>}

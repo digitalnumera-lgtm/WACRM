@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { HardDrive } from 'lucide-react'
 import type { StorageSettings as Settings } from '@/lib/monitoring/storage'
 import { api, buttonClass, inputClass, primaryButton, sendJson } from './ui'
 
@@ -39,7 +38,6 @@ export function StorageSettings() {
   const percent = Math.min(100, Math.round((used / cap) * 100))
 
   return <section className="crm-card p-5">
-    <div className="flex items-center gap-2"><HardDrive size={18} className="text-primary" /><h2 className="text-lg font-semibold">Media storage</h2></div>
     {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
     {data && !data.ready && <p className="mt-3 text-sm text-amber-700">Storage tools need the latest database update.</p>}
     {data && form && <>

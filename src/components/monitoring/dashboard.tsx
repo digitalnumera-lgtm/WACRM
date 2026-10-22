@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState, type ReactNode } from 'react'
-import { ArrowDownRight, ArrowUpRight, CheckCheck, Clock, Inbox, MailWarning, MessageCircle, Reply, UserPlus, Users } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, CheckCheck, Clock, Inbox, MailWarning } from 'lucide-react'
 import type { MonitoringChannel } from '@/lib/monitoring/types'
 import type { InboxTab } from './inbox-list'
-import { api, waitingFor } from './ui'
+import { api, Icon3D, waitingFor } from './ui'
 import { ActivePill, CountUp } from './motion'
 
 type Overview = {
@@ -25,9 +25,9 @@ function Delta({ now, before }: { now: number; before: number }) {
     {up ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}{Math.abs(change)}%</span>
 }
 
-function Kpi({ label, value, icon: Icon, children, dark }: { label: string; value: number | undefined; icon: typeof Inbox; children?: ReactNode; dark?: boolean }) {
+function Kpi({ label, value, icon, children, dark }: { label: string; value: number | undefined; icon: string; children?: ReactNode; dark?: boolean }) {
   return <div className={`rounded-3xl p-5 ${dark ? 'bg-[var(--ink)] text-[var(--ink-fg)] dark:bg-[var(--hl)] dark:text-[var(--hl-fg)]' : 'crm-card'}`}>
-    <div className="flex items-center justify-between"><span className={`flex size-9 items-center justify-center rounded-full ${dark ? 'bg-white/10 dark:bg-black/10' : 'bg-muted'}`}><Icon size={17} /></span>{children}</div>
+    <div className="flex items-start justify-between"><Icon3D name={icon} size={40} />{children}</div>
     <p className={`mt-5 text-sm ${dark ? 'opacity-70' : 'text-muted-foreground'}`}>{label}</p>
     <p className="font-display mt-1 text-4xl font-semibold tracking-tight"><CountUp value={value} /></p>
   </div>
@@ -57,11 +57,11 @@ export function Dashboard({ refresh, channels, onTab, onChannel }: { refresh: nu
       {periods.map(p => <button key={p.days} role="radio" aria-checked={days === p.days} onClick={() => setDays(p.days)} className={`relative isolate rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${days === p.days ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{days === p.days && <ActivePill id="dashboard-period" className="rounded-full bg-primary" />}{p.label}</button>)}
     </div>
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-      <Kpi dark label="Waiting for an agent now" value={counts?.waiting} icon={Clock} />
-      <Kpi label="New numbers today" value={data?.newNumbers?.today} icon={UserPlus}>{data?.newNumbers && <span className="text-xs text-muted-foreground">Yesterday {data.newNumbers.yesterday}</span>}</Kpi>
-      <Kpi label={`Messages received · ${period}`} value={data?.volume.inbound[0]} icon={MessageCircle}>{data && <Delta now={data.volume.inbound[0]} before={data.volume.inbound[1]} />}</Kpi>
-      <Kpi label={`Agent replies · ${period}`} value={data?.volume.outbound[0]} icon={Reply}>{data && <Delta now={data.volume.outbound[0]} before={data.volume.outbound[1]} />}</Kpi>
-      <Kpi label={`Active conversations · ${period}`} value={data?.activeConversations} icon={Users} />
+      <Kpi dark label="Waiting for an agent now" value={counts?.waiting} icon="hourglass" />
+      <Kpi label="New numbers today" value={data?.newNumbers?.today} icon="add-user-male">{data?.newNumbers && <span className="text-xs text-muted-foreground">Yesterday {data.newNumbers.yesterday}</span>}</Kpi>
+      <Kpi label={`Messages received · ${period}`} value={data?.volume.inbound[0]} icon="chat">{data && <Delta now={data.volume.inbound[0]} before={data.volume.inbound[1]} />}</Kpi>
+      <Kpi label={`Agent replies · ${period}`} value={data?.volume.outbound[0]} icon="comments">{data && <Delta now={data.volume.outbound[0]} before={data.volume.outbound[1]} />}</Kpi>
+      <Kpi label={`Active conversations · ${period}`} value={data?.activeConversations} icon="people" />
     </div>
     <section className="crm-card p-5">
       <h2 className="font-display text-lg font-semibold">Needs attention</h2>

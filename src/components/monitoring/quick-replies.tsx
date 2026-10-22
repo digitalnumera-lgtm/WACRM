@@ -79,7 +79,7 @@ export function QuickRepliesPanel() {
   }
   return <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(300px,420px)]">
     <section aria-label="Saved reply library" className="space-y-4 crm-card p-6">
-      <div><h3 className="font-semibold">Saved replies</h3><p className="mt-1 text-sm text-muted-foreground">Reusable text for management. Insert a reply into a conversation, personalize it, then send.</p></div>
+      <div />
       <label className="flex items-center gap-2"><Search size={18} /><input aria-label="Search saved replies" className={input} placeholder="Search by title" maxLength={120} value={search} onChange={e => setSearch(e.target.value)} /></label>
       {loadError && <p role="alert" className="text-sm text-destructive">{loadError} <button className={button} onClick={() => setRevision(n => n + 1)}>Refresh replies</button></p>}
       <ul className="space-y-3">{data?.replies.map(reply => <li key={reply.id} className="rounded-lg border border-border p-4"><p className="font-medium">{reply.title}</p><p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">{reply.body}</p><div className="mt-3 flex flex-wrap gap-2"><button disabled={busy} className={button} onClick={() => { setEditing(reply); setTitle(reply.title); setBody(reply.body); setError(''); setNotice('') }}>Edit</button>{remove === reply.id ? <><button className={button + ' text-destructive'} disabled={busy} onClick={() => void destroy(reply)}>Confirm removal</button><button className={button} onClick={() => setRemove(null)}>Cancel removal</button></> : <button disabled={busy} className={button} onClick={() => setRemove(reply.id)}>Remove</button>}</div></li>)}</ul>
