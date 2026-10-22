@@ -63,6 +63,8 @@ export async function DELETE(request: Request, context: Context) {
     if (result.error) return privateJson({ error: result.error.message || 'Unable to remove this member.' }, 400)
     const cleared = await monitoringAdmin().from('monitoring_member_access').delete().eq('account_id', accountId).eq('user_id', memberId)
     if (cleared.error) throw cleared.error
+    // Client Tracker access goes too (the table may not be installed yet).
+    await monitoringAdmin().from('tracker_access').delete().eq('account_id', accountId).eq('user_id', memberId)
     forgetMemberAccess(accountId, memberId)
     forgetAccountContext(memberId)
     return privateJson({ removed: true })

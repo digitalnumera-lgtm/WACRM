@@ -16,6 +16,7 @@ import { LabelsSettings, useLabels } from './labels'
 import { AccessProvider } from './access'
 import { SectionBoundary } from './error-boundary'
 import { SortableNav, orderedPages } from './sortable-nav'
+import { lastPanel, rememberPanel } from '@/components/tracker/panel'
 import { ActivePill, MotionRoot } from './motion'
 import { playChime, PreferencesProvider, PreferencesSettings, useDarkMode, usePreferences } from './preferences'
 import { MonitoringSettings } from './settings-panel'
@@ -28,6 +29,7 @@ const ContactsPanel = dynamic(() => import('./contacts-panel').then(m => m.Conta
 const MediaLibrary = dynamic(() => import('./media-library').then(m => m.MediaLibrary), { loading })
 const ReportsPanel = dynamic(() => import('./activity-panels').then(m => m.ReportsPanel), { loading })
 const MessageBrowser = dynamic(() => import('./activity-panels').then(m => m.MessageBrowser), { loading })
+const PanelSwitch = dynamic(() => import('@/components/tracker/tracker-settings').then(m => m.PanelSwitch), { loading })
 const TeamSettings = dynamic(() => import('./team-settings').then(m => m.TeamSettings), { loading })
 const StorageSettings = dynamic(() => import('./storage-settings').then(m => m.StorageSettings), { loading })
 const SecuritySettings = dynamic(() => import('./security-settings').then(m => m.SecuritySettings), { loading })
@@ -41,7 +43,7 @@ const ChannelManager = dynamic(() => import('./admin-panels').then(m => m.Channe
 const ReviewEvents = dynamic(() => import('./admin-panels').then(m => m.ReviewEvents), { loading })
 
 type View = 'Inbox' | 'Dashboard' | 'Leads' | 'Contacts' | 'Media' | 'Reports' | 'Settings'
-export type SettingsSection = 'preferences' | 'security' | 'team' | 'numbers' | 'storage' | 'labels' | 'replies' | 'import' | 'events' | 'access' | 'general'
+export type SettingsSection = 'panel' | 'preferences' | 'security' | 'team' | 'numbers' | 'storage' | 'labels' | 'replies' | 'import' | 'events' | 'access' | 'general'
 
 const nav: { name: View; label: string; icon: typeof Inbox; need: Permission }[] = [
   { name: 'Inbox', label: 'Inbox', icon: Inbox, need: 'view_inbox' },
@@ -51,8 +53,9 @@ const nav: { name: View; label: string; icon: typeof Inbox; need: Permission }[]
   { name: 'Media', label: 'Media', icon: ImageIcon, need: 'view_media' },
   { name: 'Reports', label: 'Reports', icon: ChartNoAxesCombined, need: 'view_inbox' },
 ]
-type Section = { id: SettingsSection; label: string; group: 'You' | 'Workspace' | 'Advanced'; allowed: (me: MonitoringMe, replies: boolean) => boolean }
+type Section = { id: SettingsSection; label: string; group: 'You' | 'Workspace' | 'Advanced'; allowed: (me: MonitoringMe, replies: boolean, tracker?: boolean) => boolean }
 const sections: Section[] = [
+  { id: 'panel', label: 'Client Tracker', group: 'You', allowed: (_me, _replies, tracker) => !!tracker },
   { id: 'preferences', label: 'Preferences', group: 'You', allowed: () => true },
   { id: 'security', label: 'Security', group: 'You', allowed: () => true },
   { id: 'team', label: 'Team & roles', group: 'Workspace', allowed: me => me.full },
@@ -80,15 +83,15 @@ export function MonitoringSignOut({ compact }: { compact?: boolean }) {
     : <button className={buttonClass} onClick={signOut}>Sign out</button>}{error && <p role="alert" className="text-xs text-destructive">{error}</p>}</>
 }
 
-export function MonitoringWorkspace(props: { accountName: string; me: MonitoringMe; preferences: Preferences; initialView?: 'Inbox' | 'Settings'; initialSection?: SettingsSection }) {
+export function MonitoringWorkspace(props: { accountName: string; me: MonitoringMe; preferences: Preferences; initialView?: 'Inbox' | 'Settings'; initialSection?: SettingsSection; tracker?: boolean }) {
   return <PreferencesProvider initial={props.preferences}><AccessProvider me={props.me}><Workspace {...props} /></AccessProvider></PreferencesProvider>
 }
 
-function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: { accountName: string; me: MonitoringMe; initialView?: 'Inbox' | 'Settings'; initialSection?: SettingsSection }) {
+function Workspace({ accountName, me, initialView = 'Inbox', initialSection, tracker = false }: { accountName: string; me: MonitoringMe; initialView?: 'Inbox' | 'Settings'; initialSection?: SettingsSection; tracker?: boolean }) {
   const { prefs, update: updatePrefs } = usePreferences()
   const dark = useDarkMode(prefs.theme)
   const [view, setView] = useState<View>(initialView)
-  const [section, setSection] = useState<SettingsSection>(() => initialSection && sections.some(s => s.id === initialSection && s.allowed(me, true)) ? initialSection : 'preferences')
+  const [section, setSection] = useState<SettingsSection>(() => initialSection && sections.some(s => s.id === initialSection && s.allowed(me, true, tracker)) ? initialSection : 'preferences')
   const [reportsTab, setReportsTab] = useState<'activity' | 'log'>('activity')
   const [filters, setFilters] = useState<InboxFilters>(() => ({ ...emptyFilters, tab: prefs.defaultTab, sort: prefs.defaultSort }))
   const [selected, setSelected] = useState<string | null>(null)
@@ -104,6 +107,11 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
   // Labels and settings load once; changes made here reload them explicitly.
   const { labels, ready: labelsReady, reload: reloadLabels } = useLabels(0)
   const workflowReady = inbox.workflowReady
+  // Reopen the Client Tracker when that was the panel used last in this browser.
+  useEffect(() => {
+    if (tracker && lastPanel() === 'tracker' && !window.location.search) window.location.replace('/tracker')
+    else rememberPanel('crm')
+  }, [tracker])
   const bump = useCallback(() => setRefresh(n => n + 1), [])
 
   useEffect(() => {
@@ -247,13 +255,14 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
           </div>}
           {view === 'Settings' && <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
             <nav aria-label="Settings" className="crm-card flex gap-1 overflow-x-auto p-2 lg:sticky lg:top-0 lg:flex-col lg:gap-0.5 lg:self-start">
-              {(['You', 'Workspace', 'Advanced'] as const).map(group => { const items = sections.filter(s => s.group === group && s.allowed(me, replyEnabled === true)); return items.length ? <div key={group} className="flex gap-1 lg:block lg:pb-2">
+              {(['You', 'Workspace', 'Advanced'] as const).map(group => { const items = sections.filter(s => s.group === group && s.allowed(me, replyEnabled === true, tracker)); return items.length ? <div key={group} className="flex gap-1 lg:block lg:pb-2">
                 <p className="hidden px-3 pb-1 pt-2 text-xs font-medium text-muted-foreground lg:block">{group}</p>
                 {items.map(s => <button key={s.id} onClick={() => setSection(s.id)} aria-current={section === s.id ? 'page' : undefined}
                   className={`flex w-full shrink-0 items-center rounded-2xl px-3 py-2 text-left text-sm font-medium ${section === s.id ? 'bg-primary text-primary-foreground' : 'text-foreground/80 hover:bg-muted'}`}>{s.label}</button>)}
               </div> : null })}
             </nav>
             <div className="min-w-0 space-y-5">
+              {section === 'panel' && tracker && <PanelSwitch target="tracker" available />}
               {section === 'preferences' && <PreferencesSettings />}
               {section === 'security' && <SecuritySettings />}
               {section === 'team' && me.full && <TeamSettings channels={liveChannels} />}
