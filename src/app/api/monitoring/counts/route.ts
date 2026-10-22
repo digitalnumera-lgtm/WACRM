@@ -1,4 +1,4 @@
-import { allowedChannels, requireMonitoring } from '@/lib/monitoring/team-access'
+import { allowedChannels, hideNumbers, requireMonitoring } from '@/lib/monitoring/team-access'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { monitoringError, privateJson } from '@/lib/monitoring/http'
 import { applyInboxFilters, applyInboxTab, inboxTabs, missingWorkflowSchema, readInboxFilters } from '@/lib/monitoring/inbox'
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     const db = monitoringAdmin()
     const countFor = (tab: typeof inboxTabs[number]) => {
       const base = db.from('monitoring_inbox').select('id', { count: 'exact', head: true }).eq('account_id', accountId)
-      return applyInboxTab(applyInboxFilters(base, { ...filters, channelIds }), tab) as PromiseLike<{ count: number | null; error: unknown }>
+      return hideNumbers(access, applyInboxTab(applyInboxFilters(base, { ...filters, channelIds }), tab)) as PromiseLike<{ count: number | null; error: unknown }>
     }
     const results = await Promise.all(inboxTabs.map(countFor))
     const failed = results.find(r => r.error)

@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     if (!SYNC_TYPES.includes(type)) throw new MonitoringInputError('Choose contacts or history.')
     const channel = await supabase.from('monitoring_channels').select('id,phone_number_id').eq('account_id', accountId).eq('id', channelId).maybeSingle()
     if (channel.error) throw channel.error
-    if (!channel.data || !canSeeChannel(access, channel.data.id)) return privateJson({ error: 'Number not found.' }, 404)
+    if (!channel.data || !canSeeChannel(access, channel.data.id, { includeHidden: true })) return privateJson({ error: 'Number not found.' }, 404)
     const db = monitoringAdmin()
     const record = await readConnection(db, accountId, channelId)
     if (!record) return privateJson({ error: 'This number was not connected through Connect number, so Meta history sharing is not available for it.' }, 409)

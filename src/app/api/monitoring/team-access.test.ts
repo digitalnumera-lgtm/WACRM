@@ -15,7 +15,9 @@ import { GET as team } from './team/route'
 import { POST as invite } from './team/invites/route'
 import { POST as createRole } from './team/roles/route'
 import { runStorageCleanup } from '@/lib/monitoring/storage'
-import { allowedChannels, scopeChannels } from '@/lib/monitoring/team-access'
+import { allowedChannels, canSeeChannel, hideNumbers, scopeChannels } from '@/lib/monitoring/team-access'
+import { PATCH as setNumber } from './channels/[id]/route'
+import { GET as counts } from './counts/route'
 
 const company = '11111111-1111-4111-8111-111111111111'
 const chanA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -47,7 +49,7 @@ function database() {
     from(table: string) {
       const filters: [string, string, unknown][] = []
       let op = 'select', value: unknown, head = false
-      const matches = (row: Row) => filters.every(([kind, key, v]) => kind === 'eq' ? row[key] === v : kind === 'neq' ? row[key] !== v : kind === 'in' ? (v as unknown[]).includes(row[key]) : kind === 'is' ? row[key] === v || (v === null && row[key] === undefined) : kind === 'ilike' ? String(row[key] ?? '').toLowerCase() === String(v).replace(/\\(.)/g, '$1').toLowerCase() : true)
+      const matches = (row: Row) => filters.every(([kind, key, v]) => kind === 'eq' ? row[key] === v : kind === 'neq' ? row[key] !== v : kind === 'in' ? (v as unknown[]).includes(row[key]) : kind === 'notin' ? !(v as unknown[]).includes(row[key]) : kind === 'is' ? row[key] === v || (v === null && row[key] === undefined) : kind === 'ilike' ? String(row[key] ?? '').toLowerCase() === String(v).replace(/\\(.)/g, '$1').toLowerCase() : true)
       const run = () => {
         if (op !== 'select') writes.push({ table, op, value })
         if (op === 'insert' || op === 'upsert') { const list = Array.isArray(value) ? value : [value]; return { data: list.map(v => ({ id: `${table}-new`, expires_at: '2026-10-29T00:00:00Z', ...(v as Row) })), error: null, count: null } }
@@ -61,7 +63,7 @@ function database() {
         eq(k: string, v: unknown) { filters.push(['eq', k, v]); return query }, neq(k: string, v: unknown) { filters.push(['neq', k, v]); return query }, in(k: string, v: unknown) { filters.push(['in', k, v]); return query },
         is(k: string, v: unknown) { filters.push(['is', k, v]); return query },
         ilike(k: string, v: unknown) { filters.push(['ilike', k, v]); return query },
-        not() { return query }, or() { return query }, gt() { return query }, gte() { return query }, lt() { return query }, contains() { return query },
+        not(k: string, operator: string, v: unknown) { if (operator === 'in') filters.push(['notin', k, String(v).replace(/^\(|\)$/g, '').split(',')]); return query }, or() { return query }, gt() { return query }, gte() { return query }, lt() { return query }, contains() { return query },
         order() { return query }, limit() { return query }, range() { return query },
         single() { const r = run(); return Promise.resolve({ ...r, data: Array.isArray(r.data) ? r.data[0] ?? null : r.data }) },
         maybeSingle() { const r = run(); return Promise.resolve({ ...r, data: Array.isArray(r.data) ? r.data[0] ?? null : r.data }) },
@@ -198,6 +200,32 @@ describe('team management', () => {
   })
 })
 
+describe('paused or removed numbers', () => {
+  beforeEach(() => {
+    asOwner()
+    rows.monitoring_channels = [{ id: chanA, account_id: company, label: 'Ahmad', active: true }, { id: chanB, account_id: company, label: 'Ahmed', active: false }]
+    rows.monitoring_inbox = [{ id: threadA, account_id: company, channel_id: chanA, last_direction: 'inbound' }, { id: threadB, account_id: company, channel_id: chanB, last_direction: 'inbound' }]
+    rows.monitoring_threads = [{ id: threadA, account_id: company, channel_id: chanA, last_direction: 'inbound', message_count: 1 }, { id: threadB, account_id: company, channel_id: chanB, last_direction: 'inbound', message_count: 1 }]
+  })
+
+  it('hides their chats, counts and alerts but keeps the number in Settings', async () => {
+    const body = await (await list(get('/api/monitoring?scroll=1&tab=all'))).json()
+    expect(body.threads.map((t: Row) => t.id)).toEqual([threadA])
+    expect(body.channels.map((c: Row) => c.id)).toEqual([chanA, chanB])
+    expect((await (await list(get(`/api/monitoring?scroll=1&tab=all&channel=${chanB}`))).json()).threads).toEqual([])
+    expect((await (await list(get('/api/monitoring?scroll=1&tab=all&agent=Ahmed'))).json()).threads).toEqual([])
+    expect((await (await counts(get('/api/monitoring/counts'))).json()).counts.all).toBe(1)
+    expect((await thread(get(`/api/monitoring/threads/${threadB}`), ctx(threadB))).status).toBe(404)
+    const alerts = await (await latest(get('/api/monitoring/latest?since=2026-01-01T00:00:00Z'))).json()
+    expect(alerts.threads.map((t: Row) => t.id)).toEqual([threadA])
+  })
+
+  it('can still be restored', async () => {
+    expect((await setNumber(send(`/api/monitoring/channels/${chanB}`, 'PATCH', { active: true }), ctx(chanB))).status).toBe(200)
+    expect(writes).toContainEqual({ table: 'monitoring_channels', op: 'update', value: { active: true } })
+  })
+})
+
 describe('scope helpers', () => {
   it('intersects filters with assigned numbers', () => {
     expect(allowedChannels({ channelIds: null }, null)).toBeNull()
@@ -206,6 +234,22 @@ describe('scope helpers', () => {
     const query = { in: vi.fn().mockReturnThis() }
     scopeChannels({ channelIds: [] }, query)
     expect(query.in).toHaveBeenCalledWith('channel_id', ['00000000-0000-0000-0000-000000000000'])
+  })
+
+  it('leaves out hidden numbers unless asked to include them', () => {
+    const hidden = { channelIds: null, hiddenIds: [chanB] }
+    expect(allowedChannels(hidden, null)).toBeNull()
+    expect(allowedChannels(hidden, [chanA, chanB])).toEqual([chanA])
+    expect(allowedChannels({ channelIds: [chanA, chanB], hiddenIds: [chanB] }, null)).toEqual([chanA])
+    expect(canSeeChannel(hidden, chanB)).toBe(false)
+    expect(canSeeChannel(hidden, chanB, { includeHidden: true })).toBe(true)
+    const query = { in: vi.fn().mockReturnThis(), not: vi.fn().mockReturnThis() }
+    scopeChannels(hidden, query)
+    expect(query.not).toHaveBeenCalledWith('channel_id', 'in', `(${chanB})`)
+    query.not.mockClear()
+    scopeChannels(hidden, query, 'id', { includeHidden: true })
+    expect(query.not).not.toHaveBeenCalled()
+    expect(hideNumbers({ hiddenIds: [] }, query)).toBe(query)
   })
 })
 

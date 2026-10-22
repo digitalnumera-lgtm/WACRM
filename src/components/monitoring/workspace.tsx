@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import dynamic from 'next/dynamic'
 import { ChartNoAxesCombined, Columns3, Image as ImageIcon, Inbox, LayoutDashboard, LogOut, MessageSquare, Settings, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -95,6 +95,8 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
   const settingsRevision = useRef(0)
   const [chatCache] = useState(() => new Map<string, ChatSnapshot>())
   const inbox = useInbox(filters, refresh)
+  // Paused or removed numbers only appear in Settings → Business numbers.
+  const liveChannels = useMemo(() => inbox.channels.filter(c => c.active), [inbox.channels])
   // Labels and settings load once; changes made here reload them explicitly.
   const { labels, ready: labelsReady, reload: reloadLabels } = useLabels(0)
   const workflowReady = inbox.workflowReady
@@ -218,16 +220,16 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
           <header className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-sm text-muted-foreground">{accountName}</p><h1 className="font-display text-3xl font-semibold tracking-tight">{view === 'Leads' ? 'Leads board' : view}</h1></div>
             <span className="md:hidden"><MonitoringSignOut compact /></span></header>
           <SectionBoundary resetKey={`${view}:${section}:${reportsTab}`}>
-          {view === 'Dashboard' && <Dashboard refresh={refresh} channels={inbox.channels} onTab={tab => showInbox({ tab, sort: tab === 'waiting' ? 'oldest' : prefs.defaultSort })} onChannel={id => showInbox({ tab: 'all', channel: id })} />}
-          {view === 'Leads' && <LeadsBoard channels={inbox.channels} refresh={refresh} onOpen={open} />}
-          {view === 'Contacts' && <ContactsPanel channels={inbox.channels} onOpen={open} />}
-          {view === 'Media' && <MediaLibrary channels={inbox.channels} refresh={refresh} onOpen={open} />}
+          {view === 'Dashboard' && <Dashboard refresh={refresh} channels={liveChannels} onTab={tab => showInbox({ tab, sort: tab === 'waiting' ? 'oldest' : prefs.defaultSort })} onChannel={id => showInbox({ tab: 'all', channel: id })} />}
+          {view === 'Leads' && <LeadsBoard channels={liveChannels} refresh={refresh} onOpen={open} />}
+          {view === 'Contacts' && <ContactsPanel channels={liveChannels} onOpen={open} />}
+          {view === 'Media' && <MediaLibrary channels={liveChannels} refresh={refresh} onOpen={open} />}
           {view === 'Reports' && <div className="space-y-5">
             <div role="tablist" aria-label="Reports" className="inline-flex gap-1 rounded-full bg-card p-1 shadow-sm">
               {([['activity', 'Activity & agents', 'view_reports'], ['log', 'Message search', 'view_inbox']] as const).filter(([, , need]) => can(me, need)).map(([id, label]) =>
                 <button key={id} role="tab" aria-selected={reportsTab === id || !can(me, 'view_reports')} onClick={() => setReportsTab(id)} className={`rounded-full px-4 py-1.5 text-sm font-medium ${reportsTab === id || !can(me, 'view_reports') ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{label}</button>)}
             </div>
-            {reportsTab === 'activity' && can(me, 'view_reports') ? <ReportsPanel channels={inbox.channels} refresh={refresh} /> : <MessageBrowser channels={inbox.channels} refresh={refresh} onOpen={open} />}
+            {reportsTab === 'activity' && can(me, 'view_reports') ? <ReportsPanel channels={liveChannels} refresh={refresh} /> : <MessageBrowser channels={liveChannels} refresh={refresh} onOpen={open} />}
           </div>}
           {view === 'Settings' && <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
             <nav aria-label="Settings" className="crm-card flex gap-1 overflow-x-auto p-2 lg:sticky lg:top-0 lg:flex-col lg:gap-0.5 lg:self-start">
@@ -239,16 +241,16 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
             </nav>
             <div className="min-w-0 space-y-5">
               {section === 'preferences' && <PreferencesSettings />}
-              {section === 'team' && me.full && <TeamSettings channels={inbox.channels} />}
+              {section === 'team' && me.full && <TeamSettings channels={liveChannels} />}
               {section === 'numbers' && can(me, 'manage_numbers') && <Panel><ConnectNumber onConnected={bump} /><BusinessNumbers channels={inbox.channels} refresh={refresh} onSaved={bump} onOpen={id => showInbox({ tab: 'all', channel: id })} />
                 <details className="crm-card p-4"><summary className="cursor-pointer text-sm font-medium text-muted-foreground">Advanced: add a number without chat history</summary>
                   <div className="mt-4 space-y-6"><div><h4 className="text-sm font-semibold">From the Meta business portfolio</h4><PortfolioPicker onSaved={bump} /></div><div><h4 className="text-sm font-semibold">By phone number ID and token</h4><ChannelManager channels={inbox.channels} onSaved={bump} /></div></div></details></Panel>}
               {section === 'storage' && can(me, 'manage_settings') && <StorageSettings />}
               {section === 'labels' && can(me, 'manage_labels') && <LabelsSettings labels={labels} ready={labelsReady} onChanged={() => { reloadLabels(); bump() }} />}
               {section === 'replies' && me.full && <QuickRepliesPanel />}
-              {section === 'access' && can(me, 'manage_numbers') && <RenewMetaAccess channels={inbox.channels} />}
-              {section === 'import' && can(me, 'manage_numbers') && <HistoryImport channels={inbox.channels} onSaved={bump} />}
-              {section === 'events' && can(me, 'manage_numbers') && <ReviewEvents channels={inbox.channels} />}
+              {section === 'access' && can(me, 'manage_numbers') && <RenewMetaAccess channels={liveChannels} />}
+              {section === 'import' && can(me, 'manage_numbers') && <HistoryImport channels={liveChannels} onSaved={bump} />}
+              {section === 'events' && can(me, 'manage_numbers') && <ReviewEvents channels={liveChannels} />}
               {section === 'general' && me.full && <MonitoringSettings enabled={replyEnabled} onSaved={enabled => { settingsRevision.current++; setReplyEnabled(enabled); bump() }} />}
             </div>
           </div>}
