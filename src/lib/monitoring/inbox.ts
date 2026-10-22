@@ -16,6 +16,8 @@ export type InboxFilters = {
   tab: InboxTab; channelIds: string[] | null; status: string | null; label: string | null;
   priority: Priority | null; search: string | null; sort: typeof inboxSorts[number];
   cursor: ReturnType<typeof readCursor>
+  /** Conversations with a message matching the search (any message, not just the last). */
+  messageThreads?: string[]
 }
 
 /** True when the optional workflow schema has not been installed yet. */
@@ -28,6 +30,31 @@ export function searchLiteral(search: string) {
   // Quote PostgREST operands and escape ILIKE wildcards so user input cannot
   // inject filters or broaden a company query.
   return search.replace(/\\/g, '\\\\').replace(/[%_*]/g, '\\$&').replace(/"/g, '\\"')
+}
+
+/**
+ * Phone-number forms of a search. Numbers are stored with the country code
+ * (92301…), so 0301…, +92 301…, 0092 301… and 92301… all find the same chat.
+ */
+export function numberVariants(search: string): string[] {
+  if (!/^[\d\s()+.-]+$/.test(search)) return []
+  const digits = search.replace(/\D/g, '')
+  if (digits.length < 3) return []
+  const variants = new Set([digits])
+  if (digits.startsWith('00')) variants.add(digits.slice(2))
+  else if (digits.startsWith('0')) variants.add(`92${digits.slice(1)}`)
+  return [...variants]
+}
+
+/** PostgREST `or` filter for the inbox search box. */
+export function searchFilter(search: string, messageThreads: readonly string[] = []) {
+  const literal = searchLiteral(search)
+  const numbers = numberVariants(search)
+  return [
+    ...(numbers.length ? numbers : [literal]).map(n => `customer.ilike."%${n}%"`),
+    `customer_name.ilike."%${literal}%"`, `last_preview.ilike."%${literal}%"`,
+    ...(messageThreads.length ? [`id.in.(${messageThreads.join(',')})`] : []),
+  ].join(',')
 }
 
 export function readInboxFilters(params: URLSearchParams): Omit<InboxFilters, 'channelIds'> & { channel: string | null; agent: string | null } {
@@ -64,10 +91,7 @@ export function applyInboxFilters<Q extends Query>(query: Q, f: Omit<InboxFilter
   if (f.status) q = q.eq('lead_status', f.status)
   if (f.priority) q = q.eq('priority', f.priority)
   if (f.label) q = q.contains('label_ids', [f.label])
-  if (f.search) {
-    const literal = searchLiteral(f.search)
-    q = q.or(`customer.ilike."%${literal}%",customer_name.ilike."%${literal}%",last_preview.ilike."%${literal}%"`)
-  }
+  if (f.search) q = q.or(searchFilter(f.search, f.messageThreads))
   return q
 }
 

@@ -231,7 +231,7 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
       </div>
       <form role="search" onSubmit={e => { e.preventDefault(); set({ q: search.trim() }) }} className="relative">
         <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input id="inbox-search" aria-label="Search conversations" className="w-full rounded-full bg-muted py-2.5 pl-10 pr-9 text-sm outline-none focus:ring-2 focus:ring-[var(--hl)]" placeholder="Search" maxLength={120} value={search} onChange={e => setSearch(e.target.value)} />
+        <input id="inbox-search" aria-label="Search conversations" className="w-full rounded-full bg-muted py-2.5 pl-10 pr-9 text-sm outline-none focus:ring-2 focus:ring-[var(--hl)]" placeholder="Search name, number or message" maxLength={120} value={search} onChange={e => setSearch(e.target.value)} />
         {filters.q && <button type="button" aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => { setSearch(''); set({ q: '' }) }}><X size={16} /></button>}
       </form>
       {showFilters && <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted/60 p-3">

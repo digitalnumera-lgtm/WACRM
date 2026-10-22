@@ -22,7 +22,8 @@ function Bubble({ from, children, time }: { from: "customer" | "agent"; children
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return <div className={`numera-auth ${sans.variable} ${display.variable} grid min-h-dvh lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]`}>
     <aside className="relative hidden flex-col justify-between overflow-hidden bg-[#121316] p-12 text-[#F3F3EE] lg:flex">
-      <div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-2xl bg-[#C0DD11] text-lg font-black text-[#121316]">N</span><span className="font-display text-lg font-semibold">Numera CRM</span></div>
+      {/* eslint-disable-next-line @next/next/no-img-element -- small static brand file */}
+      <div className="flex items-center gap-3"><img src="/brand/numera-logo-white.png" alt="Numera Digital" width={1200} height={347} className="h-10 w-auto" /><span className="rounded-full bg-[#C0DD11] px-2.5 py-0.5 text-xs font-semibold text-[#121316]">CRM</span></div>
       <div className="max-w-lg">
         <h1 className="font-display text-5xl font-semibold leading-[1.05] tracking-tight">Every WhatsApp chat your team has, in one place.</h1>
         <p className="mt-5 max-w-md text-lg leading-relaxed text-[#F3F3EE]/70">See who is waiting for a reply, review chats and voice notes, and track how fast each agent answers.</p>
@@ -35,7 +36,8 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       <p className="text-sm text-[#F3F3EE]/40">Numera Digital</p>
     </aside>
     <main className="flex min-w-0 flex-col">
-      <div className="flex items-center gap-2.5 px-6 pt-6 lg:hidden"><span className="flex size-9 items-center justify-center rounded-xl bg-[#121316] font-black text-[#C0DD11]">N</span><span className="font-display font-semibold">Numera CRM</span></div>
+      {/* eslint-disable-next-line @next/next/no-img-element -- small static brand file */}
+      <div className="flex items-center gap-2.5 px-6 pt-6 lg:hidden"><img src="/brand/numera-logo.png" alt="Numera Digital" width={1200} height={347} className="h-8 w-auto" /><span className="rounded-full bg-[#121316] px-2 py-0.5 text-[11px] font-semibold text-[#C0DD11]">CRM</span></div>
       <div className="flex-1">{children}</div>
     </main>
   </div>;

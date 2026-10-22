@@ -183,7 +183,7 @@ function DesktopNotifications({ enabled, onChange }: { enabled: boolean; onChang
     setNote('')
     if (!next) { onChange(false); return }
     const permission = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission
-    if (permission === 'granted') { onChange(true); new Notification('Notifications are on', { body: 'You’ll be told when a customer sends a new message.', icon: '/icon' }) }
+    if (permission === 'granted') { onChange(true); new Notification('Notifications are on', { body: 'You’ll be told when a customer sends a new message.', icon: '/icon.png' }) }
     else setNote('Blocked by the browser. Allow notifications for this site in the address bar, then try again.')
   }
   return <div className="flex flex-col items-start gap-1 sm:items-end"><Switch label="Desktop notifications" checked={enabled && permission === 'granted'} onChange={v => void toggle(v)} />{note && <span className="max-w-xs text-xs text-destructive">{note}</span>}</div>

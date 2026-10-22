@@ -10,23 +10,35 @@ type Counts = Map<string, { id: string; count: number }>
  * chat unread and reopen resolved/snoozed conversations. Advance each touched
  * thread's review marker (and resolve/snooze point) by the number of messages
  * this delivery actually added. Genuinely new unread messages stay unread.
+ *
+ * Conversations that exist only because of shared history and have been quiet
+ * for two days are filed as Done, so months-old chats where the customer spoke
+ * last don't flood Waiting. A new message reopens them; recent ones stay open.
  */
-export async function applyHistoryReview(db: SupabaseClient, accountId: string, before: Counts, after: Counts) {
-  const deltas = [...after.entries()].map(([customer, row]) => ({ id: row.id, delta: row.count - (before.get(customer)?.count ?? 0) })).filter(r => r.delta > 0)
+export const HISTORY_QUIET_MS = 48 * 3600000
+export async function applyHistoryReview(db: SupabaseClient, accountId: string, before: Counts, after: Counts, now = Date.now()) {
+  const deltas = [...after.entries()].map(([customer, row]) => ({ id: row.id, count: row.count, created: !before.has(customer), delta: row.count - (before.get(customer)?.count ?? 0) })).filter(r => r.delta > 0)
   if (!deltas.length) return
   const meta = await db.from('monitoring_thread_meta').select('thread_id,status,status_at_count,seen_count').eq('account_id', accountId).in('thread_id', deltas.map(d => d.id))
   if (meta.error && missingWorkflowSchema(meta.error)) return // Inbox workflow schema not installed yet.
   if (meta.error) throw new Error('History review update failed')
   const existing = new Map((meta.data ?? []).map(row => [row.thread_id, row]))
-  const rows = deltas.map(({ id, delta }) => {
+  const fresh = deltas.filter(d => d.created && !existing.has(d.id)).map(d => d.id)
+  const quiet = new Set<string>()
+  if (fresh.length) {
+    const threads = await db.from('monitoring_threads').select('id,last_message_at').eq('account_id', accountId).in('id', fresh)
+    if (threads.error) throw new Error('History review update failed')
+    for (const t of (threads.data ?? []) as { id: string; last_message_at: string }[]) if (now - Date.parse(t.last_message_at) > HISTORY_QUIET_MS) quiet.add(t.id)
+  }
+  const filed: Record<string, unknown>[] = [], moved: Record<string, unknown>[] = [], seen: Record<string, unknown>[] = []
+  for (const { id, delta, count } of deltas) {
     const row = existing.get(id)
-    if (!row) return { thread_id: id, account_id: accountId, seen_count: delta }
-    return { thread_id: id, account_id: accountId, seen_count: row.seen_count + delta,
-      ...(row.status !== 'open' ? { status_at_count: row.status_at_count + delta } : {}) }
-  })
-  // Rows with and without status_at_count are written separately so a partial
-  // upsert never resets a column it did not mean to change.
-  for (const group of [rows.filter(r => 'status_at_count' in r), rows.filter(r => !('status_at_count' in r))]) {
+    if (!row) (quiet.has(id) ? filed : seen).push({ thread_id: id, account_id: accountId, seen_count: delta, ...(quiet.has(id) ? { status: 'resolved', status_at_count: count } : {}) })
+    else if (row.status !== 'open') moved.push({ thread_id: id, account_id: accountId, seen_count: row.seen_count + delta, status_at_count: row.status_at_count + delta })
+    else seen.push({ thread_id: id, account_id: accountId, seen_count: row.seen_count + delta })
+  }
+  // Each group has the same columns, so an upsert never resets a column it did not mean to change.
+  for (const group of [filed, moved, seen]) {
     if (!group.length) continue
     const result = await db.from('monitoring_thread_meta').upsert(group, { onConflict: 'thread_id' })
     if (result.error) throw new Error('History review update failed')

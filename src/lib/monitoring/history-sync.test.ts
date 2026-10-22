@@ -86,6 +86,15 @@ describe('history review and contacts storage', () => {
     await applyHistoryReview(db as never, 'acc', new Map([[customer, { id: 't1', count: 5 }]]), new Map([[customer, { id: 't1', count: 5 }], ['923000000000', { id: 't2', count: 3 }]]))
     expect(upsert).toHaveBeenCalledExactlyOnceWith([{ thread_id: 't2', account_id: 'acc', seen_count: 3 }], { onConflict: 'thread_id' })
   })
+  it('files quiet history-only chats as Done but keeps recent ones open', async () => {
+    const upsert = vi.fn(async () => ({ error: null }))
+    const now = Date.parse('2026-10-22T09:00:00Z')
+    const db = { from: (table: string) => { const q: Record<string, unknown> = { select: () => q, eq: () => q, in: () => q, upsert, then: (r: (v: unknown) => unknown) => Promise.resolve(
+      table === 'monitoring_threads' ? { data: [{ id: 'old', last_message_at: '2026-07-01T10:00:00Z' }, { id: 'recent', last_message_at: '2026-10-21T20:00:00Z' }], error: null } : { data: [], error: null }).then(r) }; return q } }
+    await applyHistoryReview(db as never, 'acc', new Map(), new Map([['923000000001', { id: 'old', count: 7 }], ['923000000002', { id: 'recent', count: 4 }]]), now)
+    expect(upsert).toHaveBeenCalledWith([{ thread_id: 'old', account_id: 'acc', seen_count: 7, status: 'resolved', status_at_count: 7 }], { onConflict: 'thread_id' })
+    expect(upsert).toHaveBeenCalledWith([{ thread_id: 'recent', account_id: 'acc', seen_count: 4 }], { onConflict: 'thread_id' })
+  })
   it('ignores a missing workflow schema', async () => {
     const db = { from: () => { const q: Record<string, unknown> = { select: () => q, eq: () => q, in: () => q, then: (r: (v: unknown) => unknown) => Promise.resolve({ data: null, error: { code: 'PGRST205' } }).then(r) }; return q } }
     await expect(applyHistoryReview(db as never, 'acc', new Map(), new Map([[customer, { id: 't', count: 1 }]]))).resolves.toBeUndefined()

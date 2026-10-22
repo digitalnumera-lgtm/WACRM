@@ -141,7 +141,7 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
           for (const t of fresh.slice(0, 3)) {
             if (!document.hidden && t.id === open) continue
             const agent = channels.find(c => c.id === t.channel_id)?.label
-            const note = new Notification(`${t.customer_name || `+${t.customer}`}${agent ? ` → ${agent}` : ''}`, { body: previewText(t.last_preview) || 'New message', tag: t.id, icon: '/icon' })
+            const note = new Notification(`${t.customer_name || `+${t.customer}`}${agent ? ` → ${agent}` : ''}`, { body: previewText(t.last_preview) || 'New message', tag: t.id, icon: '/icon.png' })
             note.onclick = () => { window.focus(); setSelected(t.id); setView('Inbox'); note.close() }
           }
         }
@@ -199,7 +199,7 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
 
   return <MotionRoot><div data-density={prefs.density} data-chat-size={prefs.chatSize} data-style={prefs.style} className={`monitoring-panel flex h-dvh flex-col overflow-hidden text-foreground md:flex-row md:gap-3 md:p-3 ${dark ? 'dark' : ''}`}>
     <aside aria-label="Workspace" className={`order-last shrink-0 items-center gap-1 border-t border-border bg-card/90 px-2 py-1.5 backdrop-blur md:order-first md:flex md:w-14 md:flex-col md:border-0 md:bg-transparent md:p-0 md:py-1 ${chatOpenOnPhone ? 'hidden md:flex' : 'flex'}`}>
-      <div title={accountName} className="hidden size-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--ink)] text-lg font-black text-[var(--ink-accent)] md:mb-4 md:flex">N</div>
+      <div title={accountName} role="img" aria-label="Numera Digital" className="brand-mark hidden h-11 w-9 shrink-0 md:mb-4 md:block" />
       <nav className="flex flex-1 items-center justify-around gap-1 overflow-x-auto md:flex-col md:justify-start md:overflow-visible">
         {views.map(v => navButton(v.name, v.label, v.icon))}
         <span className="hidden md:block md:flex-1" />

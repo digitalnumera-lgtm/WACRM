@@ -4,7 +4,8 @@ import { allowedChannels, hideNumbers, requireMonitoring, scopeChannels } from '
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { withWaitingCounts } from '@/lib/monitoring/waiting'
 import { channelColumns, checkedId, MonitoringInputError, monitoringError, pageNumber, privateJson, threadColumns } from '@/lib/monitoring/http'
-import { applyInboxCursor, applyInboxFilters, applyInboxTab, inboxColumns, missingWorkflowSchema, pageSize, readInboxFilters, searchLiteral } from '@/lib/monitoring/inbox'
+import { applyInboxCursor, applyInboxFilters, applyInboxTab, inboxColumns, missingWorkflowSchema, pageSize, readInboxFilters, searchFilter } from '@/lib/monitoring/inbox'
+import { threadsWithText } from '@/lib/monitoring/message-search'
 
 export async function GET(request: Request) {
   try {
@@ -14,6 +15,7 @@ export async function GET(request: Request) {
     const page = pageNumber(params.get('page'))
     const scroll = params.get('scroll') === '1'
     const filters = readInboxFilters(params)
+    const messageThreads = filters.search ? await threadsWithText(access, filters.search) : []
     // Includes paused or removed numbers for Settings; their chats stay hidden below.
     const channels = await scopeChannels(access, supabase.from('monitoring_channels').select(channelColumns).eq('account_id', accountId), 'id', { includeHidden: true }).order('label').order('id')
     if (channels.error) throw channels.error
@@ -30,7 +32,7 @@ export async function GET(request: Request) {
     // Service role is used only with an explicit company (and number) filter,
     // after the access check above; the view itself is not exposed to browsers.
     let query = monitoringAdmin().from('monitoring_inbox').select(inboxColumns, { count: filters.cursor ? undefined : 'exact' }).eq('account_id', accountId)
-    query = hideNumbers(access, applyInboxTab(applyInboxFilters(query, { ...filters, channelIds }), filters.tab))
+    query = hideNumbers(access, applyInboxTab(applyInboxFilters(query, { ...filters, channelIds, messageThreads }), filters.tab))
     // Pinned conversations: fetch exactly these (still company and number scoped).
     const ids = [...new Set((params.get('ids') ?? '').split(',').filter(Boolean))]
     if (ids.length > 30) throw new MonitoringInputError('Choose up to 30 conversations.')
@@ -38,7 +40,7 @@ export async function GET(request: Request) {
     query = applyInboxCursor(query, filters)
     const ordered = query.order('last_message_at', { ascending }).order('id', { ascending })
     const result = await (scroll ? ordered.limit(pageSize + 1) : ordered.range(page * pageSize, page * pageSize + pageSize - 1))
-    if (result.error && missingWorkflowSchema(result.error)) return legacyList(supabase, accountId, channels.data ?? [], channelIds, filters, page, scroll, access.hiddenIds)
+    if (result.error && missingWorkflowSchema(result.error)) return legacyList(supabase, accountId, channels.data ?? [], channelIds, { ...filters, messageThreads }, page, scroll, access.hiddenIds)
     if (result.error) throw result.error
     const rows = scroll ? result.data.slice(0, pageSize) : result.data
     const threads = await withWaitingCounts(monitoringAdmin(), accountId, rows as unknown as { id: string; last_direction: string; state?: string }[])
@@ -51,16 +53,13 @@ export async function GET(request: Request) {
 // thread list without workflow tabs, labels or priority.
 async function legacyList(
   supabase: SupabaseClient, accountId: string, channels: unknown[],
-  channelIds: string[] | null, filters: ReturnType<typeof readInboxFilters>, page: number, scroll: boolean, hiddenIds: string[] = [],
+  channelIds: string[] | null, filters: ReturnType<typeof readInboxFilters> & { messageThreads?: string[] }, page: number, scroll: boolean, hiddenIds: string[] = [],
 ) {
   let query = supabase.from('monitoring_threads').select(threadColumns, { count: filters.cursor ? undefined : 'exact' }).eq('account_id', accountId)
   if (channelIds) query = query.in('channel_id', channelIds)
   query = hideNumbers({ hiddenIds }, query)
   if (filters.status) query = query.eq('lead_status', filters.status)
-  if (filters.search) {
-    const literal = searchLiteral(filters.search)
-    query = query.or(`customer.ilike."%${literal}%",customer_name.ilike."%${literal}%",last_preview.ilike."%${literal}%"`)
-  }
+  if (filters.search) query = query.or(searchFilter(filters.search, filters.messageThreads))
   if (filters.cursor) query = query.or(cursorFilter('last_message_at', filters.cursor))
   const ordered = query.order('last_message_at', { ascending: false }).order('id', { ascending: false })
   const result = await (scroll ? ordered.limit(pageSize + 1) : ordered.range(page * pageSize, page * pageSize + pageSize - 1))

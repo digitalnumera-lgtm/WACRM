@@ -306,6 +306,8 @@ html[data-theme="rose"] {
   box-shadow: var(--card-shadow);
 }
 .monitoring-panel .chat-wallpaper { background-color: var(--chat-bg); }
+/* Numera mark, coloured by the current style (the file is only used as a shape). */
+.monitoring-panel .brand-mark { background: var(--foreground); -webkit-mask: url(/brand/numera-mark.png) center / contain no-repeat; mask: url(/brand/numera-mark.png) center / contain no-repeat; }
 .monitoring-panel { --bubble-icon: var(--card); }
 .monitoring-panel .bubble-agent { background: var(--bubble-agent); color: var(--bubble-agent-fg); --bubble-icon: var(--bubble-agent); }
 .monitoring-panel .bubble-customer { background: var(--bubble-customer); color: var(--bubble-customer-fg); --bubble-icon: var(--bubble-customer); }
