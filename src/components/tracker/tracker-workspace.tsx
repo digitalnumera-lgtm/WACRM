@@ -38,7 +38,7 @@ function useTracker() {
     finally { running.current = false; setBusy(false) }
   }, [])
   useEffect(() => {
-    void load()
+    void load() // eslint-disable-line react-hooks/set-state-in-effect -- initial fetch
     const timer = window.setInterval(() => { if (!document.hidden) void load() }, 60_000)
     return () => window.clearInterval(timer)
   }, [load])

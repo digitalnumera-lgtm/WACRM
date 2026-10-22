@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeftRight, Check, Copy, KeyRound } from 'lucide-react'
+import { ArrowLeftRight, Check, Copy, Download, KeyRound } from 'lucide-react'
 import type { TrackerLevel } from '@/lib/tracker/model'
 import { api, buttonClass, Icon3D, inputClass, primaryButton, sendJson } from '@/components/monitoring/ui'
 import { rememberPanel } from './panel'
@@ -49,9 +49,21 @@ function OwnerSettings({ onConnected }: { onConnected: () => void }) {
   </>
 }
 
+/** Saves the script as a file (works even where copying to the clipboard is blocked). */
+function download(text: string) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }))
+  const a = document.createElement('a')
+  a.href = url; a.download = 'crm-connect.gs'; a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 function CopyButton({ text, label }: { text: string; label: string }) {
   const [done, setDone] = useState(false)
-  return <button type="button" className={buttonClass} onClick={() => { void navigator.clipboard?.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1500) }) }}>{done ? <Check size={14} /> : <Copy size={14} />}{done ? 'Copied' : label}</button>
+  return <button type="button" className={buttonClass} onClick={() => {
+    const ok = () => { setDone(true); setTimeout(() => setDone(false), 1500) }
+    const fallback = () => { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); try { if (document.execCommand('copy')) ok() } finally { t.remove() } }
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(ok, fallback); else fallback()
+  }}>{done ? <Check size={14} /> : <Copy size={14} />}{done ? 'Copied' : label}</button>
 }
 
 function Connection({ data, onSaved, onConnected }: { data: SettingsData; onSaved: () => void; onConnected: () => void }) {
@@ -76,18 +88,25 @@ function Connection({ data, onSaved, onConnected }: { data: SettingsData; onSave
     onConnected()
   })
   const connected = !!data.connection.url && data.connection.hasKey
+  const script = key ? data.script.source.replace("const CRM_KEY = 'PASTE-KEY-HERE';", `const CRM_KEY = '${key}';`) : data.script.source
   return <section className="crm-card space-y-5 p-5">
     <div className="flex items-start gap-4"><Icon3D name="plug" size={52} /><div><h2 className="font-semibold">Google Sheet connection</h2>
       <p className="text-sm text-muted-foreground">{connected ? 'Connected to the Numera Client Tracker Sheet through Apps Script.' : 'Connect the Numera Client Tracker Sheet in four steps.'} Changes made here (by you or people with Full access) run your main script&apos;s own functions, so ClickUp, Drive, balances, commission and emails work exactly as with the forms.</p></div></div>
     <ol className="list-none space-y-5 text-sm">
       <li className="space-y-2"><p className="flex items-center gap-2 font-medium"><Icon3D name="key" size={32} />1. Create a private key</p>
-        {key ? <div className="space-y-2 rounded-2xl bg-muted/60 p-3"><p className="text-xs text-muted-foreground">Shown only now. Paste it into the script in step 2, in place of PASTE-KEY-HERE.</p><div className="flex flex-wrap items-center gap-2"><code className="select-all break-all rounded-lg bg-background px-2 py-1 text-xs">{key}</code><CopyButton text={key} label="Copy key" /></div></div>
+        {key ? <div className="space-y-2 rounded-2xl bg-muted/60 p-3"><p className="text-xs text-muted-foreground">Shown only now. It is already filled into the script in step 2, so you do not need to paste it anywhere else.</p><div className="flex flex-wrap items-center gap-2"><code className="select-all break-all rounded-lg bg-background px-2 py-1 text-xs">{key}</code><CopyButton text={key} label="Copy key" /></div></div>
           : <div className="flex flex-wrap items-center gap-2"><button className={buttonClass} disabled={!!busy} onClick={() => void newKey()}><KeyRound size={14} />{data.connection.hasKey ? 'Create a new key' : 'Create key'}</button>{data.connection.hasKey && <span className="text-xs text-muted-foreground">A key exists. A new key stops the old one working until the script has the new one.</span>}</div>}
       </li>
       <li className="space-y-2"><p className="font-medium">2. Add the script file</p>
-        <p className="text-muted-foreground">Open the &quot;Numera Automation&quot; Apps Script project → <b>+</b> next to Files → Script → name it <code>crm-connect</code>. Paste the script, put the key between the quotes on the <code>CRM_KEY</code> line, and save. Your main <code>numera-crm-v3.gs</code> stays as it is.</p>
-        <div className="flex flex-wrap gap-2"><CopyButton text={data.script.source} label={`Copy script (version ${data.script.version})`} /></div>
-        <details><summary className="cursor-pointer text-xs text-muted-foreground">Show the script</summary><pre className="mt-2 max-h-72 overflow-auto rounded-2xl bg-muted/60 p-3 text-[11px] leading-relaxed">{data.script.source}</pre></details>
+        <p className="text-muted-foreground">Open the &quot;Numera Automation&quot; Apps Script project → <b>+</b> next to Files → Script → name it <code>crm-connect</code>. Delete everything in that new file (including <code>function myFunction</code>), paste the whole script and save. Your main <code>numera-crm-v3.gs</code> stays as it is.</p>
+        <p className="text-muted-foreground">{key ? 'Your new key is already filled in below.' : <>Create a key first (step 1): it is then filled in for you. Otherwise replace <code>PASTE-KEY-HERE</code> yourself.</>} The script is about {script.split('\n').length} lines and ends with <code>{'};'}</code>.</p>
+        <div className="flex flex-wrap gap-2">
+          <CopyButton text={script} label={`Copy script (version ${data.script.version})`} />
+          <button type="button" className={buttonClass} onClick={() => download(script)}><Download size={14} />Download crm-connect.gs</button>
+        </div>
+        <textarea readOnly value={script} onFocus={e => e.currentTarget.select()} aria-label="Script" rows={10} spellCheck={false}
+          className="w-full rounded-2xl border border-border bg-muted/60 p-3 font-mono text-[11px] leading-relaxed" />
+        <p className={'text-xs text-muted-foreground'}>Tip: click inside the box, press Cmd + A then Cmd + C to copy it all.</p>
       </li>
       <li className="space-y-2"><p className="font-medium">3. Deploy it as a web app</p>
         <p className="text-muted-foreground">In Apps Script: <b>Deploy → New deployment</b> → type <b>Web app</b>. Execute as <b>Me</b>, Who has access <b>Anyone</b> (the key keeps it private). Approve the permissions, then copy the <b>Web app URL</b>. After changing the script later, use Deploy → Manage deployments → edit → New version.</p>
