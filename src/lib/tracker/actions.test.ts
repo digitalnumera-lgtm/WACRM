@@ -22,3 +22,23 @@ describe('tracker change checks', () => {
     expect(actionInput('payout', { tab: 'pm', month: '2026-09', name: 'Usman', status: 'Paid', paidOn: '2026-10-15', amountPaid: '3000' }).input).toMatchObject({ tab: 'pm', amountPaid: '3000' })
   })
 })
+
+describe('new tracker changes', () => {
+  it('lets only non-formula deal columns be edited', () => {
+    expect(actionInput('editDeal', { dealId: 'D-0012', fields: { Phone: '03001234567', 'Website Amount': '30,000', 'Date Closed': '2026-10-20' } }).input)
+      .toEqual({ dealId: 'D-0012', fields: { Phone: '03001234567', 'Website Amount': '30000', 'Date Closed': '2026-10-20' } })
+    expect(() => actionInput('editDeal', { dealId: 'D-0012', fields: { 'Deal Total': '1' } })).toThrow(/cannot be changed/)
+    expect(() => actionInput('editDeal', { dealId: 'D-0012', fields: { 'ClickUp Project': 'x' } })).toThrow(/cannot be changed/)
+    expect(() => actionInput('editDeal', { dealId: 'D-0012', fields: {} })).toThrow(/Nothing/)
+    expect(() => actionInput('editDeal', { dealId: 'D-0012', fields: { Client: '' } })).toThrow(/empty/)
+  })
+  it('checks payments, payouts and rates', () => {
+    expect(() => actionInput('deletePayment', { paymentId: 'D-0001' })).toThrow(/payment/)
+    expect(actionInput('editPayment', { paymentId: 'p-0007', amount: '5,000', kind: 'Refund' }).input).toEqual({ paymentId: 'P-0007', amount: '5000', kind: 'Refund' })
+    expect(() => actionInput('personRate', { name: 'Ali', rate: '150' })).toThrow(/0 to 100/)
+    expect(actionInput('personRate', { name: 'Ali', role: 'PM', rate: '' }).input).toMatchObject({ role: 'PM', rate: '' })
+    expect(() => actionInput('addPayout', { name: 'Ali', amount: '0', date: '2026-11-17' })).toThrow(/amount/)
+    expect(actionInput('addPayout', { name: 'Ali', amount: '5000', date: '2026-11-17', upTo: '2026-11-16' }).input).toMatchObject({ amount: '5000', role: 'Agent' })
+    expect(() => actionInput('deletePayout', { payoutId: 'P-0001' })).toThrow(/payout/)
+  })
+})

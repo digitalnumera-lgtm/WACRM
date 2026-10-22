@@ -27,7 +27,7 @@ function database() {
         return { data: (rows[table] ?? []).filter(r => filters.every(([k, v]) => r[k] === v)), error: null }
       }
       const q = {
-        select: () => q, eq: (k: string, v: unknown) => { filters.push([k, v]); return q },
+        select: () => q, not: () => q, eq: (k: string, v: unknown) => { filters.push([k, v]); return q },
         upsert: (v: unknown) => { op = 'upsert'; value = v; return q }, delete: () => { op = 'delete'; return q },
         maybeSingle: () => Promise.resolve({ data: run().data[0] ?? null, error: null }),
         then: (resolve: (v: unknown) => unknown) => Promise.resolve(run()).then(resolve),
@@ -103,5 +103,15 @@ describe('client tracker access', () => {
     as(admin, 'admin'); expect((await act(req())).status).toBe(403)
     as(agent, 'viewer'); expect((await act(req())).status).toBe(403)
     as(owner, 'owner'); expect((await act(req())).status).toBe(409) // allowed, but the Sheet is not connected in this test
+  })
+})
+
+describe('change alerts from the script', () => {
+  it('rejects unknown keys without touching anything', async () => {
+    const { POST: notify } = await import('./notify/route')
+    rows.tracker_connection = []
+    const res = await notify(new Request('http://crm.test/api/tracker/notify', { method: 'POST', body: JSON.stringify({ key: 'x'.repeat(32) }) }))
+    expect(res.status).toBe(401)
+    expect(writes).toEqual([])
   })
 })

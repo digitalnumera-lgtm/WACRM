@@ -35,5 +35,5 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
   if (!me) return <NoAccess tracker={tracker} />
   const { view, section } = await searchParams
   return <MonitoringWorkspace accountName={name} me={me} preferences={sanitizePreferences(metadata?.crm_preferences)}
-    initialView={view === 'settings' ? 'Settings' : 'Inbox'} initialSection={section as SettingsSection | undefined} tracker={tracker} />
+    initialView={view === 'settings' ? 'Settings' : undefined} initialSection={section as SettingsSection | undefined} tracker={tracker} />
 }

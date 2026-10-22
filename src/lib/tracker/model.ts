@@ -7,7 +7,10 @@ export const atLeast = (level: TrackerLevel, min: TrackerLevel) => LEVEL_RANK[le
 
 export interface SheetTable { headers: string[]; rows: string[][]; notes?: string[] }
 export interface ClickUpSummary { status: string; teams: Record<string, [number, number]> }
-export interface RawSnapshot { generatedAt: string; tabs: Record<string, SheetTable>; clickup?: Record<string, ClickUpSummary> }
+export interface CommissionDefaults { target: number; rateBelow: number; rateAbove: number; pmRate: number; teams: string[]; noPmTeams: string[] }
+export interface RawSnapshot { generatedAt: string; tabs: Record<string, SheetTable>; clickup?: Record<string, ClickUpSummary>; commission?: CommissionDefaults }
+export interface PersonRate { person: string; role: 'Agent' | 'PM'; rate: number | null; note: string }
+export interface Payout { id: string; date: string; person: string; role: 'Agent' | 'PM'; amount: number; upTo: string; note: string; addedBy: string }
 
 export interface TrackerDeal {
   id: string; clientId: string; dateClosed: string; month: string; agent: string; client: string; brand: string; team: string
@@ -17,7 +20,7 @@ export interface TrackerDeal {
   marketing: { services: string; region: string; days: string; start: string; end: string; status: string } | null
   money?: {
     total: number; advance: number | null; paid: number | null; remaining: number | null; paymentStatus: string
-    fullyPaidOn: string; lastPayment: string; website: number; hosting: number; marketing: number; other: number; commissionable: number | null
+    fullyPaidOn: string; refundedOn: string; lastPayment: string; website: number; hosting: number; marketing: number; other: number; commissionable: number | null
   }
 }
 export interface TrackerPayment { id: string; date: string; month: string; dealId: string; client: string; amount: number; collectedBy: string; type: string; method: string; note: string; addedBy: string }
@@ -31,7 +34,7 @@ export interface TrackerView {
   level: TrackerLevel; generatedAt: string; fetchedAt: string; stale?: string
   summary: TrackerSummary; deals: TrackerDeal[]
   payments?: TrackerPayment[]
-  commission?: { agents: SheetTable | null; pm: SheetTable | null; owner: SheetTable | null }
+  commission?: { agents: SheetTable | null; pm: SheetTable | null; owner: SheetTable | null; defaults: CommissionDefaults | null; rates: PersonRate[]; payouts: Payout[] }
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -56,6 +59,14 @@ export function amount(value: unknown): number {
 }
 /** Refunds count against what was collected. */
 export const signed = (p: Pick<TrackerPayment, 'amount' | 'type'>) => /refund/i.test(p.type) && p.amount > 0 ? -p.amount : p.amount
+/** "7%" or 0.07 or 7 → 0.07; blank → null. */
+export function rateOf(value: unknown): number | null {
+  const t = String(value ?? '').trim()
+  if (!t) return null
+  const n = amount(t)
+  if (!Number.isFinite(n)) return null
+  return t.endsWith('%') || n > 1 ? n / 100 : n
+}
 const blankOr = (value: unknown) => String(value ?? '').trim() === '' ? null : amount(value)
 
 function records(table: SheetTable | undefined): Record<string, string>[] {
@@ -94,7 +105,7 @@ export function buildView(raw: RawSnapshot, level: TrackerLevel, fetchedAt: stri
     }
     if (money) deal.money = {
       total: amount(r['Deal Total']), advance: blankOr(appr?.['Advance']), paid: bal ? amount(bal['Paid']) : null, remaining: bal ? amount(bal['Remaining']) : null,
-      paymentStatus: bal?.['Payment Status'] ?? '', fullyPaidOn: bal?.['Fully Paid On'] ?? '', lastPayment: bal?.['Last Payment'] ?? '',
+      paymentStatus: bal?.['Payment Status'] ?? '', fullyPaidOn: bal?.['Fully Paid On'] ?? '', refundedOn: bal?.['Refunded On'] ?? '', lastPayment: bal?.['Last Payment'] ?? '',
       website: amount(r['Website Amount']), hosting: amount(r['Hosting Amount']), marketing: amount(r['Marketing Amount']), other: amount(r['Other Amount']),
       commissionable: blankOr(r['Commission Amount']),
     }
@@ -132,6 +143,14 @@ export function buildView(raw: RawSnapshot, level: TrackerLevel, fetchedAt: stri
 
   const view: TrackerView = { level, generatedAt: raw.generatedAt, fetchedAt, summary, deals }
   if (money) view.payments = payments
-  if (atLeast(level, 'full')) view.commission = { agents: raw.tabs['Agents'] ?? null, pm: raw.tabs['PM Commission'] ?? null, owner: raw.tabs['Owner Deals'] ?? null }
+  if (atLeast(level, 'full')) view.commission = {
+    agents: raw.tabs['Agents'] ?? null, pm: raw.tabs['PM Commission'] ?? null, owner: raw.tabs['Owner Deals'] ?? null,
+    defaults: raw.commission ?? null,
+    rates: records(raw.tabs['Commission Settings']).filter(r => r['Person']).map(r => ({ person: r['Person'], role: r['Role'] === 'PM' ? 'PM' as const : 'Agent' as const, rate: rateOf(r['Rate']), note: r['Note'] ?? '' })),
+    payouts: records(raw.tabs['Commission Payouts']).filter(r => /^CP-\d+/.test(r['Payout ID'])).map(r => ({
+      id: r['Payout ID'], date: r['Date'] ?? '', person: r['Person'] ?? '', role: r['Role'] === 'PM' ? 'PM' as const : 'Agent' as const,
+      amount: amount(r['Amount']), upTo: r['Statement up to'] ?? '', note: r['Note'] ?? '', addedBy: r['Added By'] ?? '',
+    })).sort((a, b) => dayKey(b.date).localeCompare(dayKey(a.date)) || b.id.localeCompare(a.id)),
+  }
   return view
 }

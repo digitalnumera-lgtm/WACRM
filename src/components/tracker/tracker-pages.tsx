@@ -3,7 +3,8 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { ExternalLink, FolderOpen, Pencil, Plus, Search, X } from 'lucide-react'
 import { dayKey, signed, type SheetTable, type TrackerDeal, type TrackerView } from '@/lib/tracker/model'
-import { AddDealDialog, DealActions, PayoutDialog, type Changed } from './tracker-edit'
+import { AddDealDialog, DealActions, PaymentRowActions, PayoutDialog, type Changed } from './tracker-edit'
+import { CommissionPayouts, CommissionRates, CommissionStatement } from './tracker-commission'
 import { CountUp } from '@/components/monitoring/motion'
 import { Avatar, buttonClass, Icon3D, inputClass, primaryButton } from '@/components/monitoring/ui'
 
@@ -207,7 +208,7 @@ function ClientSheet({ data, clientKey: key, onClose, canEdit, onChanged }: { da
         <h3 className="mb-2 font-semibold">Payments</h3>
         <ul className="crm-card divide-y divide-border">{payments.map(p => <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
           <span><span className="font-medium">{p.type || 'Payment'}</span> <span className="text-muted-foreground">· {p.dealId} · {p.date}{p.collectedBy && ` · ${p.collectedBy}`}</span>{p.note && <span className="block text-xs text-muted-foreground">{p.note}</span>}</span>
-          <span className={`font-semibold tabular-nums ${signed(p) < 0 ? 'text-red-600 dark:text-red-400' : ''}`}>{pkr(signed(p))}</span>
+          <span className="flex items-center gap-2"><span className={`font-semibold tabular-nums ${signed(p) < 0 ? 'text-red-600 dark:text-red-400' : ''}`}>{pkr(signed(p))}</span>{canEdit && <PaymentRowActions payment={p} onChanged={onChanged} />}</span>
         </li>)}</ul>
       </section>}
     </aside>
@@ -244,14 +245,17 @@ export function TrackerPayments({ data, onClient }: { data: TrackerView; onClien
 }
 
 export function TrackerCommission({ data, canEdit, onChanged }: { data: TrackerView; canEdit: boolean; onChanged: Changed }) {
-  const tabs = [['agents', 'Sales agents'], ['pm', 'PM commission'], ['owner', 'Owner deals']] as const
-  const [tab, setTab] = useState<(typeof tabs)[number][0]>('agents')
-  const table = data.commission?.[tab] ?? null
+  const tabs = [['statement', 'Statement'], ['payouts', 'Payments made'], ['rates', 'Rates'], ['agents', 'Agents tab'], ['pm', 'PM tab'], ['owner', 'Owner deals']] as const
+  const [tab, setTab] = useState<(typeof tabs)[number][0]>('statement')
+  const sheetTab = tab === 'agents' || tab === 'pm' || tab === 'owner' ? data.commission?.[tab] ?? null : null
   return <div className="space-y-4">
-    <div role="tablist" aria-label="Commission" className="inline-flex gap-1 rounded-full bg-card p-1 shadow-sm">
-      {tabs.map(([id, label]) => <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`rounded-full px-4 py-1.5 text-sm font-medium ${tab === id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{label}</button>)}
+    <div role="tablist" aria-label="Commission" className="flex max-w-full gap-1 overflow-x-auto rounded-full bg-card p-1 shadow-sm sm:inline-flex">
+      {tabs.filter(([id]) => canEdit || id !== 'rates').map(([id, label]) => <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium ${tab === id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{label}</button>)}
     </div>
-    {table ? <SheetGrid table={table} payout={canEdit && tab !== 'owner' ? tab : null} onChanged={onChanged} /> : <p className="crm-card p-6 text-sm text-muted-foreground">This tab was not found in the Sheet.</p>}
+    {tab === 'statement' && <CommissionStatement data={data} canEdit={canEdit} onChanged={onChanged} />}
+    {tab === 'payouts' && <CommissionPayouts payouts={data.commission?.payouts ?? []} canEdit={canEdit} onChanged={onChanged} />}
+    {tab === 'rates' && <div className="crm-card p-5"><CommissionRates data={data} onChanged={onChanged} /></div>}
+    {(tab === 'agents' || tab === 'pm' || tab === 'owner') && (sheetTab ? <SheetGrid table={sheetTab} payout={null} onChanged={onChanged} /> : <p className="crm-card p-6 text-sm text-muted-foreground">This tab was not found in the Sheet.</p>)}
   </div>
 }
 

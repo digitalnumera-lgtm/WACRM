@@ -6,7 +6,7 @@
 // exactly as with the forms and the Approvals / Tools tabs. Every name here
 // starts with crm so it cannot clash with the main script (except doPost,
 // which the main script does not use).
-export const TRACKER_SCRIPT_VERSION = 2
+export const TRACKER_SCRIPT_VERSION = 3
 
 export const TRACKER_APPS_SCRIPT = String.raw`/**
  * Numera CRM connection. Version ${TRACKER_SCRIPT_VERSION}.
@@ -14,15 +14,21 @@ export const TRACKER_APPS_SCRIPT = String.raw`/**
  * same changes as the deal form, payment form, Approvals tab and Tools tab
  * by calling numera-crm-v3.gs's own functions (it must be in this project).
  *
- * Setup:
- * 1. Paste the key from CRM → Client Tracker → Settings between the quotes below. Save.
+ * Setup (CRM → Client Tracker → Settings fills in the key and address for you):
+ * 1. Paste this whole file as crm-connect.gs and save.
  * 2. Deploy → New deployment → type "Web app". Execute as: Me. Who has access: Anyone.
  * 3. Copy the Web app URL into CRM → Client Tracker → Settings.
+ * 4. Pick crmSetup in the function list above and press Run once: the CRM then hears about
+ *    form answers and Sheet edits within seconds.
  */
 const CRM_KEY = 'PASTE-KEY-HERE';
+const CRM_URL = 'PASTE-CRM-ADDRESS';
 const CRM_SHEET_ID = '1vc8UsKlvhFbIpEIsg--pMzbQypiGtGhfDQVnLZ19gJ0';
-const CRM_TABS = ['Deals', 'Approvals', 'Payment Log', 'Client Balances', 'Agents', 'PM Commission', 'Owner Deals'];
-const CRM_HEADERS = ['Deal ID', 'Payment ID', 'Pay Month', 'Month'];
+const CRM_TABS = ['Deals', 'Approvals', 'Payment Log', 'Client Balances', 'Agents', 'PM Commission', 'Owner Deals', 'Commission Settings', 'Commission Payouts'];
+const CRM_HEADERS = ['Deal ID', 'Payment ID', 'Pay Month', 'Month', 'Person', 'Payout ID'];
+const CRM_RATES_TAB = 'Commission Settings', CRM_PAYOUTS_TAB = 'Commission Payouts';
+const CRM_RATES_COLS = ['Person', 'Role', 'Rate', 'Note', 'Updated'];
+const CRM_PAYOUT_COLS = ['Payout ID', 'Date', 'Person', 'Role', 'Amount', 'Statement up to', 'Note', 'Added By', 'Added At'];
 
 function doPost(e) {
   let body = {};
@@ -80,7 +86,7 @@ function crmSnapshot_() {
       notes: notes,
     };
   });
-  return { generatedAt: new Date().toISOString(), tabs: tabs, clickup: crmClickUp_(tabs.Deals) };
+  return { generatedAt: new Date().toISOString(), tabs: tabs, clickup: crmClickUp_(tabs.Deals), commission: crmCommissionDefaults_() };
 }
 
 /** Project status and subtask progress per team tag, from ClickUp (read-only, cached 10 minutes). */
@@ -262,6 +268,177 @@ const CRM_ACTIONS = {
     if (/tick the box again/.test(msg)) msg = deleteDeal_(id); // approved deal: the CRM already confirmed
     crmAfterChange_();
     return { message: msg };
+  },
+
+  /** Same as editing the Deals tab by hand: Services text, balances, commission, payment list and logins list follow. */
+  editDeal: function (input, actor) {
+    syncCols_();
+    const deals = tab_(TAB.deals);
+    const r = findRow_(deals, DEAL_COLS, String(input.dealId), 1);
+    if (!r) throw new Error(input.dealId + ' is not on the Deals tab.');
+    const formulas = dealFormulas_();
+    const names = Object.keys(input.fields || {});
+    names.forEach(function (name) {
+      const c = DEAL_COLS.indexOf(name);
+      if (c < 0 || formulas[name] || CRM_EDITABLE.indexOf(name) < 0) throw new Error('Cannot change ' + name + '.');
+      let v = input.fields[name];
+      if (name === 'Date Closed' || name === 'Marketing Start') v = crmDate_(v);
+      else if (/Amount$|^Marketing Days$/.test(name)) v = v === '' || v === null ? '' : num_(v);
+      else if (name === 'Phone') v = phone_(v);
+      else v = String(v === null || v === undefined ? '' : v);
+      if (typeof v === 'string' && /^[=+\-@]/.test(v)) v = "'" + v;
+      deals.getRange(r, c + 1).setValue(v);
+    });
+    if (!names.length) return { changed: 0 };
+    refreshServices_(deals, r);
+    if (names.some(function (n) { return ['Client', 'Business / Brand', 'Phone'].indexOf(n) > -1; })) {
+      try { refreshLoginsIndex_(); } catch (err) { Logger.log('Logins list: ' + err.message); }
+    }
+    syncAdvanceDates_();
+    crmAfterChange_();
+    return { changed: names.length, by: actor };
+  },
+
+  /** Change a Payment Log row (date, amount, payment or refund, method, note). */
+  editPayment: function (input, actor) {
+    const log = tab_(TAB.log);
+    const r = findRow_(log, LOG_COLS, String(input.paymentId), 1);
+    if (!r) throw new Error('Payment ' + input.paymentId + ' was not found.');
+    const ci = function (n) { return LOG_COLS.indexOf(n) + 1; };
+    const type = String(log.getRange(r, ci('Type')).getValue());
+    const refund = input.kind ? input.kind === 'Refund' : /refund/i.test(type);
+    if (input.amount !== undefined) {
+      const amt = Math.abs(num_(input.amount));
+      if (!amt) throw new Error('Enter an amount.');
+      log.getRange(r, ci('Amount')).setValue(refund ? -amt : amt);
+    }
+    if (input.kind) log.getRange(r, ci('Type')).setValue(refund ? 'Refund' : (/^Advance/.test(type) ? type : 'Installment'));
+    if (input.date) log.getRange(r, ci('Date')).setValue(crmDate_(input.date));
+    if (input.method !== undefined) log.getRange(r, ci('Method')).setValue(String(input.method || ''));
+    if (input.note !== undefined) log.getRange(r, ci('Note')).setValue(String(input.note || '') + ' (edited in the CRM by ' + actor + ')');
+    crmAfterChange_();
+    return { paymentId: input.paymentId };
+  },
+
+  /** Remove one Payment Log row. */
+  deletePayment: function (input) {
+    const log = tab_(TAB.log);
+    const r = findRow_(log, LOG_COLS, String(input.paymentId), 1);
+    if (!r) throw new Error('Payment ' + input.paymentId + ' was not found.');
+    log.deleteRow(r);
+    crmAfterChange_();
+    return { paymentId: input.paymentId };
+  },
+
+  /** The Tools tab's health check. */
+  healthCheck: function () {
+    return { lines: healthCheck_() };
+  },
+
+  /** Default commission numbers: the settings cells on Agents and PM Commission. */
+  commissionDefaults: function (input) {
+    const ag = tab_(TAB.agents), pm = tab_(TAB.pm);
+    if (input.target !== undefined && input.target !== '') ag.getRange('B2').setValue(num_(input.target));
+    if (input.rateBelow !== undefined && input.rateBelow !== '') ag.getRange('D2').setValue(num_(input.rateBelow) / 100);
+    if (input.rateAbove !== undefined && input.rateAbove !== '') ag.getRange('F2').setValue(num_(input.rateAbove) / 100);
+    if (input.pmRate !== undefined && input.pmRate !== '') pm.getRange('B2').setValue(num_(input.pmRate) / 100);
+    return crmCommissionDefaults_();
+  },
+
+  /** One person's own rate on the Commission Settings tab (empty rate = the default). */
+  personRate: function (input, actor) {
+    const sh = crmTab_(CRM_RATES_TAB, CRM_RATES_COLS);
+    const role = input.role === 'PM' ? 'PM' : 'Agent';
+    const rows = rowsOf_(sh, CRM_RATES_COLS, 1);
+    let r = 0;
+    rows.forEach(function (o, i) { if (String(o.Person).trim() === String(input.name).trim() && o.Role === role) r = i + 2; });
+    const rate = input.rate === '' || input.rate === null || input.rate === undefined ? '' : num_(input.rate) / 100;
+    const row = [String(input.name).trim(), role, rate, String(input.note || ''), new Date()];
+    if (!r) r = lastRowIn_(sh, 1) + 1;
+    sh.getRange(r, 1, 1, row.length).setValues([row]);
+    sh.getRange(r, 3).setNumberFormat('0.##%');
+    sh.getRange(r, 5).setNumberFormat('dd-mmm-yyyy hh:mm');
+    return { person: row[0], role: role, by: actor };
+  },
+
+  /** What was actually paid to someone: a row on the Commission Payouts tab. */
+  addPayout: function (input, actor) {
+    const sh = crmTab_(CRM_PAYOUTS_TAB, CRM_PAYOUT_COLS);
+    const amt = num_(input.amount);
+    if (!amt) throw new Error('Enter the amount paid.');
+    const id = nextId_('LAST_PAYOUT_NO', 'CP-', 4, colValues_(sh, CRM_PAYOUT_COLS, 'Payout ID', 1));
+    const r = lastRowIn_(sh, 1) + 1;
+    sh.getRange(r, 1, 1, CRM_PAYOUT_COLS.length).setValues([[id, crmDate_(input.date) || dateOnly_(new Date()), String(input.name).trim(),
+      input.role === 'PM' ? 'PM' : 'Agent', amt, crmDate_(input.upTo), String(input.note || ''), actor, new Date()]]);
+    sh.getRange(r, 2).setNumberFormat('dd-mmm-yyyy');
+    sh.getRange(r, 5).setNumberFormat('#,##0');
+    sh.getRange(r, 6).setNumberFormat('dd-mmm-yyyy');
+    sh.getRange(r, 9).setNumberFormat('dd-mmm-yyyy hh:mm');
+    return { payoutId: id };
+  },
+
+  deletePayout: function (input) {
+    const sh = crmTab_(CRM_PAYOUTS_TAB, CRM_PAYOUT_COLS);
+    const r = findRow_(sh, CRM_PAYOUT_COLS, String(input.payoutId), 1);
+    if (!r) throw new Error('Payout ' + input.payoutId + ' was not found.');
+    sh.deleteRow(r);
+    return { payoutId: input.payoutId };
   }
 };
+
+/* Deal columns the CRM may change (formula columns are never written). */
+const CRM_EDITABLE = ['Date Closed', 'Sales Agent', 'Team', 'Client', 'Business / Brand', 'Phone', 'Email', 'Country', 'Website Region',
+  'Website Amount', 'Hosting Amount', 'Marketing Region', 'Marketing Days', 'Marketing Start', 'Marketing Amount', 'Other Service',
+  'Other Amount', 'Notes'];
+
+/** A tab the CRM keeps (made the first time it is needed). */
+function crmTab_(name, cols) {
+  const ss = ss_();
+  let sh = ss.getSheetByName(name);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    sh.getRange(1, 1, 1, cols.length).setValues([cols]).setFontWeight('bold').setBackground(NAVY).setFontColor('#FFFFFF');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+/** The default commission numbers, and who counts as a PM, read straight from the Sheet. */
+function crmCommissionDefaults_() {
+  const ag = tab_(TAB.agents), pm = tab_(TAB.pm);
+  return {
+    target: ag ? num_(ag.getRange('B2').getValue()) : 0,
+    rateBelow: ag ? num_(ag.getRange('D2').getValue()) : 0,
+    rateAbove: ag ? num_(ag.getRange('F2').getValue()) : 0,
+    pmRate: pm ? num_(pm.getRange('B2').getValue()) : 0,
+    teams: teamNames_(),
+    noPmTeams: pmSkip_()
+  };
+}
+
+/* ---------------- Telling the CRM about changes ---------------- */
+
+/** Run once from the editor: the CRM then hears about form answers and edits within seconds. */
+function crmSetup() {
+  const ss = SpreadsheetApp.openById(CRM_SHEET_ID);
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'crmOnSheetChange') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('crmOnSheetChange').forSpreadsheet(ss).onFormSubmit().create();
+  ScriptApp.newTrigger('crmOnSheetChange').forSpreadsheet(ss).onEdit().create();
+  ScriptApp.newTrigger('crmOnSheetChange').forSpreadsheet(ss).onChange().create();
+  return 'Done: the CRM will hear about changes.';
+}
+
+/** Waits for the main script to finish its own updates, then tells the CRM (at most one call per half minute). */
+function crmOnSheetChange() {
+  if (!/^https:\/\//.test(CRM_URL)) return;
+  const cache = CacheService.getScriptCache();
+  if (cache.get('crm_notify')) return;
+  cache.put('crm_notify', '1', 30);
+  Utilities.sleep(15000);
+  try {
+    UrlFetchApp.fetch(CRM_URL.replace(/\/$/, '') + '/api/tracker/notify', {
+      method: 'post', contentType: 'application/json', payload: JSON.stringify({ key: CRM_KEY }), muteHttpExceptions: true
+    });
+  } catch (err) { Logger.log('CRM notify: ' + err.message); }
+}
 `

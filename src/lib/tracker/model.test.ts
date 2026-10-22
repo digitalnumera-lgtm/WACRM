@@ -87,7 +87,15 @@ describe('apps script file', () => {
     expect(TRACKER_APPS_SCRIPT).toContain("const CRM_KEY = 'PASTE-KEY-HERE'")
   })
   it('changes the Sheet only through the main script functions the forms and tabs use', () => {
-    for (const fn of ['dealFromRaw_(', 'addDeal_(', 'addPayment_(', 'createProject_(', 'syncClickUpStatus_(', 'deleteDeal_(', 'recalc_()']) expect(TRACKER_APPS_SCRIPT).toContain(fn)
-    expect(TRACKER_APPS_SCRIPT).not.toMatch(/appendRow|deleteRow|insertRow|setFormula|setTrashed|UrlFetchApp\.fetch\(/)
+    for (const fn of ['dealFromRaw_(', 'addDeal_(', 'addPayment_(', 'createProject_(', 'syncClickUpStatus_(', 'deleteDeal_(', 'recalc_()', 'refreshServices_(', 'healthCheck_()']) expect(TRACKER_APPS_SCRIPT).toContain(fn)
+    // Rows are only removed for a single payment or payout the CRM asked to remove; nothing is ever trashed.
+    expect(TRACKER_APPS_SCRIPT.match(/deleteRow\(/g)).toHaveLength(2)
+    expect(TRACKER_APPS_SCRIPT).not.toMatch(/appendRow|insertRow|setFormula|setTrashed/)
+    // The only outgoing call besides ClickUp reads is the change alert to this CRM, carrying just the key.
+    expect(TRACKER_APPS_SCRIPT).toContain("payload: JSON.stringify({ key: CRM_KEY })")
+    expect(TRACKER_APPS_SCRIPT).toContain("const CRM_URL = 'PASTE-CRM-ADDRESS'")
+  })
+  it('never writes formula columns when a deal is edited', () => {
+    expect(TRACKER_APPS_SCRIPT).toContain('formulas[name] || CRM_EDITABLE.indexOf(name) < 0')
   })
 })

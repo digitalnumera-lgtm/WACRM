@@ -1,5 +1,5 @@
 // The private link to the Apps Script web app, and the cached Sheet copy.
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { decrypt, encrypt } from '@/lib/whatsapp/encryption'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { isRawSnapshot, type RawSnapshot } from './model'
@@ -81,9 +81,7 @@ export async function getSnapshot(accountId: string, { force = false } = {}): Pr
       if (!conn.url || !conn.key) throw new TrackerConnectionError('not_connected', 'The Client Tracker is not connected to the Sheet yet.')
       const body = await callScript(conn.url, conn.key, 'snapshot', {}, 90_000)
       if (!isRawSnapshot(body.snapshot)) throw new TrackerConnectionError('bad_reply', 'The script answered without Sheet data. Update the script file to the latest version.')
-      const fetchedAt = new Date().toISOString()
-      const saved = await db.from('tracker_snapshot').upsert({ account_id: accountId, data: body.snapshot, fetched_at: fetchedAt }, { onConflict: 'account_id' })
-      if (saved.error) throw saved.error
+      const fetchedAt = await storeSnapshot(accountId, body.snapshot)
       return { raw: body.snapshot, fetchedAt }
     })().finally(() => inflight.delete(accountId))
     inflight.set(accountId, job)
@@ -97,8 +95,34 @@ export async function getSnapshot(accountId: string, { force = false } = {}): Pr
 
 /** Saves a Sheet copy the script returned after a change. */
 export async function storeSnapshot(accountId: string, snapshot: RawSnapshot): Promise<string> {
+  const db = monitoringAdmin()
   const fetchedAt = new Date().toISOString()
-  const saved = await monitoringAdmin().from('tracker_snapshot').upsert({ account_id: accountId, data: snapshot, fetched_at: fetchedAt }, { onConflict: 'account_id' })
+  const hash = snapshotHash(snapshot)
+  // Same content as last time: only the time is updated (a tiny write instead of the whole copy).
+  const same = await db.from('tracker_snapshot').update({ fetched_at: fetchedAt }).eq('account_id', accountId).eq('data_hash', hash).select('account_id')
+  if (!same.error && (same.data?.length ?? 0) > 0) return fetchedAt
+  const saved = await db.from('tracker_snapshot').upsert({ account_id: accountId, data: snapshot, fetched_at: fetchedAt, data_hash: hash }, { onConflict: 'account_id' })
   if (saved.error) throw saved.error
   return fetchedAt
+}
+
+/** Fingerprint of the Sheet copy without its timestamp: unchanged copies are not written again. */
+export function snapshotHash(snapshot: RawSnapshot): string {
+  const { generatedAt: _ignored, ...rest } = snapshot // eslint-disable-line @typescript-eslint/no-unused-vars
+  return createHash('sha256').update(JSON.stringify(rest)).digest('hex')
+}
+
+/** The company whose script sent this key, or null. */
+export async function accountForKey(key: string): Promise<string | null> {
+  if (!/^[A-Za-z0-9_-]{20,100}$/.test(key)) return null
+  const rows = await monitoringAdmin().from('tracker_connection').select('account_id,encrypted_key').not('encrypted_key', 'is', null)
+  if (rows.error) return null
+  const given = Buffer.from(key)
+  for (const row of rows.data ?? []) {
+    let stored: string
+    try { stored = decrypt(row.encrypted_key as string) } catch { continue }
+    const want = Buffer.from(stored)
+    if (want.length === given.length && timingSafeEqual(want, given)) return row.account_id as string
+  }
+  return null
 }

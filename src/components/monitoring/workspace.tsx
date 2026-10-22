@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import dynamic from 'next/dynamic'
-import { ChartNoAxesCombined, Columns3, Image as ImageIcon, Inbox, LayoutDashboard, LogOut, MessageSquare, Settings, Users } from 'lucide-react'
+import { ChartNoAxesCombined, CircleHelp, Columns3, Image as ImageIcon, Inbox, LayoutDashboard, LogOut, MessageSquare, Settings, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { MonitoringThread } from '@/lib/monitoring/types'
 import type { ThreadWorkflow } from '@/lib/monitoring/workflow-types'
 import { can, type MonitoringMe, type Permission } from '@/lib/monitoring/permissions'
-import type { Preferences } from '@/lib/monitoring/preferences'
+import { LIST_WIDTH, type Preferences } from '@/lib/monitoring/preferences'
 import { Conversation, prefetchConversation, workflowPatch, type ChatSnapshot } from './conversation'
 import { ContactPanel } from './contact-panel'
 import { ConversationList, emptyFilters, previewText, useInbox, type InboxFilters } from './inbox-list'
@@ -16,7 +16,8 @@ import { LabelsSettings, useLabels } from './labels'
 import { AccessProvider } from './access'
 import { SectionBoundary } from './error-boundary'
 import { SortableNav, orderedPages } from './sortable-nav'
-import { lastPanel, rememberPanel } from '@/components/tracker/panel'
+import { lastPanel, rememberPanel, restorePage, savePage } from '@/components/tracker/panel'
+import { PanelSwitchButton } from '@/components/tracker/panel-switch'
 import { ActivePill, MotionRoot } from './motion'
 import { playChime, PreferencesProvider, PreferencesSettings, useDarkMode, usePreferences } from './preferences'
 import { MonitoringSettings } from './settings-panel'
@@ -29,7 +30,7 @@ const ContactsPanel = dynamic(() => import('./contacts-panel').then(m => m.Conta
 const MediaLibrary = dynamic(() => import('./media-library').then(m => m.MediaLibrary), { loading })
 const ReportsPanel = dynamic(() => import('./activity-panels').then(m => m.ReportsPanel), { loading })
 const MessageBrowser = dynamic(() => import('./activity-panels').then(m => m.MessageBrowser), { loading })
-const PanelSwitch = dynamic(() => import('@/components/tracker/tracker-settings').then(m => m.PanelSwitch), { loading })
+const CrmHelp = dynamic(() => import('./help').then(m => m.CrmHelp), { loading })
 const TeamSettings = dynamic(() => import('./team-settings').then(m => m.TeamSettings), { loading })
 const StorageSettings = dynamic(() => import('./storage-settings').then(m => m.StorageSettings), { loading })
 const SecuritySettings = dynamic(() => import('./security-settings').then(m => m.SecuritySettings), { loading })
@@ -42,8 +43,9 @@ const RenewMetaAccess = dynamic(() => import('./renew-access').then(m => m.Renew
 const ChannelManager = dynamic(() => import('./admin-panels').then(m => m.ChannelManager), { loading })
 const ReviewEvents = dynamic(() => import('./admin-panels').then(m => m.ReviewEvents), { loading })
 
-type View = 'Inbox' | 'Dashboard' | 'Leads' | 'Contacts' | 'Media' | 'Reports' | 'Settings'
-export type SettingsSection = 'panel' | 'preferences' | 'security' | 'team' | 'numbers' | 'storage' | 'labels' | 'replies' | 'import' | 'events' | 'access' | 'general'
+type View = 'Inbox' | 'Dashboard' | 'Leads' | 'Contacts' | 'Media' | 'Reports' | 'Help' | 'Settings'
+const VIEWS: readonly View[] = ['Inbox', 'Dashboard', 'Leads', 'Contacts', 'Media', 'Reports', 'Help', 'Settings']
+export type SettingsSection = 'preferences' | 'security' | 'team' | 'numbers' | 'storage' | 'labels' | 'replies' | 'import' | 'events' | 'access' | 'general'
 
 const nav: { name: View; label: string; icon: typeof Inbox; need: Permission }[] = [
   { name: 'Inbox', label: 'Inbox', icon: Inbox, need: 'view_inbox' },
@@ -53,9 +55,8 @@ const nav: { name: View; label: string; icon: typeof Inbox; need: Permission }[]
   { name: 'Media', label: 'Media', icon: ImageIcon, need: 'view_media' },
   { name: 'Reports', label: 'Reports', icon: ChartNoAxesCombined, need: 'view_inbox' },
 ]
-type Section = { id: SettingsSection; label: string; icon: string; hint: string; group: 'You' | 'Workspace' | 'Advanced'; allowed: (me: MonitoringMe, replies: boolean, tracker?: boolean) => boolean }
+type Section = { id: SettingsSection; label: string; icon: string; hint?: string; group: 'You' | 'Workspace' | 'Advanced'; allowed: (me: MonitoringMe, replies: boolean, tracker?: boolean) => boolean }
 const sections: Section[] = [
-  { id: 'panel', label: 'Client Tracker', icon: 'accounting', hint: 'Deals, clients, payments and commission from the Google Sheet', group: 'You', allowed: (_me, _replies, tracker) => !!tracker },
   { id: 'preferences', label: 'Preferences', icon: 'gear', hint: 'Theme, style, sounds and how the inbox opens', group: 'You', allowed: () => true },
   { id: 'security', label: 'Security', icon: 'security-checked', hint: 'Two-step sign-in and signed-in devices', group: 'You', allowed: () => true },
   { id: 'team', label: 'Team & roles', icon: 'conference-call', hint: 'Invite people, roles and which numbers they see', group: 'Workspace', allowed: me => me.full },
@@ -87,10 +88,20 @@ export function MonitoringWorkspace(props: { accountName: string; me: Monitoring
   return <PreferencesProvider initial={props.preferences}><AccessProvider me={props.me}><Workspace {...props} /></AccessProvider></PreferencesProvider>
 }
 
-function Workspace({ accountName, me, initialView = 'Inbox', initialSection, tracker = false }: { accountName: string; me: MonitoringMe; initialView?: 'Inbox' | 'Settings'; initialSection?: SettingsSection; tracker?: boolean }) {
+function Workspace({ accountName, me, initialView, initialSection, tracker = false }: { accountName: string; me: MonitoringMe; initialView?: 'Inbox' | 'Settings'; initialSection?: SettingsSection; tracker?: boolean }) {
   const { prefs, update: updatePrefs } = usePreferences()
+  const [draftWidth, setListWidth] = useState<number | null>(null)
   const dark = useDarkMode(prefs.theme)
-  const [view, setView] = useState<View>(initialView)
+  // A new visit (or one after 30 minutes away) opens the dashboard; a refresh keeps the page.
+  const home: View = can(me, 'view_reports') ? 'Dashboard' : 'Inbox'
+  const [view, setViewState] = useState<View>(initialView ?? home)
+  const setView = useCallback((next: View) => { setViewState(next); savePage('crm', next) }, [])
+  useEffect(() => {
+    if (initialView) { savePage('crm', initialView); return }
+    const allowed = VIEWS.filter(v => v === 'Settings' || v === 'Help' || nav.some(n => n.name === v && can(me, n.need)))
+    setViewState(restorePage('crm', allowed, home)) // eslint-disable-line react-hooks/set-state-in-effect -- read once after mount
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const keep = () => savePage('crm', view); window.addEventListener('pagehide', keep); return () => window.removeEventListener('pagehide', keep) }, [view])
   const [section, setSection] = useState<SettingsSection>(() => initialSection && sections.some(s => s.id === initialSection && s.allowed(me, true, tracker)) ? initialSection : 'preferences')
   const [reportsTab, setReportsTab] = useState<'activity' | 'log'>('activity')
   const [filters, setFilters] = useState<InboxFilters>(() => ({ ...emptyFilters, tab: prefs.defaultTab, sort: prefs.defaultSort }))
@@ -207,6 +218,7 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection, tra
     <Icon size={19} />{name === 'Inbox' && (inbox.counts?.waiting ?? 0) > 0 && view !== 'Inbox' && <span className="absolute right-1 top-1 size-2.5 rounded-full bg-red-500 ring-2 ring-background" />}
   </button>
   const navOrder = orderedPages(views.map(v => v.name), prefs.navOrder)
+  const listWidth = draftWidth ?? prefs.listWidth
   const chatOpenOnPhone = view === 'Inbox' && !!selected
 
   return <MotionRoot><div data-density={prefs.density} data-chat-size={prefs.chatSize} data-style={prefs.style} className={`monitoring-panel flex h-dvh flex-col overflow-hidden text-foreground md:flex-row md:gap-3 md:p-3 ${dark ? 'dark' : ''}`}>
@@ -218,12 +230,15 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection, tra
           return navButton(item.name, item.label, item.icon, state)
         }} />
         <span className="hidden md:block md:flex-1" />
+        {navButton('Help', 'Help', CircleHelp)}
+        {tracker && <PanelSwitchButton to="tracker" />}
         {navButton('Settings', 'Settings', Settings)}
       </nav>
       <div className="hidden md:block"><MonitoringSignOut compact /></div>
     </aside>
 
-    {view === 'Inbox' ? <main className={`grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] md:gap-3 ${contactOpen && selectedThread ? 'lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)_320px]' : 'lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]'}`}>
+    {view === 'Inbox' ? <main style={{ '--list-w': `${listWidth}px` } as React.CSSProperties} className={`relative grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] md:gap-3 ${contactOpen && selectedThread ? 'lg:grid-cols-[var(--list-w)_minmax(0,1fr)] xl:grid-cols-[var(--list-w)_minmax(0,1fr)_320px]' : 'lg:grid-cols-[var(--list-w)_minmax(0,1fr)]'}`}>
+      <ListResizer width={listWidth} onWidth={setListWidth} onDone={w => updatePrefs({ listWidth: w })} />
       <ConversationList inbox={inbox} filters={filters} setFilters={setFilters} labels={labels} selected={selected} onSelect={setSelected}
         onPrefetch={id => prefetchConversation(id, chatCache)} hidden={!!selected} pinned={prefs.pinned} refresh={refresh} />
       <section aria-label="Conversation" className={`min-h-0 min-w-0 overflow-hidden md:rounded-3xl md:border md:border-border md:shadow-sm ${selected ? 'flex flex-col' : 'hidden lg:flex lg:flex-col'}`}>
@@ -242,6 +257,7 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection, tra
           <header className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-sm text-muted-foreground">{accountName}</p><h1 className="font-display text-3xl font-semibold tracking-tight">{view === 'Leads' ? 'Leads board' : view}</h1></div>
             <span className="md:hidden"><MonitoringSignOut compact /></span></header>
           <SectionBoundary resetKey={`${view}:${section}:${reportsTab}`}>
+          {view === 'Help' && <div className="space-y-5"><div className="flex items-center gap-3 px-1"><Icon3D name="help" size={40} /><h1 className="font-display text-2xl font-semibold tracking-tight">Help</h1></div><CrmHelp /></div>}
           {view === 'Dashboard' && <Dashboard refresh={refresh} channels={liveChannels} onTab={tab => showInbox({ tab, sort: tab === 'waiting' ? 'oldest' : prefs.defaultSort })} onChannel={id => showInbox({ tab: 'all', channel: id })} />}
           {view === 'Leads' && <LeadsBoard channels={liveChannels} refresh={refresh} onOpen={open} />}
           {view === 'Contacts' && <ContactsPanel channels={liveChannels} onOpen={open} />}
@@ -262,8 +278,7 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection, tra
               </div> : null })}
             </nav>
             <div className="min-w-0 space-y-5">
-              {(() => { const current = sections.find(s => s.id === section); return current ? <div className="flex items-center gap-4 px-1"><Icon3D name={current.icon} size={56} /><div><h1 className="font-display text-2xl font-semibold tracking-tight">{current.label}</h1><p className="text-sm text-muted-foreground">{current.hint}</p></div></div> : null })()}
-              {section === 'panel' && tracker && <PanelSwitch target="tracker" available />}
+              {(() => { const current = sections.find(s => s.id === section); return current ? <div className="flex items-center gap-3 px-1"><Icon3D name={current.icon} size={40} /><h1 className="font-display text-2xl font-semibold tracking-tight">{current.label}</h1></div> : null })()}
               {section === 'preferences' && <PreferencesSettings />}
               {section === 'security' && <SecuritySettings />}
               {section === 'team' && me.full && <TeamSettings channels={liveChannels} />}
@@ -287,4 +302,28 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection, tra
 
 function Panel({ children }: { children: ReactNode }) {
   return <div className="space-y-5">{children}</div>
+}
+
+/** Drag the edge between the conversation list and the chat to change the list width. */
+function ListResizer({ width, onWidth, onDone }: { width: number; onWidth: (w: number | null) => void; onDone: (w: number) => void }) {
+  const start = (e: React.PointerEvent) => {
+    e.preventDefault()
+    const x0 = e.clientX, w0 = width
+    let last = w0
+    const move = (ev: PointerEvent) => { last = Math.round(Math.min(LIST_WIDTH.max, Math.max(LIST_WIDTH.min, w0 + ev.clientX - x0))); onWidth(last) }
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); document.body.style.cursor = ''; if (last !== w0) onDone(last); onWidth(null) }
+    document.body.style.cursor = 'col-resize'
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+  const nudge = (e: React.KeyboardEvent) => {
+    const step = e.key === 'ArrowLeft' ? -20 : e.key === 'ArrowRight' ? 20 : 0
+    if (step) { e.preventDefault(); onDone(Math.min(LIST_WIDTH.max, Math.max(LIST_WIDTH.min, width + step))) }
+  }
+  return <div role="separator" aria-orientation="vertical" aria-label="Resize conversation list" aria-valuenow={width} aria-valuemin={LIST_WIDTH.min} aria-valuemax={LIST_WIDTH.max} tabIndex={0}
+    onPointerDown={start} onKeyDown={nudge} onDoubleClick={() => onDone(360)} title="Drag to resize · double-click to reset"
+    style={{ left: 'calc(var(--list-w) + 6px)' }}
+    className="group absolute inset-y-4 z-20 hidden w-3 -translate-x-1/2 cursor-col-resize touch-none items-center justify-center lg:flex">
+    <span className="h-12 w-1 rounded-full bg-border transition-colors group-hover:bg-foreground/40 group-focus-visible:bg-foreground/60" />
+  </div>
 }
