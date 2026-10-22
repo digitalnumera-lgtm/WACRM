@@ -1,14 +1,17 @@
 import { readCursor, cursorFilter, makeCursor } from '@/lib/monitoring/scroll'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { messageText } from '@/lib/monitoring/rich-message'
-import { requireRole } from '@/lib/auth/account'
+import { after as afterResponse } from 'next/server'
+import { canSeeChannel, requireMonitoring } from '@/lib/monitoring/team-access'
+import { touchThread } from '@/lib/monitoring/storage'
 import { checkedId, monitoringError, pageNumber, privateJson, readJson, requiredText, threadColumns } from '@/lib/monitoring/http'
 
 type Context = { params: Promise<{ id: string }> }
 
 export async function GET(request: Request, context: Context) {
   try {
-    const { supabase, accountId } = await requireRole('admin')
+    const access = await requireMonitoring('view_inbox')
+    const { db: supabase, accountId } = access
     const id = checkedId((await context.params).id)
     const params = new URL(request.url).searchParams
     const page = pageNumber(params.get('page'))
@@ -29,7 +32,12 @@ export async function GET(request: Request, context: Context) {
         : Promise.resolve({ data: [], count: 0, error: null }),
     ])
     if (thread.error || messages.error || audit.error) throw thread.error ?? messages.error ?? audit.error
-    if (!thread.data) return privateJson({ error: 'Conversation not found.' }, 404)
+    if (!thread.data || !canSeeChannel(access, thread.data.channel_id)) return privateJson({ error: 'Conversation not found.' }, 404)
+    // The first load after a chat is opened (not hover prefetch, paging or
+    // polling) keeps its saved media from cleanup. Recorded after the response.
+    if (params.get('opened') === '1') {
+      try { afterResponse(() => touchThread(accountId, id)) } catch { void touchThread(accountId, id) }
+    }
     const rows = scroll ? (messages.data ?? []).slice(0, 50) : messages.data ?? []
     // Most rich text is already normalized on ingestion. Retrieve missing detail
     // in bounded batches rather than issuing up to 50 ledger queries per chat.
@@ -62,15 +70,19 @@ export async function GET(request: Request, context: Context) {
 
 export async function PATCH(request: Request, context: Context) {
   try {
-    const { supabase, accountId } = await requireRole('admin')
+    const access = await requireMonitoring('edit_lead_stage')
+    const { db: supabase, accountId, userId } = access
     const id = checkedId((await context.params).id)
     const body = await readJson(request)
     const status = requiredText(body, 'lead_status', 40)
-    const thread = await supabase.from('monitoring_threads').select('id').eq('account_id', accountId).eq('id', id).maybeSingle()
+    const thread = await supabase.from('monitoring_threads').select('id,channel_id').eq('account_id', accountId).eq('id', id).maybeSingle()
     if (thread.error) throw thread.error
-    if (!thread.data) return privateJson({ error: 'Conversation not found.' }, 404)
-    // Existing database function updates the status and audit in one transaction.
-    const result = await supabase.rpc('set_monitoring_lead_status', { p_thread: id, p_status: status })
+    if (!thread.data || !canSeeChannel(access, thread.data.channel_id)) return privateJson({ error: 'Conversation not found.' }, 404)
+    // Database functions update the status and audit in one transaction: the
+    // admin one checks the session; the member one runs after the check above.
+    const result = access.full
+      ? await supabase.rpc('set_monitoring_lead_status', { p_thread: id, p_status: status })
+      : await supabase.rpc('monitoring_set_lead_status_as', { p_account: accountId, p_thread: id, p_status: status, p_actor: userId })
     if (result.error) {
       if (result.error.code === '22023' || result.error.code === '23514') return privateJson({ error: 'Unsupported lead status.' }, 400)
       throw result.error

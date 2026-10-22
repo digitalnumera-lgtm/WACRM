@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AlarmClock, ArrowDown, ArrowLeft, CheckCheck, ChevronDown, LoaderCircle, LockKeyhole, Mail, MailOpen, MoreVertical, PanelRight, RotateCcw } from 'lucide-react'
 import { MessageMedia } from './message-media'
+import { useCan } from './access'
 import { ReplyComposer } from './reply-composer'
 import type { MonitoringChannel, MonitoringMessage, MonitoringThread, ThreadDetail } from '@/lib/monitoring/types'
 import type { ConversationPriority, InternalNote, ThreadWorkflow } from '@/lib/monitoring/workflow-types'
@@ -52,6 +53,8 @@ export function Conversation({ id, thread: listThread, channels, repliesEnabled,
   cache: Map<string, ChatSnapshot>; contactOpen: boolean; onToggleContact: () => void; onBack: () => void;
   onPatched: (patch: Partial<MonitoringThread>) => void; onLoaded: (thread: MonitoringThread) => void; onChanged: () => void;
 }) {
+  const canManage = useCan('manage_conversations')
+  const canNote = useCan('write_notes')
   const [snapshot, setSnapshot] = useState<ChatSnapshot | null>(() => cache.get(id) ?? null)
   const snapshotRef = useRef(snapshot)
   const [error, setError] = useState('')
@@ -70,6 +73,9 @@ export function Conversation({ id, thread: listThread, channels, repliesEnabled,
   const polling = useRef(false)
   const positioned = useRef(false)
   const markedRead = useRef(false)
+  // The first request after opening tells the server this chat was viewed
+  // (keeps its saved media); polling and hover prefetch do not.
+  const openedSent = useRef(false)
   const scrollUpdate = useRef<{ height: number; top: number } | 'bottom' | null>('bottom')
   const endpoint = `/api/monitoring/threads/${id}`
   const save = useCallback((value: ChatSnapshot) => {
@@ -94,7 +100,9 @@ export function Conversation({ id, thread: listThread, channels, repliesEnabled,
       const newest = snapshotRef.current?.messages.at(-1)
       let next = newest ? cursor(newest) : null
       do {
-        const response = await read(`${endpoint}?scroll=1${next ? `&after=${encodeURIComponent(next)}` : ''}`, signal)
+        const opened = openedSent.current ? '' : '&opened=1'
+        const response = await read(`${endpoint}?scroll=1${opened}${next ? `&after=${encodeURIComponent(next)}` : ''}`, signal)
+        openedSent.current = true
         if (signal.aborted) return
         const current = snapshotRef.current
         const atBottom = nearBottom()
@@ -174,11 +182,12 @@ export function Conversation({ id, thread: listThread, channels, repliesEnabled,
   // (never a WhatsApp read receipt). "Mark unread" undoes it.
   const unread = !!thread && ((thread.unread_count ?? 0) > 0 || !!thread.marked_unread)
   useEffect(() => {
-    if (!snapshot || !workflowReady || markedRead.current || !thread?.state || !unread) return
+    // Only roles that manage conversations change the shared read state.
+    if (!canManage || !snapshot || !workflowReady || markedRead.current || !thread?.state || !unread) return
     markedRead.current = true
     void update({ action: 'read' })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snapshot, workflowReady, thread?.state, unread])
+  }, [snapshot, workflowReady, thread?.state, unread, canManage])
 
   const channel = channels.find(c => c.id === thread?.channel_id)
   const name = thread?.customer_name || (thread ? `+${thread.customer}` : 'Opening conversation…')
@@ -198,7 +207,7 @@ export function Conversation({ id, thread: listThread, channels, repliesEnabled,
         <h3 className="flex items-center gap-2 truncate text-base font-semibold">{name}<PriorityIcon priority={priority} /></h3>
         <p className="truncate text-xs text-muted-foreground">{thread && `+${thread.customer}`}{channel && <> · <span className="font-medium text-foreground/80">{channel.label}</span> · {channel.display_number}</>}{channel && !channel.active && ' · removed from monitoring'}</p>
       </div>
-      {workflowReady && thread?.state && <div className="flex items-center gap-1.5">
+      {canManage && workflowReady && thread?.state && <div className="flex items-center gap-1.5">
         <div className="flex">
           {state === 'open'
             ? <button className={`${primaryButton} rounded-r-none bg-emerald-600`} disabled={busy} onClick={() => void update({ action: 'status', status: 'resolved' })}><CheckCheck size={16} /><span className="hidden sm:inline">Resolve</span></button>
@@ -246,7 +255,8 @@ export function Conversation({ id, thread: listThread, channels, repliesEnabled,
       </div>}
       {repliesEnabled && tab === 'reply'
         ? <ReplyComposer threadId={id} variables={{ name: thread?.customer_name || thread?.customer || '', phone: thread?.customer || '', agent: channel?.label || '' }} onSent={() => { scrollUpdate.current = 'bottom'; void latest(); onChanged() }} />
-        : <NoteComposer endpoint={`${endpoint}/notes`} onSaved={() => { scrollUpdate.current = 'bottom'; setNotesRevision(n => n + 1) }} />}
+        : canNote ? <NoteComposer endpoint={`${endpoint}/notes`} onSaved={() => { scrollUpdate.current = 'bottom'; setNotesRevision(n => n + 1) }} />
+          : <p className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground"><LockKeyhole size={13} />View only. Your role can read this conversation but not add notes.</p>}
     </footer>
   </div>
 }

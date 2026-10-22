@@ -1,6 +1,7 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto'
 import { after } from 'next/server'
 import { archiveDeliveredMedia } from '@/lib/monitoring/media-archive'
+import { AUTO_SAVE_MAX_BYTES, readStorageSettings, runStorageCleanup } from '@/lib/monitoring/storage'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { monitoringBatches, persistMonitoringBatches } from '@/lib/monitoring/ingest'
@@ -50,9 +51,18 @@ export async function POST(request: Request) {
     outcomes.batches = batches.length
     const db = monitoringAdmin()
     const archive = await persistMonitoringBatches(db, batches, event => { outcomes[event] = (outcomes[event] ?? 0) + 1 })
-    // Copy new media to permanent storage after Meta has its acknowledgement.
+    // Save new media to storage after Meta has its acknowledgement.
     if (archive?.length) {
-      try { after(() => archiveDeliveredMedia(db, archive).catch(() => {})) } catch { /* No request scope (tests): skip archiving. */ }
+      const policy = async (accountId: string) => {
+        const settings = await readStorageSettings(db, accountId)
+        return { kinds: settings.auto_save, maxBytes: AUTO_SAVE_MAX_BYTES }
+      }
+      // Save new media, then (at most hourly per company) apply storage cleanup.
+      const work = async () => {
+        await archiveDeliveredMedia(db, archive, 25, policy).catch(() => {})
+        for (const accountId of new Set(archive.map(job => job.accountId))) await runStorageCleanup(db, accountId).catch(() => {})
+      }
+      try { after(work) } catch { /* No request scope (tests): skip archiving. */ }
     }
     return finish('acknowledged', 200, { received: true })
   } catch {

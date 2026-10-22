@@ -5,6 +5,7 @@ import { Building2, ChevronDown, Copy, Mail, MapPin, Pencil, Phone, Plus, X } fr
 import { leadStatuses, type LeadAudit, type MonitoringChannel, type MonitoringThread } from '@/lib/monitoring/types'
 import type { ContactProfile, ConversationPriority, MonitoringLabel } from '@/lib/monitoring/workflow-types'
 import { LabelPicker } from './labels'
+import { useCan } from './access'
 import { api, Avatar, buttonClass, inputClass, LabelChip, Menu, primaryButton, priorityMeta, sendJson, timeAgo } from './ui'
 
 type Related = Pick<MonitoringThread, 'id' | 'channel_id' | 'lead_status' | 'last_message_at' | 'last_preview' | 'last_direction' | 'message_count' | 'customer_name'>
@@ -23,6 +24,8 @@ export function ContactPanel({ thread, channels, labels, workflowReady, onPatche
   thread: MonitoringThread; channels: MonitoringChannel[]; labels: MonitoringLabel[]; workflowReady: boolean | null;
   onPatched: (patch: Partial<MonitoringThread>) => void; onOpenThread: (id: string) => void; onClose: () => void
 }) {
+  const canView = useCan('view_contacts'), canEdit = useCan('edit_contacts'), canLead = useCan('edit_lead_stage')
+  const canPriority = useCan('manage_conversations'), canLabel = useCan('apply_labels')
   const [profile, setProfile] = useState<ContactProfile | null>(null)
   const [related, setRelated] = useState<Related[]>([])
   const [editing, setEditing] = useState(false)
@@ -33,12 +36,13 @@ export function ContactPanel({ thread, channels, labels, workflowReady, onPatche
   const name = profile?.name || thread.customer_name || `+${thread.customer}`
 
   useEffect(() => {
+    if (!canView) return
     const controller = new AbortController()
     api<{ profile: ContactProfile | null; conversations: Related[] }>(`/api/monitoring/contacts/profile?customer=${encodeURIComponent(thread.customer)}`, { signal: controller.signal })
       .then(data => { setProfile(data.profile); setRelated(data.conversations); setError('') })
       .catch(e => { if (!controller.signal.aborted) setError(e.message) })
     return () => controller.abort()
-  }, [thread.customer, revision])
+  }, [thread.customer, revision, canView])
 
   async function act(action: () => Promise<void>) {
     setBusy(true); setError('')
@@ -63,7 +67,7 @@ export function ContactPanel({ thread, channels, labels, workflowReady, onPatche
         <li className="flex items-center gap-2"><Building2 size={14} className="text-muted-foreground" /><span className={profile?.company ? '' : 'text-muted-foreground'}>{profile?.company || 'No company'}</span></li>
         <li className="flex items-center gap-2"><MapPin size={14} className="text-muted-foreground" /><span className={profile?.city ? '' : 'text-muted-foreground'}>{profile?.city || 'No city'}</span></li>
         {profile?.notes && <li className="whitespace-pre-wrap rounded-lg bg-muted/60 p-2 text-xs">{profile.notes}</li>}
-        <li><button className={`${buttonClass} mt-1 w-full`} disabled={workflowReady === false} title={workflowReady === false ? 'Needs the inbox database update' : undefined} onClick={() => setEditing(true)}><Pencil size={14} />Edit contact</button></li>
+        {canEdit && <li><button className={`${buttonClass} mt-1 w-full`} disabled={workflowReady === false} title={workflowReady === false ? 'Needs the inbox database update' : undefined} onClick={() => setEditing(true)}><Pencil size={14} />Edit contact</button></li>}
       </ul> : <ContactForm profile={profile} fallbackName={thread.customer_name} busy={busy} onCancel={() => setEditing(false)} onSave={values => act(async () => {
         const data = await api<{ profile: ContactProfile }>('/api/monitoring/contacts/profile', sendJson('PUT', { customer: thread.customer, ...values }))
         setProfile(data.profile); setEditing(false); setRevision(n => n + 1)
@@ -72,11 +76,11 @@ export function ContactPanel({ thread, channels, labels, workflowReady, onPatche
 
     <Section title="Conversation">
       <div className="space-y-3">
-        <label className="block text-xs font-medium text-muted-foreground">Lead stage<select aria-label="Lead stage" className={`${inputClass} mt-1 capitalize`} value={thread.lead_status} disabled={busy} onChange={e => void setLead(e.target.value)}>{!leadStatuses.includes(thread.lead_status as typeof leadStatuses[number]) && <option>{thread.lead_status}</option>}{leadStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
-        <label className="block text-xs font-medium text-muted-foreground">Priority<select aria-label="Priority" className={`${inputClass} mt-1`} value={thread.priority ?? 'none'} disabled={busy || !workflowReady} onChange={e => void setPriority(e.target.value as ConversationPriority)}>{(['none', 'low', 'medium', 'high', 'urgent'] as const).map(p => <option key={p} value={p}>{priorityMeta[p].label}</option>)}</select></label>
+        <label className="block text-xs font-medium text-muted-foreground">Lead stage<select aria-label="Lead stage" className={`${inputClass} mt-1 capitalize`} value={thread.lead_status} disabled={busy || !canLead} onChange={e => void setLead(e.target.value)}>{!leadStatuses.includes(thread.lead_status as typeof leadStatuses[number]) && <option>{thread.lead_status}</option>}{leadStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
+        <label className="block text-xs font-medium text-muted-foreground">Priority<select aria-label="Priority" className={`${inputClass} mt-1`} value={thread.priority ?? 'none'} disabled={busy || !workflowReady || !canPriority} onChange={e => void setPriority(e.target.value as ConversationPriority)}>{(['none', 'low', 'medium', 'high', 'urgent'] as const).map(p => <option key={p} value={p}>{priorityMeta[p].label}</option>)}</select></label>
         <div><p className="text-xs font-medium text-muted-foreground">Labels</p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">{threadLabels.map(l => <LabelChip key={l.id} label={l} onRemove={busy ? undefined : () => void setLabels((thread.label_ids ?? []).filter(id => id !== l.id))} />)}
-            {workflowReady && <Menu label="Add label" align="left" trigger={<><Plus size={13} /><span className="text-xs">Add</span></>}>{() => <LabelPicker labels={labels} selected={thread.label_ids ?? []} disabled={busy} onChange={ids => void setLabels(ids)} />}</Menu>}
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">{threadLabels.map(l => <LabelChip key={l.id} label={l} onRemove={busy || !canLabel ? undefined : () => void setLabels((thread.label_ids ?? []).filter(id => id !== l.id))} />)}
+            {workflowReady && canLabel && <Menu label="Add label" align="left" trigger={<><Plus size={13} /><span className="text-xs">Add</span></>}>{() => <LabelPicker labels={labels} selected={thread.label_ids ?? []} disabled={busy} onChange={ids => void setLabels(ids)} />}</Menu>}
             {workflowReady === false && <span className="text-xs text-muted-foreground">Needs the inbox database update</span>}
           </div>
         </div>
@@ -94,7 +98,7 @@ export function ContactPanel({ thread, channels, labels, workflowReady, onPatche
       </dl>
     </Section>
 
-    <Section title={`Other conversations (${others.length})`} defaultOpen={others.length > 0}>
+    {canView && <Section title={`Other conversations (${others.length})`} defaultOpen={others.length > 0}>
       {others.length === 0 ? <p className="text-xs text-muted-foreground">This customer has not messaged any other business number.</p>
         : <ul className="space-y-2">{others.map(r => { const c = channels.find(ch => ch.id === r.channel_id); return <li key={r.id}>
           <button className="w-full rounded-lg border border-border p-2.5 text-left hover:border-primary/50 hover:bg-muted/50" onClick={() => onOpenThread(r.id)}>
@@ -102,7 +106,7 @@ export function ContactPanel({ thread, channels, labels, workflowReady, onPatche
             <p className="mt-1 truncate text-xs text-muted-foreground">{r.last_preview || 'Media message'}</p>
             <p className="mt-1 text-[11px] capitalize text-muted-foreground">{r.lead_status} · {r.message_count} messages</p>
           </button></li> })}</ul>}
-    </Section>
+    </Section>}
 
     <Section title="Lead history" defaultOpen={false}>
       {/* Loaded only when opened, to keep switching chats fast. */}

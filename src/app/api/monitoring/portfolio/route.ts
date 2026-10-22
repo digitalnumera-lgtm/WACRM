@@ -1,10 +1,12 @@
 import { existingMonitoringToken } from '@/lib/monitoring/channel-token'
-import { requireRole } from '@/lib/auth/account'
+import { assertAllNumbers, requireMonitoring } from '@/lib/monitoring/team-access'
 import { monitoringError, privateJson, readJson, requiredText } from '@/lib/monitoring/http'
 
 export async function POST(request: Request) {
   try {
-    const { accountId } = await requireRole('admin')
+    const access = await requireMonitoring('manage_numbers')
+    assertAllNumbers(access)
+    const { accountId } = access
     const body = await readJson(request)
     const business = requiredText(body, 'business_id', 40)
     let token: string

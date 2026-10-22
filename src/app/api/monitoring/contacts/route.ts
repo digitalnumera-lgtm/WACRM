@@ -1,16 +1,20 @@
-import { requireRole } from '@/lib/auth/account'
+import { requireMonitoring, scopeChannels } from '@/lib/monitoring/team-access'
 import { monitoringError, pageNumber, privateJson, readJson } from '@/lib/monitoring/http'
 export async function GET(request: Request) {
   try {
-    const { supabase, accountId } = await requireRole('admin')
+    const access = await requireMonitoring('view_contacts')
+    const { db: supabase, accountId } = access
     const params = new URL(request.url).searchParams; const page = pageNumber(params.get('page'))
     const search = (params.get('q') ?? '').trim().slice(0, 120).toLowerCase()
     const literal = search.replace(/\\/g, '\\\\').replace(/[%_*]/g, '\\$&').replace(/"/g, '\\"')
     const directory = new Map<string, { phone: string; name: string; email: string | null; threads: { id: string; channel_id: string }[] }>()
     let truncated = false
-    for (const table of ['contacts', 'monitoring_threads']) {
+    // Address-book contacts are shared across every number, so members limited
+    // to some numbers only see customers who chatted with those numbers.
+    for (const table of access.channelIds === null ? ['contacts', 'monitoring_threads'] : ['monitoring_threads']) {
       for (let offset = 0; offset < 10000; offset += 1000) {
         let query = supabase.from(table).select(table === 'contacts' ? 'id,phone,name,email' : 'id,customer,customer_name,channel_id').eq('account_id', accountId)
+        if (table === 'monitoring_threads') query = scopeChannels(access, query)
         if (search) query = query.or(table === 'contacts' ? `phone.ilike."%${literal}%",name.ilike."%${literal}%"` : `customer.ilike."%${literal}%",customer_name.ilike."%${literal}%"`)
         const result = await query.order('id').range(offset, offset + 999)
         if (result.error) throw result.error
@@ -31,7 +35,7 @@ export async function GET(request: Request) {
 }
 export async function POST(request: Request) {
   try {
-    const { supabase, accountId, userId } = await requireRole('admin')
+    const { db: supabase, accountId, userId } = await requireMonitoring('edit_contacts')
     const body = await readJson(request, 2 * 1024 * 1024)
     if (!Array.isArray(body.contacts) || !body.contacts.length || body.contacts.length > 200) return privateJson({ error: 'Choose 1–200 contacts per batch.' }, 400)
     const contacts = []

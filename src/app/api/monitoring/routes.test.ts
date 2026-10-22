@@ -74,7 +74,7 @@ describe('management monitoring APIs', () => {
     const body = await response.json()
     expect(body.channels).toHaveLength(1); expect(body.threads).toHaveLength(1)
     expect(body.threads[0].customer).toBe('customer')
-    expect(mocks.role).toHaveBeenCalledWith('admin')
+    expect(mocks.role).toHaveBeenCalledWith('viewer')
     expect(calls.filter(c => c.method === 'eq' && c.args[0] === 'account_id')).toEqual([
       { table: 'monitoring_channels', method: 'eq', args: ['account_id', company] },
       { table: 'monitoring_inbox', method: 'eq', args: ['account_id', company] },

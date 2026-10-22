@@ -1,4 +1,4 @@
-import { requireRole } from '@/lib/auth/account'
+import { requireMonitoring } from '@/lib/monitoring/team-access'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { checkedId, monitoringError, privateJson, readJson, requiredText } from '@/lib/monitoring/http'
 import { managementReplyTarget, managementReplyWindow, readReplyAttempt, replyAttemptResult, sendManagementReply } from '@/lib/monitoring/management-reply'
@@ -8,7 +8,7 @@ import { managementRepliesEnabled } from '@/lib/monitoring/settings'
 type Context = { params: Promise<{ id: string }> }
 export async function GET(request: Request, context: Context) {
   try {
-    const { supabase, accountId } = await requireRole('admin')
+    const { supabase, accountId } = await requireMonitoring('full')
     const id = checkedId((await context.params).id)
     const target = await managementReplyTarget(supabase, accountId, id)
     if (!target) return privateJson({ error: 'Conversation not found.' }, 404)
@@ -21,7 +21,7 @@ export async function GET(request: Request, context: Context) {
 }
 export async function POST(request: Request, context: Context) {
   try {
-    const { supabase, accountId, userId } = await requireRole('admin')
+    const { supabase, accountId, userId } = await requireMonitoring('full')
     const id = checkedId((await context.params).id)
     const body = await readJson(request, 32768)
     const requestId = checkedId(String(body.request_id ?? ''))

@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import { requireRole } from '@/lib/auth/account'
+import { requireMonitoring } from '@/lib/monitoring/team-access'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { checkedId, MonitoringInputError, monitoringError, privateJson, readJson, requiredText } from '@/lib/monitoring/http'
 import { workflowId } from '@/lib/monitoring/workflow'
 
 export async function GET(request: Request) {
   try {
-    const { accountId } = await requireRole('admin')
+    const { accountId } = await requireMonitoring('view_inbox')
     const search = new URL(request.url).searchParams.get('q')?.trim() ?? ''
     if (search.length > 120) throw new MonitoringInputError('Search is too long.')
     let query = monitoringAdmin().from('monitoring_events').select('id,payload', { count: 'exact' })
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 }
 export async function POST(request: Request) {
   try {
-    const { accountId, userId } = await requireRole('admin')
+    const { accountId, userId } = await requireMonitoring('full')
     const body = await readJson(request, 32768)
     const title = requiredText(body, 'title', 80)
     const text = requiredText(body, 'body', 4096)
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
 }
 export async function PATCH(request: Request) {
   try {
-    const { accountId, userId } = await requireRole('admin')
+    const { accountId, userId } = await requireMonitoring('full')
     const body = await readJson(request, 32768)
     const id = checkedId(String(body.id ?? ''))
     const version = checkedId(String(body.version ?? ''))

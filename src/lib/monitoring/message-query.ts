@@ -9,6 +9,9 @@ export function messageFilters(params: URLSearchParams) {
   if (direction && !['inbound', 'outbound'].includes(direction)) throw new MonitoringInputError('Invalid direction')
   const kind = params.get('kind') || null
   if (kind && !/^[a-z_]{1,40}$/.test(kind)) throw new MonitoringInputError('Invalid message type')
+  // Several media types at once (the Media library's "Photos & videos" tab).
+  const kinds = params.get('kinds') ? [...new Set(params.get('kinds')!.split(','))] : null
+  if (kinds && (!kinds.length || kinds.some(k => !(mediaKinds as readonly string[]).includes(k)))) throw new MonitoringInputError('Invalid media types')
   const q = (params.get('q') ?? '').trim()
   if (q.length > 120) throw new MonitoringInputError('Search is too long')
   const parseDate = (key: string) => {
@@ -20,6 +23,6 @@ export function messageFilters(params: URLSearchParams) {
   const from = parseDate('from'), to = parseDate('to')
   if (from && to && from > to) throw new MonitoringInputError('Start date must be before end date')
   const until = to ? new Date(Date.parse(to) + 86400000).toISOString() : null
-  return { page, channel, thread, direction, kind, q, from, until, mediaOnly: params.get('media') === 'true' }
+  return { page, channel, thread, direction, kind, kinds, q, from, until, mediaOnly: params.get('media') === 'true' || !!kinds }
 }
 

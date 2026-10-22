@@ -1,4 +1,4 @@
-import { requireRole } from '@/lib/auth/account'
+import { assertAllNumbers, requireMonitoring } from '@/lib/monitoring/team-access'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { MonitoringInputError, monitoringError, privateJson, readJson, requiredText } from '@/lib/monitoring/http'
 import { ConnectError, exchangeSignupCode, readConnection, requestSync, SYNC_TYPES, writeConnection, type ConnectionRecord } from '@/lib/monitoring/connect'
@@ -16,7 +16,9 @@ export const runtime = 'nodejs'
  */
 export async function POST(request: Request) {
   try {
-    const { accountId, userId } = await requireRole('admin')
+    const access = await requireMonitoring('manage_numbers')
+    assertAllNumbers(access)
+    const { accountId, userId } = access
     const body = await readJson(request)
     const code = requiredText(body, 'code', 2048)
     const waba = requiredText(body, 'waba_id', 40)

@@ -1,4 +1,4 @@
-import { requireRole } from '@/lib/auth/account'
+import { canSeeChannel, requireMonitoring } from '@/lib/monitoring/team-access'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { checkedId, MonitoringInputError, monitoringError, privateJson, readJson } from '@/lib/monitoring/http'
 import { canRequestSync, readConnection, requestSync, SYNC_TYPES, writeConnection, type SyncType } from '@/lib/monitoring/connect'
@@ -9,14 +9,15 @@ export const runtime = 'nodejs'
 /** Retries a failed contacts/history sync request, only inside Meta's 24-hour window. */
 export async function POST(request: Request) {
   try {
-    const { supabase, accountId } = await requireRole('admin')
+    const access = await requireMonitoring('manage_numbers')
+    const { db: supabase, accountId } = access
     const body = await readJson(request)
     const channelId = checkedId(String(body.channel_id ?? ''))
     const type = String(body.sync_type) as SyncType
     if (!SYNC_TYPES.includes(type)) throw new MonitoringInputError('Choose contacts or history.')
     const channel = await supabase.from('monitoring_channels').select('id,phone_number_id').eq('account_id', accountId).eq('id', channelId).maybeSingle()
     if (channel.error) throw channel.error
-    if (!channel.data) return privateJson({ error: 'Number not found.' }, 404)
+    if (!channel.data || !canSeeChannel(access, channel.data.id)) return privateJson({ error: 'Number not found.' }, 404)
     const db = monitoringAdmin()
     const record = await readConnection(db, accountId, channelId)
     if (!record) return privateJson({ error: 'This number was not connected through Connect number, so Meta history sharing is not available for it.' }, 409)

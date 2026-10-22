@@ -1,5 +1,5 @@
 import { existingMonitoringToken } from '@/lib/monitoring/channel-token'
-import { requireRole } from '@/lib/auth/account'
+import { assertAllNumbers, requireMonitoring } from '@/lib/monitoring/team-access'
 import { encrypt } from '@/lib/whatsapp/encryption'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { listWabaPhoneNumbers, verifyPhoneNumber } from '@/lib/whatsapp/meta-api'
@@ -7,7 +7,9 @@ import { MonitoringInputError, monitoringError, privateJson, readJson, requiredT
 
 export async function POST(request: Request) {
   try {
-    const { accountId } = await requireRole('admin')
+    const access = await requireMonitoring('manage_numbers')
+    assertAllNumbers(access)
+    const { accountId } = access
     const body = await readJson(request)
     const phone = requiredText(body, 'phone_number_id', 40)
     const waba = requiredText(body, 'waba_id', 40)
@@ -23,7 +25,7 @@ export async function POST(request: Request) {
       if (!numbers.some(number => number.id === phone)) throw new Error('Number mismatch')
     } catch { return privateJson({ error: 'Unable to verify this number with the supplied Numera Meta app credentials.' }, 400) }
     // The existing RPC is service-role only so encrypted tokens are never
-    // writable through a browser session. Account comes only from requireRole.
+    // writable through a browser session. Account comes only from requireMonitoring.
     const result = await monitoringAdmin().rpc('create_monitoring_channel', {
       p_account: accountId, p_phone: phone, p_waba: waba, p_label: label,
       p_display: info.display_phone_number, p_token: encrypt(accessToken),

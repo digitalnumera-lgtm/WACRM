@@ -13,17 +13,17 @@ it('rejects unauthenticated users and non-management roles before service access
     mocks.role.mockRejectedValue(error)
     expect((await PATCH(request({ active: false }), context)).status).toBe(error instanceof UnauthorizedError ? 401 : 403)
   }
-  expect(mocks.role).toHaveBeenCalledWith('admin')
+  expect(mocks.role).toHaveBeenCalledWith('viewer')
   expect(mocks.admin).not.toHaveBeenCalled()
 })
 it('rejects invalid values and cross-origin mutations', async () => {
-  mocks.role.mockResolvedValue({ accountId: 'company' })
+  mocks.role.mockResolvedValue({ role: 'admin',  accountId: 'company' })
   expect((await PATCH(request({ active: 'false' }), context)).status).toBe(400)
   expect((await PATCH(request({ active: false }, 'https://other.test'), context)).status).toBe(403)
   expect(mocks.admin).not.toHaveBeenCalled()
 })
 it('removes and restores only the authenticated company channel without deleting history', async () => {
-  mocks.role.mockResolvedValue({ accountId: 'own-company' })
+  mocks.role.mockResolvedValue({ role: 'admin',  accountId: 'own-company' })
   const query = { update: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), select: vi.fn().mockReturnThis(), maybeSingle: vi.fn() }
   const db = { from: vi.fn().mockReturnValue(query) }; mocks.admin.mockReturnValue(db)
   for (const active of [false, true]) {

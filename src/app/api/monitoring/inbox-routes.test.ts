@@ -58,7 +58,7 @@ beforeEach(() => {
     monitoring_inbox: [{ id: thread, account_id: company, state: 'open', is_unread: true, last_direction: 'inbound' }, { id: foreignThread, account_id: foreign, state: 'open', is_unread: true, last_direction: 'inbound' }],
     monitoring_contact_profiles: [],
   }
-  mocks.role.mockResolvedValue({ supabase: database(), accountId: company, userId: 'manager' })
+  mocks.role.mockResolvedValue({ role: 'admin',  supabase: database(), accountId: company, userId: 'manager' })
   mocks.admin.mockReturnValue(database())
 })
 afterEach(() => vi.clearAllMocks())

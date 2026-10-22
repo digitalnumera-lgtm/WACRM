@@ -1,7 +1,7 @@
 export const mediaProblems = {
   meta_access_invalid: { status: 424, message: 'Meta rejected the saved access token. Renew Meta access in Settings, then retry this attachment.' },
   meta_access_denied: { status: 424, message: 'The saved Meta token does not have permission to access this attachment. Renew access for this business number in Settings.' },
-  media_unavailable: { status: 410, message: 'Meta could not provide this attachment. It may no longer be available or accessible to this business number.' },
+  media_unavailable: { status: 410, message: 'This attachment is no longer available. WhatsApp keeps media for 7 days, and the CRM copy was not saved or was cleaned up to save storage.' },
   media_too_large: { status: 413, message: 'This attachment exceeds the CRM preview limit of 32 MB.' },
   media_unsupported: { status: 415, message: 'This attachment format is not supported by the CRM.' },
   media_rate_limited: { status: 503, message: 'Meta is limiting media requests. Wait briefly, then retry.' },
