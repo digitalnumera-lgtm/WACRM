@@ -2,9 +2,10 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, live]
   push:
-    branches: [main]
+    # `live` is the branch the site deploys from; every push is checked.
+    branches: [main, live]
 
 # Cancel older CI runs for the same branch when a new commit arrives —
 # saves minutes when someone pushes a stack of fixes to one PR.
