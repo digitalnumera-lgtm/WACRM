@@ -44,6 +44,13 @@ export async function POST(request: Request) {
       await saveConnection(accountId, userId, { key })
       return privateJson({ key })
     }
+    if (body.action === 'set_key') {
+      // The key already written in the deployed script: saves a redeploy when the two got out of step.
+      const key = typeof body.key === 'string' ? body.key.trim().replace(/^'|'$/g, '') : ''
+      if (!/^[A-Za-z0-9_-]{20,100}$/.test(key) || key === 'PASTE-KEY-HERE') throw new MonitoringInputError('Paste only the key: the letters and numbers between the quotes on the CRM_KEY line.')
+      await saveConnection(accountId, userId, { key })
+      return privateJson({ saved: true })
+    }
     if (body.action === 'test') {
       const conn = await readConnection(accountId)
       if (!conn.url || !conn.key) return privateJson({ error: 'Add the web app link and create a key first.' }, 400)

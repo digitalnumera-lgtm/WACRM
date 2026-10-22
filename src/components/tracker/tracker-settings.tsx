@@ -82,6 +82,11 @@ function Connection({ data, onSaved, onConnected }: { data: SettingsData; onSave
   const saveUrl = () => run('url', async () => {
     await api('/api/tracker/settings', sendJson('POST', { url })); setMessage({ ok: true, text: 'Link saved.' }); onSaved()
   })
+  const [ownKey, setOwnKey] = useState('')
+  const saveOwnKey = () => run('own', async () => {
+    await api('/api/tracker/settings', sendJson('POST', { action: 'set_key', key: ownKey }))
+    setOwnKey(''); setMessage({ ok: true, text: 'Key saved. Now press Test connection.' }); onSaved()
+  })
   const test = () => run('test', async () => {
     const result = await api<{ version: number | null; latest: number }>('/api/tracker/settings', sendJson('POST', { action: 'test' }))
     setMessage({ ok: true, text: result.version && result.version < result.latest ? 'Connected, but the script file is out of date. Copy the latest script and deploy a new version.' : 'Connected. The Client Tracker can read the Sheet.' })
@@ -113,6 +118,11 @@ function Connection({ data, onSaved, onConnected }: { data: SettingsData; onSave
         <div className="flex flex-wrap gap-2"><input className={`${inputClass} min-w-0 flex-1`} value={url} onChange={e => setUrl(e.target.value)} placeholder="https://script.google.com/macros/s/…/exec" aria-label="Web app URL" /><button className={primaryButton} disabled={!!busy || url.trim() === (data.connection.url ?? '')} onClick={() => void saveUrl()}>{busy === 'url' ? 'Saving…' : 'Save link'}</button></div>
       </li>
       <li className="space-y-2"><p className="font-medium">4. Test</p>
+        <details className="text-sm"><summary className="cursor-pointer text-muted-foreground">The test says the script rejected the key?</summary>
+          <div className="mt-2 space-y-2"><p className="text-muted-foreground">Copy the key that is in your deployed script (the text between the quotes on the <code>CRM_KEY</code> line) and paste it here. Then the CRM uses the same key and you do not need to deploy again.</p>
+            <div className="flex flex-wrap gap-2"><input className={`${inputClass} min-w-0 flex-1 font-mono`} value={ownKey} onChange={e => setOwnKey(e.target.value)} placeholder="Key from the CRM_KEY line" aria-label="Key from the script" autoComplete="off" /><button type="button" className={buttonClass} disabled={!!busy || ownKey.trim().length < 20} onClick={() => void saveOwnKey()}>Use this key</button></div>
+            <p className="text-xs text-muted-foreground">Still rejected? The live web app runs the version from the last deploy: after saving the script, use Deploy → Manage deployments → pencil → Version: New version → Deploy.</p></div>
+        </details>
         <button className={buttonClass} disabled={!!busy || !connected} onClick={() => void test()}>{busy === 'test' ? 'Testing…' : 'Test connection'}</button>
       </li>
     </ol>
