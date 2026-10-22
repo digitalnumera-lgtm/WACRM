@@ -6,10 +6,7 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 /**
  * Baseline security headers applied to every response.
  *
- * CSP ships as `Content-Security-Policy-Report-Only` so the browser
- * surfaces violations in the console without blocking anything — once
- * we have confidence nothing legit trips it (two deploys, a pass on
- * every route), flip the key to `Content-Security-Policy` to enforce.
+ * CSP is enforced (it ran report-only first).
  *
  * The rest of the headers are straight blocks, safe to enforce today:
  *   - HSTS: only meaningful on HTTPS (no-op on http://localhost).
@@ -36,14 +33,14 @@ const SECURITY_HEADERS = [
     value: "camera=(), microphone=(self), geolocation=(), payment=(), usb=()",
   },
   {
-    key: "Content-Security-Policy-Report-Only",
+    // Enforced. Production drops 'unsafe-eval' (only the dev server needs it).
+    key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      // Next.js needs 'unsafe-inline' for its inline hydration script
-      // and 'unsafe-eval' in dev + some production optimisations.
+      // Next.js needs 'unsafe-inline' for its inline hydration script.
       // Nonce-based CSP is a later project.
       // connect.facebook.net: Meta's SDK for the "Connect number" popup.
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net",
+      `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'"} https://connect.facebook.net`,
       // Tailwind + inline style attributes on lots of components.
       "style-src 'self' 'unsafe-inline'",
       // Supabase public-bucket avatars, contact avatars (arbitrary
@@ -60,6 +57,8 @@ const SECURITY_HEADERS = [
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.facebook.com",
       "frame-src https://*.facebook.com",
       "frame-ancestors 'none'",
+      "object-src 'none'",
+      "worker-src 'self' blob:",
       "base-uri 'self'",
       "form-action 'self'",
     ].join("; "),
@@ -71,6 +70,8 @@ const APP_LOCALE = ["en", "pt", "es", "ko"].includes(process.env.NEXT_PUBLIC_APP
   : "en";
 
 const nextConfig: NextConfig = {
+  // Don't advertise the framework in response headers.
+  poweredByHeader: false,
   // Shared build hosts can expose many CPUs but enforce a much smaller process
   // quota. Hostinger detected 63 workers and exhausted its thread allowance.
   experimental: {

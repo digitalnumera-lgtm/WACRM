@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { ForbiddenError, getCurrentAccount, UnauthorizedError } from '@/lib/auth/account'
+import { ForbiddenError, getCurrentAccount, MfaRequiredError, UnauthorizedError } from '@/lib/auth/account'
 import { monitoringMe } from '@/lib/monitoring/team-access'
 import { sanitizePreferences } from '@/lib/monitoring/preferences'
 import type { MonitoringMe } from '@/lib/monitoring/permissions'
@@ -24,6 +24,7 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
     const claims = await account.supabase.auth.getClaims().catch(() => null)
     metadata = claims?.data?.claims?.user_metadata as Record<string, unknown> | undefined
   } catch (error) {
+    if (error instanceof MfaRequiredError) redirect('/login?step=code')
     if (error instanceof UnauthorizedError) redirect('/login')
     if (error instanceof ForbiddenError) return <NoAccess />
     throw error

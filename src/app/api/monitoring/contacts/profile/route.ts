@@ -50,11 +50,26 @@ export async function PUT(request: Request) {
       values[key] = typeof value === 'string' && value.trim() ? value.trim() : null
     }
     if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) throw new MonitoringInputError('Enter a valid email address.')
-    const result = await monitoringAdmin().from('monitoring_contact_profiles')
-      .upsert({ account_id: accountId, customer, ...values, updated_by: userId, updated_at: new Date().toISOString() }, { onConflict: 'account_id,customer' })
-      .select(profileColumns).single()
-    if (result.error && missingWorkflowSchema(result.error)) throw new WorkflowSchemaMissing()
-    if (result.error) throw result.error
+    // Two people editing the same contact: the second save is refused (409)
+    // instead of silently overwriting the first. expected_updated_at is the
+    // version the editor started from (null = no saved details yet).
+    const admin = monitoringAdmin()
+    const row = { ...values, updated_by: userId, updated_at: new Date().toISOString() }
+    const expected = body.expected_updated_at
+    if (expected !== undefined && expected !== null && typeof expected !== 'string') throw new MonitoringInputError('Invalid contact version.')
+    const table = () => admin.from('monitoring_contact_profiles')
+    const result = expected === undefined
+      ? await table().upsert({ account_id: accountId, customer, ...row }, { onConflict: 'account_id,customer' }).select(profileColumns).maybeSingle()
+      : expected === null
+        ? await table().insert({ account_id: accountId, customer, ...row }).select(profileColumns).maybeSingle()
+        : await table().update(row).eq('account_id', accountId).eq('customer', customer).eq('updated_at', expected).select(profileColumns).maybeSingle()
+    const conflict = (result.error as { code?: string } | null)?.code === '23505'
+    if (result.error && !conflict && missingWorkflowSchema(result.error)) throw new WorkflowSchemaMissing()
+    if (result.error && !conflict) throw result.error
+    if (conflict || !result.data) {
+      const current = await table().select(profileColumns).eq('account_id', accountId).eq('customer', customer).maybeSingle()
+      return privateJson({ error: 'Someone else changed this contact while you were editing. Their version is shown now; make your change again.', code: 'conflict', profile: current.data ?? null }, 409)
+    }
     return privateJson({ profile: result.data })
   } catch (error) { return monitoringError(error) }
 }

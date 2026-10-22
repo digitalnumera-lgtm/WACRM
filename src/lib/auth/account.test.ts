@@ -66,7 +66,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: () => createClient(),
 }));
 
-const { getCurrentAccount, UnauthorizedError, ForbiddenError } = await import(
+const { getCurrentAccount, UnauthorizedError, ForbiddenError, MfaRequiredError } = await import(
   "./account"
 );
 
@@ -196,5 +196,30 @@ describe("local session verification", () => {
       createClient.mockReturnValue({ ...client, auth: { getUser: vi.fn(), getClaims: vi.fn(async () => result) } });
       await expect(getCurrentAccount()).rejects.toBeInstanceOf(UnauthorizedError);
     }
+  });
+});
+
+describe("two-step sign-in", () => {
+  const byTable = {
+    profiles: { data: { account_id: "acct-1", account_role: "owner" }, error: null },
+    accounts: { data: { id: "acct-1", name: "Acme" }, error: null },
+  };
+  const withClaims = (claims: Record<string, unknown>) => {
+    const { client } = makeClient({ user: null, byTable });
+    createClient.mockReturnValue({ ...client, auth: { getUser: vi.fn(), getClaims: vi.fn(async () => ({ data: { claims }, error: null })) } });
+  };
+  it("refuses a password-only session when the account has it turned on", async () => {
+    withClaims({ sub: "user-1", aal: "aal1", app_metadata: { mfa_enabled: true } });
+    await expect(getCurrentAccount()).rejects.toBeInstanceOf(MfaRequiredError);
+  });
+  it("allows the session once the code was entered, or when it is off", async () => {
+    withClaims({ sub: "user-1", aal: "aal2", app_metadata: { mfa_enabled: true } });
+    expect((await getCurrentAccount()).userId).toBe("user-1");
+    withClaims({ sub: "user-1", aal: "aal1", app_metadata: {} });
+    expect((await getCurrentAccount()).userId).toBe("user-1");
+  });
+  it("ignores a browser-editable user_metadata flag", async () => {
+    withClaims({ sub: "user-1", aal: "aal1", app_metadata: { mfa_enabled: true }, user_metadata: { mfa_enabled: false } });
+    await expect(getCurrentAccount()).rejects.toBeInstanceOf(MfaRequiredError);
   });
 });

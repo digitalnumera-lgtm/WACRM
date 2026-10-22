@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { ForbiddenError, UnauthorizedError } from '@/lib/auth/account'
+import { ForbiddenError, MfaRequiredError, UnauthorizedError } from '@/lib/auth/account'
 
 export class MonitoringInputError extends Error {}
 /** The optional inbox workflow schema (supabase/numera/001_inbox_workflow.sql) is not installed. */
@@ -26,6 +26,7 @@ export function privateJson(data: unknown, status = 200) {
 }
 
 export function monitoringError(error: unknown) {
+  if (error instanceof MfaRequiredError) return privateJson({ error: error.message, code: error.code }, 401)
   if (error instanceof UnauthorizedError) return privateJson({ error: 'Sign in to continue.' }, 401)
   if (error instanceof ForbiddenError) return privateJson({ error: 'Your role does not allow this. Ask your company owner for access.' }, 403)
   if (error instanceof MonitoringInputError) return privateJson({ error: error.message }, 400)
