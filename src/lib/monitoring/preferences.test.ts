@@ -20,3 +20,9 @@ describe('sanitizePreferences', () => {
     expect(sanitizePreferences({ pinned: ids }).pinned).toHaveLength(MAX_PINNED)
   })
 })
+
+describe('sidebar order', () => {
+  it('keeps only known pages once each', () => {
+    expect(sanitizePreferences({ navOrder: ['Media', 'Inbox', 'Media', 'Admin', 3] }).navOrder).toEqual(['Media', 'Inbox'])
+  })
+})

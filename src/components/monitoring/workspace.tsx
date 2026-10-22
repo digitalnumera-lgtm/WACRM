@@ -15,6 +15,7 @@ import { ConversationList, emptyFilters, previewText, useInbox, type InboxFilter
 import { LabelsSettings, useLabels } from './labels'
 import { AccessProvider } from './access'
 import { SectionBoundary } from './error-boundary'
+import { SortableNav, orderedPages } from './sortable-nav'
 import { ActivePill, MotionRoot } from './motion'
 import { playChime, PreferencesProvider, PreferencesSettings, useDarkMode, usePreferences } from './preferences'
 import { MonitoringSettings } from './settings-panel'
@@ -84,7 +85,7 @@ export function MonitoringWorkspace(props: { accountName: string; me: Monitoring
 }
 
 function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: { accountName: string; me: MonitoringMe; initialView?: 'Inbox' | 'Settings'; initialSection?: SettingsSection }) {
-  const { prefs } = usePreferences()
+  const { prefs, update: updatePrefs } = usePreferences()
   const dark = useDarkMode(prefs.theme)
   const [view, setView] = useState<View>(initialView)
   const [section, setSection] = useState<SettingsSection>(() => initialSection && sections.some(s => s.id === initialSection && s.allowed(me, true)) ? initialSection : 'preferences')
@@ -190,18 +191,24 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
   }, [view, inbox.threads, selected, chatCache])
 
   const views = nav.filter(n => can(me, n.need))
-  const navButton = (name: View, label: string, Icon: typeof Inbox) => <button key={name} onClick={() => setView(name)} aria-label={label} title={label} aria-current={view === name ? 'page' : undefined}
-    className={`relative isolate flex size-11 shrink-0 items-center justify-center rounded-full transition-colors ${view === name ? 'text-[var(--ink-accent)] dark:text-[var(--hl-fg)]' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`}>
+  type NavState = { dragging?: boolean; onPointerDown?: (e: React.PointerEvent) => void; onKeyDown?: (e: React.KeyboardEvent) => void; style?: React.CSSProperties; suppressClick?: () => boolean }
+  const navButton = (name: View, label: string, Icon: typeof Inbox, drag: NavState = {}) => <button key={name} data-nav={name} onClick={() => { if (drag.suppressClick?.()) return; setView(name) }} aria-label={label} title={drag.onPointerDown ? `${label} (hold to move)` : label} aria-current={view === name ? 'page' : undefined}
+    onPointerDown={drag.onPointerDown} onKeyDown={drag.onKeyDown} onContextMenu={drag.onPointerDown ? e => e.preventDefault() : undefined} style={drag.style}
+    className={`relative isolate flex size-11 shrink-0 touch-none select-none items-center justify-center rounded-full transition-[color,background-color,box-shadow,transform] duration-200 [-webkit-touch-callout:none] ${drag.dragging ? 'cursor-grabbing bg-card shadow-lg ring-1 ring-border' : ''} ${view === name ? 'text-[var(--ink-accent)] dark:text-[var(--hl-fg)]' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`}>
     {view === name && <ActivePill id="nav-active" className="rounded-full bg-[var(--ink)] shadow-md dark:bg-[var(--hl)]" />}
     <Icon size={19} />{name === 'Inbox' && (inbox.counts?.waiting ?? 0) > 0 && view !== 'Inbox' && <span className="absolute right-1 top-1 size-2.5 rounded-full bg-red-500 ring-2 ring-background" />}
   </button>
+  const navOrder = orderedPages(views.map(v => v.name), prefs.navOrder)
   const chatOpenOnPhone = view === 'Inbox' && !!selected
 
   return <MotionRoot><div data-density={prefs.density} data-chat-size={prefs.chatSize} data-style={prefs.style} className={`monitoring-panel flex h-dvh flex-col overflow-hidden text-foreground md:flex-row md:gap-3 md:p-3 ${dark ? 'dark' : ''}`}>
     <aside aria-label="Workspace" className={`order-last shrink-0 items-center gap-1 border-t border-border bg-card/90 px-2 py-1.5 backdrop-blur md:order-first md:flex md:w-14 md:flex-col md:border-0 md:bg-transparent md:p-0 md:py-1 ${chatOpenOnPhone ? 'hidden md:flex' : 'flex'}`}>
       <div title={accountName} role="img" aria-label="Numera Digital" className="brand-mark hidden h-11 w-9 shrink-0 md:mb-4 md:block" />
       <nav className="flex flex-1 items-center justify-around gap-1 overflow-x-auto md:flex-col md:justify-start md:overflow-visible">
-        {views.map(v => navButton(v.name, v.label, v.icon))}
+        <SortableNav order={navOrder} onReorder={order => updatePrefs({ navOrder: order })} render={(name, state) => {
+          const item = views.find(v => v.name === name)!
+          return navButton(item.name, item.label, item.icon, state)
+        }} />
         <span className="hidden md:block md:flex-1" />
         {navButton('Settings', 'Settings', Settings)}
       </nav>

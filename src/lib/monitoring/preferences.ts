@@ -15,17 +15,20 @@ export interface Preferences {
   notify: boolean
   contactPanel: boolean
   pinned: string[]
+  /** Sidebar order chosen by dragging; unknown or missing pages keep their default place. */
+  navOrder: string[]
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
   theme: 'light', style: 'numera', density: 'comfortable', defaultTab: 'open', defaultSort: 'latest',
-  timeFormat: '12h', chatSize: 'medium', sound: true, notify: false, contactPanel: true, pinned: [],
+  timeFormat: '12h', chatSize: 'medium', sound: true, notify: false, contactPanel: true, pinned: [], navOrder: [],
 }
 
 const choices: { [K in keyof Preferences]?: readonly Preferences[K][] } = {
   theme: ['light', 'dark', 'system'], style: STYLES, density: ['comfortable', 'compact'], defaultTab: ['open', 'waiting', 'unread', 'all'],
   defaultSort: ['latest', 'oldest'], timeFormat: ['12h', '24h'], chatSize: ['small', 'medium', 'large'],
 }
+export const NAV_PAGES = ['Inbox', 'Dashboard', 'Leads', 'Contacts', 'Media', 'Reports'] as const
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export const MAX_PINNED = 30
 
@@ -40,5 +43,6 @@ export function sanitizePreferences(value: unknown): Preferences {
   if (typeof input.notify === 'boolean') out.notify = input.notify
   if (typeof input.contactPanel === 'boolean') out.contactPanel = input.contactPanel
   if (Array.isArray(input.pinned)) out.pinned = [...new Set(input.pinned.filter((id): id is string => typeof id === 'string' && uuid.test(id)))].slice(0, MAX_PINNED)
+  if (Array.isArray(input.navOrder)) out.navOrder = [...new Set(input.navOrder.filter((n): n is string => typeof n === 'string' && (NAV_PAGES as readonly string[]).includes(n)))]
   return out
 }
