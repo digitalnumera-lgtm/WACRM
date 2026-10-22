@@ -10,7 +10,8 @@ type Drag = { name: string; pointer: number; start: number; offset: number; vert
 /**
  * Sidebar items that can be rearranged: press and hold an icon until it lifts,
  * then move it up or down (left or right in the phone bar) and let go. A quick
- * tap still opens the page. Keyboard: focus an icon and use Alt + arrow keys.
+ * tap still opens the page. With a mouse or trackpad, dragging works without the hold.
+ * Keyboard: focus an icon and use Option/Alt + arrow keys.
  */
 export function SortableNav({ order, onReorder, render }: {
   order: string[]
@@ -32,19 +33,27 @@ export function SortableNav({ order, onReorder, render }: {
     const startOther = vertical ? e.clientX : e.clientY
     let current = [...order]
     let dragState: Drag | null = null
-    const timer = window.setTimeout(() => {
+    const pickUp = () => {
+      if (dragState) return
+      window.clearTimeout(timer)
       dragState = { name, pointer: startPos, start: startPos, offset: 0, vertical }
       setLive(current); setDrag(dragState)
       try { el.setPointerCapture(e.pointerId) } catch { /* Element gone. */ }
       navigator.vibrate?.(10)
-    }, HOLD_MS)
+    }
+    // Touch: hold first so scrolling and taps still work. Mouse or trackpad:
+    // holding works too, and simply dragging past a few pixels picks it up.
+    const touch = e.pointerType === 'touch'
+    const timer = window.setTimeout(pickUp, HOLD_MS)
     const move = (ev: PointerEvent) => {
       const pos = vertical ? ev.clientY : ev.clientX
       if (!dragState) {
-        // Moving before the hold finishes means scrolling or a normal click.
-        if (Math.abs(pos - startPos) > MOVE_CANCEL_PX || Math.abs((vertical ? ev.clientX : ev.clientY) - startOther) > MOVE_CANCEL_PX) end()
-        return
+        const moved = Math.max(Math.abs(pos - startPos), Math.abs((vertical ? ev.clientX : ev.clientY) - startOther))
+        if (moved <= (touch ? MOVE_CANCEL_PX : 4)) return
+        if (touch) { end(); return } // Moving before the hold finishes means scrolling.
+        pickUp()
       }
+      if (!dragState) return
       ev.preventDefault()
       let offset = pos - dragState.start
       const index = current.indexOf(name)
