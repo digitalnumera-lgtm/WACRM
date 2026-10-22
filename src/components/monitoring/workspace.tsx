@@ -15,6 +15,7 @@ import { ConversationList, emptyFilters, previewText, useInbox, type InboxFilter
 import { LabelsSettings, useLabels } from './labels'
 import { AccessProvider } from './access'
 import { SectionBoundary } from './error-boundary'
+import { ActivePill, MotionRoot } from './motion'
 import { playChime, PreferencesProvider, PreferencesSettings, useDarkMode, usePreferences } from './preferences'
 import { MonitoringSettings } from './settings-panel'
 import { api, buttonClass } from './ui'
@@ -190,12 +191,13 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
 
   const views = nav.filter(n => can(me, n.need))
   const navButton = (name: View, label: string, Icon: typeof Inbox) => <button key={name} onClick={() => setView(name)} aria-label={label} title={label} aria-current={view === name ? 'page' : undefined}
-    className={`relative flex size-11 shrink-0 items-center justify-center rounded-full transition-colors ${view === name ? 'bg-[var(--ink)] text-[var(--ink-accent)] shadow-md dark:bg-[var(--hl)] dark:text-[var(--hl-fg)]' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`}>
+    className={`relative isolate flex size-11 shrink-0 items-center justify-center rounded-full transition-colors ${view === name ? 'text-[var(--ink-accent)] dark:text-[var(--hl-fg)]' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`}>
+    {view === name && <ActivePill id="nav-active" className="rounded-full bg-[var(--ink)] shadow-md dark:bg-[var(--hl)]" />}
     <Icon size={19} />{name === 'Inbox' && (inbox.counts?.waiting ?? 0) > 0 && view !== 'Inbox' && <span className="absolute right-1 top-1 size-2.5 rounded-full bg-red-500 ring-2 ring-background" />}
   </button>
   const chatOpenOnPhone = view === 'Inbox' && !!selected
 
-  return <div data-density={prefs.density} data-chat-size={prefs.chatSize} data-style={prefs.style} className={`monitoring-panel flex h-dvh flex-col overflow-hidden text-foreground md:flex-row md:gap-3 md:p-3 ${dark ? 'dark' : ''}`}>
+  return <MotionRoot><div data-density={prefs.density} data-chat-size={prefs.chatSize} data-style={prefs.style} className={`monitoring-panel flex h-dvh flex-col overflow-hidden text-foreground md:flex-row md:gap-3 md:p-3 ${dark ? 'dark' : ''}`}>
     <aside aria-label="Workspace" className={`order-last shrink-0 items-center gap-1 border-t border-border bg-card/90 px-2 py-1.5 backdrop-blur md:order-first md:flex md:w-14 md:flex-col md:border-0 md:bg-transparent md:p-0 md:py-1 ${chatOpenOnPhone ? 'hidden md:flex' : 'flex'}`}>
       <div title={accountName} className="hidden size-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--ink)] text-lg font-black text-[var(--ink-accent)] md:mb-4 md:flex">N</div>
       <nav className="flex flex-1 items-center justify-around gap-1 overflow-x-auto md:flex-col md:justify-start md:overflow-visible">
@@ -263,7 +265,7 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
           </SectionBoundary>
         </div>
       </main>}
-  </div>
+  </div></MotionRoot>
 }
 
 function Panel({ children }: { children: ReactNode }) {

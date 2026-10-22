@@ -5,6 +5,7 @@ import { ArrowDownRight, ArrowUpRight, CheckCheck, Clock, Inbox, MailWarning, Me
 import type { MonitoringChannel } from '@/lib/monitoring/types'
 import type { InboxTab } from './inbox-list'
 import { api, waitingFor } from './ui'
+import { ActivePill } from './motion'
 
 type Overview = {
   days: number; workflowReady: boolean
@@ -53,7 +54,7 @@ export function Dashboard({ refresh, channels, onTab, onChannel }: { refresh: nu
   return <div className="space-y-5">
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     <div role="radiogroup" aria-label="Period" className="inline-flex gap-1 rounded-full bg-card p-1 shadow-sm">
-      {periods.map(p => <button key={p.days} role="radio" aria-checked={days === p.days} onClick={() => setDays(p.days)} className={`rounded-full px-4 py-1.5 text-sm font-medium ${days === p.days ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{p.label}</button>)}
+      {periods.map(p => <button key={p.days} role="radio" aria-checked={days === p.days} onClick={() => setDays(p.days)} className={`relative isolate rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${days === p.days ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{days === p.days && <ActivePill id="dashboard-period" className="rounded-full bg-primary" />}{p.label}</button>)}
     </div>
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       <Kpi dark label="Waiting for an agent now" value={counts?.waiting} icon={Clock} />

@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { AnimatePresence, m } from 'motion/react'
+import { easeOut } from './motion'
 import { ArrowDown, ArrowUp, ChevronsUp, Minus, SignalHigh } from 'lucide-react'
 import type { ConversationPriority, MonitoringLabel } from '@/lib/monitoring/workflow-types'
 
 export const inputClass = 'w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none focus:border-foreground/30 focus:ring-2 focus:ring-[var(--hl)]/60'
-export const buttonClass = 'inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-border bg-card px-3.5 text-sm font-medium transition-colors duration-150 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40'
-export const primaryButton = 'inline-flex h-9 items-center justify-center gap-1.5 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40'
+export const buttonClass = 'inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-border bg-card px-3.5 text-sm font-medium transition-[color,background-color,transform] duration-150 hover:bg-muted active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40'
+export const primaryButton = 'inline-flex h-9 items-center justify-center gap-1.5 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground transition-[opacity,transform] duration-150 hover:opacity-90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40'
 
 export async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { cache: 'no-store', ...options })
@@ -86,7 +88,8 @@ export function Menu({ trigger, label, children, align = 'right', disabled, trig
   }, [open])
   return <div ref={root} className="relative">
     <button type="button" aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} disabled={disabled} className={triggerClass} onClick={() => setOpen(v => !v)}>{trigger}</button>
-    {open && <div role="menu" className={`absolute z-30 mt-1 min-w-48 rounded-2xl border border-border bg-popover p-1.5 shadow-xl ${align === 'right' ? 'right-0' : 'left-0'}`}>{children(() => setOpen(false))}</div>}
+    <AnimatePresence>{open && <m.div role="menu" initial={{ opacity: 0, scale: 0.96, y: -4 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.12 } }} transition={{ duration: 0.16, ease: easeOut }}
+      className={`absolute z-30 mt-1 min-w-48 rounded-2xl border border-border bg-popover p-1.5 shadow-xl ${align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left'}`}>{children(() => setOpen(false))}</m.div>}</AnimatePresence>
   </div>
 }
 export function MenuItem({ children, onClick, active }: { children: ReactNode; onClick: () => void; active?: boolean }) {
