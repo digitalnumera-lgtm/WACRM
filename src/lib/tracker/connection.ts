@@ -79,7 +79,7 @@ export async function getSnapshot(accountId: string, { force = false } = {}): Pr
     job = (async () => {
       const conn = await readConnection(accountId)
       if (!conn.url || !conn.key) throw new TrackerConnectionError('not_connected', 'The Client Tracker is not connected to the Sheet yet.')
-      const body = await callScript(conn.url, conn.key, 'snapshot')
+      const body = await callScript(conn.url, conn.key, 'snapshot', {}, 90_000)
       if (!isRawSnapshot(body.snapshot)) throw new TrackerConnectionError('bad_reply', 'The script answered without Sheet data. Update the script file to the latest version.')
       const fetchedAt = new Date().toISOString()
       const saved = await db.from('tracker_snapshot').upsert({ account_id: accountId, data: body.snapshot, fetched_at: fetchedAt }, { onConflict: 'account_id' })

@@ -5,6 +5,7 @@ import { trackerError } from '@/lib/tracker/http'
 import { buildView } from '@/lib/tracker/model'
 
 export const runtime = 'nodejs'
+export const maxDuration = 120
 
 /** The Client Tracker data, trimmed to what the caller's access level allows. */
 export async function GET(request: Request) {
