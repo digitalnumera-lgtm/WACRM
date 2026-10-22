@@ -27,7 +27,12 @@ export async function POST(request: Request) {
     if ((reportedWaba && !/^\d+$/.test(reportedWaba)) || (requestedPhone && !/^\d+$/.test(requestedPhone))) throw new MonitoringInputError('Meta IDs must contain digits only')
 
     let token: string
-    try { token = await exchangeSignupCode(code) } catch (error) {
+    // Pages the popup could have been opened from (this site only), for Meta's shortcut flow.
+    const host = request.headers.get('host'), origin = new URL(request.url).origin, site = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '')
+    const pageUrl = typeof body.page_url === 'string' ? body.page_url : ''
+    const sameSite = (value: string) => { try { const u = new URL(value); return u.protocol === 'https:' && (u.origin === origin || u.origin === site || u.host === host) } catch { return false } }
+    const redirectUris = [...new Set([pageUrl, ...[host ? `https://${host}` : '', site, origin].filter(Boolean).flatMap(o => [`${o}/monitoring`, `${o}/monitoring/`])].filter(sameSite))]
+    try { token = await exchangeSignupCode(code, redirectUris) } catch (error) {
       if (error instanceof ConnectError) return privateJson({ error: error.message }, error.status)
       return privateJson({ error: 'Meta could not be reached. Please run Connect again.' }, 503)
     }

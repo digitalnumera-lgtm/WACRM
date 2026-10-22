@@ -37,22 +37,35 @@ function appSecret(): string {
   return secret
 }
 
-export async function exchangeSignupCode(code: string): Promise<string> {
+/**
+ * Meta normally accepts the popup's code with no redirect_uri. When it finishes
+ * through its "continue with previous settings" shortcut, the code is bound to
+ * the page that opened it (error 100/36008), so those addresses are tried next.
+ * A rejected attempt does not use up the code.
+ */
+export async function exchangeSignupCode(code: string, redirectUris: string[] = []): Promise<string> {
   const secret = appSecret()
-  const url = new URL(`${GRAPH}/oauth/access_token`)
-  url.searchParams.set('client_id', META_APP_ID)
-  url.searchParams.set('client_secret', secret)
-  url.searchParams.set('code', code)
-  const response = await fetch(url, options())
-  if (!response.ok) {
-    const error = await metaError(response)
+  let response: Response | null = null
+  for (const redirectUri of [null, ...redirectUris]) {
+    const url = new URL(`${GRAPH}/oauth/access_token`)
+    url.searchParams.set('client_id', META_APP_ID)
+    url.searchParams.set('client_secret', secret)
+    url.searchParams.set('code', code)
+    if (redirectUri) url.searchParams.set('redirect_uri', redirectUri)
+    response = await fetch(url, options())
+    if (response.ok) break
+    const error = await metaError(response.clone())
+    if (error.error_subcode !== 36008) break
+  }
+  if (!response!.ok) {
+    const error = await metaError(response!)
     // Meta's error text names the problem (expired, already used, wrong secret)
     // and contains no secrets; show it so a failed connection can be diagnosed.
-    const detail = `${typeof error.message === 'string' ? error.message.slice(0, 200) : `HTTP ${response.status}`} (code ${error.code ?? '?'}${error.error_subcode ? `/${error.error_subcode}` : ''})`
+    const detail = `${typeof error.message === 'string' ? error.message.slice(0, 200) : `HTTP ${response!.status}`} (code ${error.code ?? '?'}${error.error_subcode ? `/${error.error_subcode}` : ''})`
     console.error('[connect] code exchange failed:', detail)
     throw new ConnectError(`Meta rejected the sign-in: ${detail}. Please run Connect again.`, 400)
   }
-  const data = await response.json() as { access_token?: unknown }
+  const data = await response!.json() as { access_token?: unknown }
   if (typeof data.access_token !== 'string' || !data.access_token) throw new ConnectError('Meta did not return an access token. Please run Connect again.', 502)
   return data.access_token
 }

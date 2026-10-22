@@ -78,6 +78,28 @@ describe('Connect number', () => {
     expect(record).toMatchObject({ id: connectionEventId(company, channel), account_id: company, field: 'management_connection' })
     expect(JSON.stringify(record)).not.toContain('business-token')
   })
+  it('retries with the opening page when Meta bound the code to it (shortcut flow)', async () => {
+    const fetcher = globalThis.fetch as ReturnType<typeof vi.fn>
+    const original = fetcher.getMockImplementation()!
+    fetcher.mockImplementation(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.includes('/oauth/access_token') && new URL(url).searchParams.get('redirect_uri') !== 'https://crm.test/monitoring?view=settings') {
+        calls.push({ url })
+        return new Response(JSON.stringify({ error: { code: 100, error_subcode: 36008, message: 'Error validating verification code' } }), { status: 400 })
+      }
+      return original(input, init)
+    })
+    const response = await connect(json({ ...input, page_url: 'https://crm.test/monitoring?view=settings' }))
+    expect(response.status).toBe(201)
+    const tried = calls.filter(c => c.url.includes('/oauth/access_token')).map(c => new URL(c.url).searchParams.get('redirect_uri'))
+    expect(tried).toEqual([null, 'https://crm.test/monitoring?view=settings'])
+  })
+  it('never sends a code to another site', async () => {
+    exchange = { ok: false, body: { error: { code: 100, error_subcode: 36008, message: 'Error validating verification code' } } }
+    await connect(json({ ...input, page_url: 'https://evil.example/monitoring' }))
+    const tried = calls.filter(c => c.url.includes('/oauth/access_token')).map(c => new URL(c.url).searchParams.get('redirect_uri'))
+    expect(tried.some(uri => uri?.includes('evil.example'))).toBe(false)
+  })
   it('saves nothing when Meta rejects the code', async () => {
     exchange = { ok: false, body: { error: { code: 100, message: 'expired' } } }
     const response = await connect(json(input))

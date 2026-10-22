@@ -75,7 +75,7 @@ export function ConnectNumber({ onConnected }: { onConnected: (channelId: string
     const info = session.current
     if (info?.event === 'FINISH_ONLY_WABA') { setError('Only the WhatsApp account was shared, without a phone number. Run Connect again and select the agent’s number.'); setStep('idle'); return }
     try {
-      const data = await api<{ channel_id: string; display_number: string | null; syncs: Record<string, SyncAttempt> }>('/api/monitoring/connect', sendJson('POST', { code, waba_id: info?.waba_id, phone_number_id: info?.phone_number_id, label: label.trim() }))
+      const data = await api<{ channel_id: string; display_number: string | null; syncs: Record<string, SyncAttempt> }>('/api/monitoring/connect', sendJson('POST', { code, waba_id: info?.waba_id, phone_number_id: info?.phone_number_id, label: label.trim(), page_url: window.location.href.split('#')[0] }))
       setResult(data); setStep('done'); onConnected(data.channel_id)
     } catch (e) { setError((e as Error).message); setStep('idle') }
   }, [label, onConnected])
