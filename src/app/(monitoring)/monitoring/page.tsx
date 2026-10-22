@@ -1,28 +1,35 @@
 import { redirect } from 'next/navigation'
-import { ForbiddenError, UnauthorizedError } from '@/lib/auth/account'
+import { ForbiddenError, getCurrentAccount, UnauthorizedError } from '@/lib/auth/account'
 import { monitoringMe } from '@/lib/monitoring/team-access'
+import { sanitizePreferences } from '@/lib/monitoring/preferences'
 import type { MonitoringMe } from '@/lib/monitoring/permissions'
-import { MonitoringWorkspace, MonitoringSignOut } from '@/components/monitoring/workspace'
-import { getCurrentAccount } from '@/lib/auth/account'
+import { MonitoringWorkspace, MonitoringSignOut, type SettingsSection } from '@/components/monitoring/workspace'
 
 export const dynamic = 'force-dynamic'
 
 function NoAccess() {
-  return <main className="mx-auto max-w-lg p-10"><h1 className="text-2xl font-semibold">No CRM access yet</h1><p className="my-4 text-muted-foreground">Your login works, but your company owner has not given you a role in the CRM yet. Ask them to assign you a role in Settings → Team &amp; roles, then sign in again.</p><MonitoringSignOut /></main>
+  return <main className="mx-auto max-w-lg p-10"><h1 className="text-2xl font-semibold">No CRM access yet</h1><p className="my-4 text-muted-foreground">Ask your company owner to give you a role in Settings → Team &amp; roles, then sign in again.</p><MonitoringSignOut /></main>
 }
 
-export default async function MonitoringPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+export default async function MonitoringPage({ searchParams }: { searchParams: Promise<{ view?: string; section?: string }> }) {
   let me: MonitoringMe | null
   let name: string
+  let metadata: Record<string, unknown> | undefined
   try {
     me = await monitoringMe()
-    name = (await getCurrentAccount()).account.name
+    const account = await getCurrentAccount()
+    name = account.account.name
+    // Preferences travel in the (locally verified) session token; the client
+    // refreshes them in the background.
+    const claims = await account.supabase.auth.getClaims().catch(() => null)
+    metadata = claims?.data?.claims?.user_metadata as Record<string, unknown> | undefined
   } catch (error) {
     if (error instanceof UnauthorizedError) redirect('/login')
     if (error instanceof ForbiddenError) return <NoAccess />
     throw error
   }
   if (!me) return <NoAccess />
-  const { view } = await searchParams
-  return <MonitoringWorkspace accountName={name} me={me} initialView={view === 'settings' ? 'Settings' : 'Inbox'} />
+  const { view, section } = await searchParams
+  return <MonitoringWorkspace accountName={name} me={me} preferences={sanitizePreferences(metadata?.crm_preferences)}
+    initialView={view === 'settings' ? 'Settings' : 'Inbox'} initialSection={section as SettingsSection | undefined} />
 }

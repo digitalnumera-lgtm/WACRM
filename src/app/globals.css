@@ -228,26 +228,68 @@ html[data-theme="rose"] {
     @apply font-sans;
   }
 }
-/* Management workspace: independent light surfaces, Chatwoot-style inbox. */
+/* Numera CRM workspace: tinted canvas, rounded white cards, dark pill accents. */
 .monitoring-panel {
   color-scheme: light;
-  --background: #f4f6fa;
-  --foreground: #1b2433;
+  --background: #eef1ec;
+  --foreground: #121316;
   --card: #ffffff;
-  --card-foreground: #1b2433;
+  --card-foreground: #121316;
   --popover: #ffffff;
-  --border: #e3e8ef;
-  --input: #e3e8ef;
-  --muted: #f1f4f8;
-  --muted-foreground: #667085;
-  --primary: #1f6feb;
+  --popover-foreground: #121316;
+  --border: #e4e7e1;
+  --input: #e4e7e1;
+  --muted: #f3f5f1;
+  --muted-foreground: #6b7069;
+  --primary: #121316;
   --primary-foreground: #ffffff;
-  --ring: #1f6feb;
-  --destructive: #b42318;
+  --ring: #c0dd11;
+  --destructive: #c0352b;
+  --lime: #c0dd11;
+  --rail: transparent;
+  --chat-bg: #eef3ef;
+  --bubble-agent: #121316;
+  --bubble-agent-fg: #f6f7f2;
+  --bubble-customer: #ffffff;
+  --bubble-customer-fg: #121316;
+  --chat-font: 14px;
+  background-color: var(--background);
+  background-image: radial-gradient(1100px 600px at 0% 0%, #f8f9f4 0%, transparent 70%), radial-gradient(900px 700px at 100% 100%, #e2ebe5 0%, transparent 70%);
 }
-/* Soft WhatsApp-like chat background. */
-.monitoring-panel .chat-wallpaper {
-  background-color: #efeae2;
-  background-image: radial-gradient(rgba(0, 0, 0, 0.035) 1px, transparent 1px);
-  background-size: 18px 18px;
+.monitoring-panel.dark {
+  color-scheme: dark;
+  --background: #0d0e10;
+  --foreground: #f3f3ee;
+  --card: #17181b;
+  --card-foreground: #f3f3ee;
+  --popover: #1c1d21;
+  --popover-foreground: #f3f3ee;
+  --border: #2a2c31;
+  --input: #2a2c31;
+  --muted: #202226;
+  --muted-foreground: #a0a49c;
+  --primary: #c0dd11;
+  --primary-foreground: #121316;
+  --chat-bg: #111214;
+  --bubble-agent: #c0dd11;
+  --bubble-agent-fg: #121316;
+  --bubble-customer: #23252a;
+  --bubble-customer-fg: #f3f3ee;
+  background-image: radial-gradient(1100px 600px at 0% 0%, #16181a 0%, transparent 70%), radial-gradient(900px 700px at 100% 100%, #131a16 0%, transparent 70%);
 }
+.monitoring-panel[data-chat-size="small"] { --chat-font: 13px; }
+.monitoring-panel[data-chat-size="large"] { --chat-font: 16px; }
+.monitoring-panel .crm-card {
+  border-radius: 1.5rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: 0 1px 2px rgb(18 19 22 / 0.04), 0 8px 24px -12px rgb(18 19 22 / 0.08);
+}
+.monitoring-panel .chat-wallpaper { background-color: var(--chat-bg); }
+.monitoring-panel { --bubble-icon: var(--card); }
+.monitoring-panel .bubble-agent { background: var(--bubble-agent); color: var(--bubble-agent-fg); --bubble-icon: var(--bubble-agent); }
+.monitoring-panel .bubble-customer { background: var(--bubble-customer); color: var(--bubble-customer-fg); --bubble-icon: var(--bubble-customer); }
+.monitoring-panel .bubble-text { font-size: var(--chat-font); line-height: 1.4; }
+.monitoring-panel[data-density="compact"] .density-row { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.monitoring-panel .wave-bar { width: 3px; border-radius: 9999px; background: currentColor; opacity: 0.35; transition: opacity 0.15s; }
+.monitoring-panel .wave-bar[data-played="true"] { opacity: 1; }

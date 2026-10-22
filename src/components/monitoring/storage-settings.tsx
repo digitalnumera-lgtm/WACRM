@@ -38,7 +38,7 @@ export function StorageSettings() {
   const cap = (data?.settings.cap_mb ?? 800) * MB
   const percent = Math.min(100, Math.round((used / cap) * 100))
 
-  return <section className="rounded-2xl border border-border bg-card p-5">
+  return <section className="crm-card p-5">
     <div className="flex items-center gap-2"><HardDrive size={18} className="text-primary" /><h2 className="text-lg font-semibold">Media storage</h2></div>
     {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
     {data && !data.ready && <p className="mt-3 text-sm text-amber-700">Storage tools need the latest database update.</p>}
@@ -55,7 +55,7 @@ export function StorageSettings() {
         void run(api<Snapshot>('/api/monitoring/storage', sendJson('PATCH', { cap_mb: Number(form.cap), idle_days: form.idleOn ? Number(form.idle) : null, auto_save: form.auto })), value => `Saved. ${removed(value)}`)
       }}>
         <fieldset><legend className="text-sm font-medium">Save automatically</legend>
-          <div className="mt-2 flex flex-wrap gap-2">{kinds.map(k => <label key={k.id} className={`cursor-pointer rounded-full border px-3 py-1.5 text-sm ${form.auto.includes(k.id) ? 'border-[#121316] bg-[#121316] text-white' : 'border-border'}`}>
+          <div className="mt-2 flex flex-wrap gap-2">{kinds.map(k => <label key={k.id} className={`cursor-pointer rounded-full border px-3 py-1.5 text-sm ${form.auto.includes(k.id) ? 'border-transparent bg-primary text-primary-foreground' : 'border-border'}`}>
             <input type="checkbox" className="sr-only" checked={form.auto.includes(k.id)} onChange={e => setForm({ ...form, auto: e.target.checked ? [...form.auto, k.id] : form.auto.filter(x => x !== k.id) })} />{k.label}</label>)}</div>
           <p className="mt-2 text-xs text-muted-foreground">Others are saved when opened.</p>
         </fieldset>

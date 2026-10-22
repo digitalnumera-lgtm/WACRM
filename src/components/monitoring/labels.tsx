@@ -33,9 +33,9 @@ export function LabelsSettings({ labels, ready, onChanged }: { labels: Monitorin
     setBusy(true); setError('')
     try { await action(); onChanged() } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }
-  return <section className="rounded-xl border border-border bg-card p-5">
+  return <section className="crm-card p-6">
     <div className="flex items-center gap-2"><Tag size={18} className="text-primary" /><h3 className="text-base font-semibold">Labels</h3></div>
-    <p className="mt-1 text-sm text-muted-foreground">Tag conversations (for example “Hot lead”, “Complaint”, “Payment pending”) and filter the inbox by them.</p>
+    <p className="mt-1 text-sm text-muted-foreground">Tag chats and filter the inbox by them.</p>
     {ready === false && <p role="status" className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">Labels need the inbox database update. Run <code>supabase/numera/001_inbox_workflow.sql</code> in Supabase first.</p>}
     <form className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]" onSubmit={e => { e.preventDefault(); if (!name.trim()) return; void run(async () => { await api('/api/monitoring/labels', sendJson('POST', { name, color, description: description || null })); setName(''); setDescription('') }) }}>
       <label className="text-xs font-medium text-muted-foreground">Name<input className={inputClass} value={name} maxLength={40} onChange={e => setName(e.target.value)} placeholder="Hot lead" disabled={ready === false} /></label>

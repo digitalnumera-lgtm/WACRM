@@ -4,9 +4,9 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowDown, ArrowUp, ChevronsUp, Minus, SignalHigh } from 'lucide-react'
 import type { ConversationPriority, MonitoringLabel } from '@/lib/monitoring/workflow-types'
 
-export const inputClass = 'w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20'
-export const buttonClass = 'inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40'
-export const primaryButton = 'inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40'
+export const inputClass = 'w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none focus:border-foreground/30 focus:ring-2 focus:ring-[#C0DD11]/60'
+export const buttonClass = 'inline-flex items-center justify-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40'
+export const primaryButton = 'inline-flex items-center justify-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40'
 
 export async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { cache: 'no-store', ...options })
@@ -74,7 +74,7 @@ export function PriorityIcon({ priority, size = 14 }: { priority?: ConversationP
 }
 
 /** Small accessible dropdown menu that closes on outside click / Escape. */
-export function Menu({ trigger, label, children, align = 'right', disabled }: { trigger: ReactNode; label: string; children: (close: () => void) => ReactNode; align?: 'left' | 'right'; disabled?: boolean }) {
+export function Menu({ trigger, label, children, align = 'right', disabled, triggerClass = buttonClass }: { trigger: ReactNode; label: string; children: (close: () => void) => ReactNode; align?: 'left' | 'right'; disabled?: boolean; triggerClass?: string }) {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -85,10 +85,10 @@ export function Menu({ trigger, label, children, align = 'right', disabled }: { 
     return () => { document.removeEventListener('mousedown', click); document.removeEventListener('keydown', key) }
   }, [open])
   return <div ref={root} className="relative">
-    <button type="button" aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} disabled={disabled} className={buttonClass} onClick={() => setOpen(v => !v)}>{trigger}</button>
-    {open && <div role="menu" className={`absolute z-30 mt-1 min-w-48 rounded-xl border border-border bg-card p-1 shadow-xl ${align === 'right' ? 'right-0' : 'left-0'}`}>{children(() => setOpen(false))}</div>}
+    <button type="button" aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} disabled={disabled} className={triggerClass} onClick={() => setOpen(v => !v)}>{trigger}</button>
+    {open && <div role="menu" className={`absolute z-30 mt-1 min-w-48 rounded-2xl border border-border bg-popover p-1.5 shadow-xl ${align === 'right' ? 'right-0' : 'left-0'}`}>{children(() => setOpen(false))}</div>}
   </div>
 }
 export function MenuItem({ children, onClick, active }: { children: ReactNode; onClick: () => void; active?: boolean }) {
-  return <button type="button" role="menuitem" onClick={onClick} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted ${active ? 'font-semibold text-primary' : ''}`}>{children}</button>
+  return <button type="button" role="menuitem" onClick={onClick} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm hover:bg-muted ${active ? 'font-semibold' : ''}`}>{children}</button>
 }

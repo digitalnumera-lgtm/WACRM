@@ -37,11 +37,11 @@ export function BusinessNumbers({ channels, onSaved, onOpen, refresh = 0 }: { ch
   }
   const visible = channels.filter(channel => channel.active === (tab === 'active'))
   return <section className="space-y-4" aria-label="Manage business numbers">
-    <div><h3 className="text-lg font-semibold">Your numbers</h3><p className="mt-1 text-sm text-muted-foreground">Manage which agent numbers this workspace monitors. Saved conversations stay available when a number is removed.</p></div>
+    <div><h3 className="text-lg font-semibold">Your numbers</h3><p className="mt-1 text-sm text-muted-foreground">Agent numbers this CRM monitors.</p></div>
     <div className="flex gap-2" aria-label="Number status">{(['active', 'removed'] as const).map(value => <button key={value} onClick={() => { setTab(value); setConfirm(null) }} aria-pressed={tab === value} className={`rounded-lg px-4 py-2 text-sm font-medium ${tab === value ? 'bg-primary text-primary-foreground' : 'border border-border hover:bg-muted'}`}>{value === 'active' ? 'Active' : 'Removed'} ({channels.filter(c => c.active === (value === 'active')).length})</button>)}</div>
     {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
     {notice && <p role="status" className="rounded-lg bg-muted p-3 text-sm">{notice}</p>}
-    <div className="grid gap-4 xl:grid-cols-2">{visible.map(channel => <article key={channel.id} className="rounded-xl border border-border bg-card p-5">
+    <div className="grid gap-4 xl:grid-cols-2">{visible.map(channel => <article key={channel.id} className="crm-card p-6">
       <div className="flex items-start gap-3"><span className="rounded-xl bg-primary/10 p-3 text-primary"><Phone size={20} /></span><div className="min-w-0 flex-1"><h4 className="truncate font-semibold">{channel.label}</h4><p className="mt-1 text-sm text-muted-foreground">{channel.display_number}</p></div><span className={`rounded-full px-2 py-1 text-xs ${channel.active ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}>{channel.active ? 'Monitoring' : 'Removed'}</span></div>
       <p className="my-4 text-xs text-muted-foreground">Last event: {channel.last_event_at ? new Date(channel.last_event_at).toLocaleString() : 'No events yet'}</p>
       <div className="mb-4"><HistoryStatus channelId={channel.id} status={statuses[channel.id]} onRetried={reloadStatus} /></div>

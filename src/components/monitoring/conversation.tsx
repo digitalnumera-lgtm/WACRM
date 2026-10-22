@@ -1,9 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { AlarmClock, ArrowDown, ArrowLeft, CheckCheck, ChevronDown, LoaderCircle, LockKeyhole, Mail, MailOpen, MoreVertical, PanelRight, RotateCcw } from 'lucide-react'
+import { AlarmClock, ArrowDown, ArrowLeft, CheckCheck, ChevronDown, LoaderCircle, LockKeyhole, Mail, MailOpen, MoreVertical, PanelRight, Pin, PinOff, RotateCcw, Send } from 'lucide-react'
 import { MessageMedia } from './message-media'
 import { useCan } from './access'
+import { togglePinned, useClock, usePreferences } from './preferences'
 import { ReplyComposer } from './reply-composer'
 import type { MonitoringChannel, MonitoringMessage, MonitoringThread, ThreadDetail } from '@/lib/monitoring/types'
 import type { ConversationPriority, InternalNote, ThreadWorkflow } from '@/lib/monitoring/workflow-types'
@@ -54,6 +55,9 @@ export function Conversation({ id, thread: listThread, channels, repliesEnabled,
   onPatched: (patch: Partial<MonitoringThread>) => void; onLoaded: (thread: MonitoringThread) => void; onChanged: () => void;
 }) {
   const canManage = useCan('manage_conversations')
+  const { prefs, update: updatePrefs } = usePreferences()
+  const clock = useClock()
+  const pinned = prefs.pinned.includes(id)
   const canNote = useCan('write_notes')
   const [snapshot, setSnapshot] = useState<ChatSnapshot | null>(() => cache.get(id) ?? null)
   const snapshotRef = useRef(snapshot)
@@ -174,8 +178,8 @@ export function Conversation({ id, thread: listThread, channels, repliesEnabled,
     if (!thread) return
     setBusy(true); setActionError('')
     try {
-      const data = await api<{ workflow: ThreadWorkflow }>(`${endpoint}/workflow`, sendJson('PATCH', { ...change, observed_count: thread.message_count }))
-      onPatched(workflowPatch(data.workflow))
+      const data = await api<{ workflow?: ThreadWorkflow }>(`${endpoint}/workflow`, sendJson('PATCH', { ...change, observed_count: thread.message_count }))
+      if (data.workflow) onPatched(workflowPatch(data.workflow))
     } catch (e) { setActionError((e as Error).message) } finally { setBusy(false) }
   }
   // Opening a conversation marks its current messages reviewed in this CRM
@@ -200,24 +204,25 @@ export function Conversation({ id, thread: listThread, channels, repliesEnabled,
   const priority = (thread?.priority ?? 'none') as ConversationPriority
 
   return <div className="flex h-full min-h-0 flex-col bg-card">
-    <header className="flex items-center gap-3 border-b border-border px-4 py-3">
+    <header className="flex items-center gap-2 border-b border-border px-3 py-3 sm:gap-3 sm:px-5">
       <button className={`${buttonClass} px-2 lg:hidden`} aria-label="Back to conversations" onClick={onBack}><ArrowLeft size={16} /></button>
-      {thread && <Avatar name={name} seed={thread.customer} />}
+      {thread && <span className="hidden sm:block"><Avatar name={name} seed={thread.customer} /></span>}
       <div className="min-w-0 flex-1">
-        <h3 className="flex items-center gap-2 truncate text-base font-semibold">{name}<PriorityIcon priority={priority} /></h3>
+        <h3 className="flex items-center gap-2 truncate text-lg font-semibold tracking-tight">{name}<PriorityIcon priority={priority} /></h3>
         <p className="truncate text-xs text-muted-foreground">{thread && `+${thread.customer}`}{channel && <> · <span className="font-medium text-foreground/80">{channel.label}</span> · {channel.display_number}</>}{channel && !channel.active && ' · removed from monitoring'}</p>
       </div>
       {canManage && workflowReady && thread?.state && <div className="flex items-center gap-1.5">
         <div className="flex">
           {state === 'open'
-            ? <button className={`${primaryButton} rounded-r-none bg-emerald-600`} disabled={busy} onClick={() => void update({ action: 'status', status: 'resolved' })}><CheckCheck size={16} /><span className="hidden sm:inline">Resolve</span></button>
+            ? <button className={`${primaryButton} rounded-r-none`} disabled={busy} onClick={() => void update({ action: 'status', status: 'resolved' })}><CheckCheck size={16} /><span className="hidden sm:inline">Resolve</span></button>
             : <button className={`${primaryButton} rounded-r-none`} disabled={busy} onClick={() => void update({ action: 'status', status: 'open' })}><RotateCcw size={16} /><span className="hidden sm:inline">Reopen</span></button>}
-          <Menu label="Snooze conversation" trigger={<ChevronDown size={16} />} disabled={busy}>{close => <>
+          <Menu label="Snooze conversation" trigger={<ChevronDown size={16} />} disabled={busy} triggerClass={`${primaryButton} rounded-l-none border-l border-white/20 px-2`}>{close => <>
             <p className="px-3 py-1.5 text-[11px] font-semibold uppercase text-muted-foreground">Snooze until</p>
             {snoozeOptions.map(o => <MenuItem key={o.label} onClick={() => { close(); void update({ action: 'status', status: 'snoozed', until: new Date(Date.now() + o.hours * 3600000).toISOString() }) }}><AlarmClock size={14} />{o.label}</MenuItem>)}
           </>}</Menu>
         </div>
         <Menu label="More actions" trigger={<MoreVertical size={16} />} disabled={busy}>{close => <>
+          <MenuItem onClick={() => { close(); updatePrefs({ pinned: togglePinned(prefs.pinned, id) }) }}>{pinned ? <><PinOff size={14} />Unpin</> : <><Pin size={14} />Pin to top</>}</MenuItem>
           <MenuItem onClick={() => { close(); void update({ action: unread ? 'read' : 'unread' }) }}>{unread ? <><MailOpen size={14} />Mark as read</> : <><Mail size={14} />Mark as unread</>}</MenuItem>
           <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase text-muted-foreground">Priority</p>
           {(['urgent', 'high', 'medium', 'low', 'none'] as const).map(p => { const Icon = priorityMeta[p].icon; return <MenuItem key={p} active={priority === p} onClick={() => { close(); void update({ action: 'priority', priority: p }) }}><Icon size={14} className={priorityMeta[p].className} />{priorityMeta[p].label}</MenuItem> })}
@@ -225,28 +230,28 @@ export function Conversation({ id, thread: listThread, channels, repliesEnabled,
       </div>}
       <button className={`${buttonClass} px-2 ${contactOpen ? 'bg-muted' : ''}`} aria-label={contactOpen ? 'Hide contact panel' : 'Show contact panel'} aria-pressed={contactOpen} title="Contact details" onClick={onToggleContact}><PanelRight size={16} /></button>
     </header>
-    {state === 'snoozed' && thread?.snoozed_until && <p className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900"><AlarmClock size={14} />Snoozed until {new Date(thread.snoozed_until).toLocaleString()}. A new message reopens it.</p>}
-    {state === 'resolved' && <p className="flex items-center gap-2 border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-xs text-emerald-900"><CheckCheck size={14} />Resolved. A new message from either side reopens it.</p>}
-    {actionError && <p role="alert" className="border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">{actionError}</p>}
+    {state === 'snoozed' && thread?.snoozed_until && <p className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200"><AlarmClock size={14} />Snoozed until {new Date(thread.snoozed_until).toLocaleString()}. A new message reopens it.</p>}
+    {state === 'resolved' && <p className="flex items-center gap-2 border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-xs text-emerald-900 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200"><CheckCheck size={14} />Resolved. A new message from either side reopens it.</p>}
+    {actionError && <p role="alert" className="border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">{actionError}</p>}
     {error && <div role="alert" className="flex items-center justify-between gap-3 bg-red-50 px-4 py-2 text-sm text-red-700">{error}<button className={buttonClass} onClick={() => { setError(''); setRetry(n => n + 1) }}>Retry</button></div>}
     <div className="relative min-h-0 flex-1">
-      <div ref={viewport} aria-label="Chat messages" className="chat-wallpaper h-full space-y-1.5 overflow-y-auto overscroll-contain px-4 py-4 sm:px-8 [overflow-anchor:none]" onScroll={() => { if (nearBottom()) setNewMessages(false) }}>
+      <div ref={viewport} aria-label="Chat messages" className="chat-wallpaper h-full space-y-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-8 [overflow-anchor:none]" onScroll={() => { if (nearBottom()) setNewMessages(false) }}>
         <div ref={sentinel} className="h-1" />
         {olderBusy && <p role="status" className="flex items-center justify-center gap-2 text-xs text-muted-foreground"><LoaderCircle size={14} className="animate-spin" />Loading earlier messages…</p>}
         {snapshot && !snapshot.nextCursor && snapshot.messages.length > 0 && <p className="py-2 text-center text-xs text-muted-foreground">Beginning of saved conversation</p>}
-        {!snapshot && !error && <div role="status" aria-label="Loading messages" className="space-y-4 py-5">{[0, 1, 2, 3].map(i => <div key={i} className={`h-14 w-2/3 animate-pulse rounded-2xl ${i % 2 ? 'ml-auto bg-emerald-100' : 'bg-white'}`} />)}</div>}
+        {!snapshot && !error && <div role="status" aria-label="Loading messages" className="space-y-4 py-5">{[0, 1, 2, 3].map(i => <div key={i} className={`h-14 w-2/3 animate-pulse rounded-3xl ${i % 2 ? 'ml-auto bubble-agent opacity-20' : 'bubble-customer'}`} />)}</div>}
         {items.map((item, index) => {
           const previous = items[index - 1]
           const day = new Date(item.at).toDateString()
           const separator = !previous || new Date(previous.at).toDateString() !== day
           return <div key={item.type + (item.type === 'message' ? item.message.id : item.note.id)}>
-            {separator && <div className="sticky top-0 z-10 my-3 text-center"><span className="rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium text-slate-600 shadow-sm">{dayLabel(item.at)}</span></div>}
-            {item.type === 'note' ? <NoteBubble note={item.note} /> : <MessageBubble message={item.message} messages={snapshot!.messages} agent={channel?.label} grouped={previous?.type === 'message' && previous.message.direction === item.message.direction && !separator} />}
+            {separator && <div className="sticky top-0 z-10 my-3 text-center"><span className="rounded-full bg-card/90 px-3 py-1 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur">{dayLabel(item.at)}</span></div>}
+            {item.type === 'note' ? <NoteBubble note={item.note} clock={clock} /> : <MessageBubble message={item.message} messages={snapshot!.messages} agent={channel?.label} clock={clock} grouped={previous?.type === 'message' && previous.message.direction === item.message.direction && !separator} />}
           </div>
         })}
         {snapshot?.messages.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">No saved messages yet.</p>}
       </div>
-      {newMessages && <button className="absolute bottom-3 right-6 flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm text-white shadow-lg" onClick={() => { if (viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight; setNewMessages(false) }}>New messages<ArrowDown size={16} /></button>}
+      {newMessages && <button className="absolute bottom-3 right-6 flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm text-primary-foreground shadow-lg" onClick={() => { if (viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight; setNewMessages(false) }}>New messages<ArrowDown size={16} /></button>}
     </div>
     <footer className="border-t border-border bg-card">
       {repliesEnabled && <div className="flex gap-1 px-4 pt-2" role="tablist">
@@ -273,25 +278,27 @@ function dayLabel(value: string) {
   return date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', ...(date.getFullYear() !== today.getFullYear() ? { year: 'numeric' } : {}) })
 }
 
-function MessageBubble({ message, messages, agent, grouped }: { message: MonitoringMessage; messages: MonitoringMessage[]; agent?: string; grouped: boolean }) {
+type Clock = (value: string | number | Date, withDate?: boolean) => string
+
+function MessageBubble({ message, messages, agent, grouped, clock }: { message: MonitoringMessage; messages: MonitoringMessage[]; agent?: string; grouped: boolean; clock: Clock }) {
   const outbound = message.direction === 'outbound'
-  return <div className={`flex ${outbound ? 'justify-end' : 'justify-start'} ${grouped ? '' : 'pt-2'}`}>
-    <article data-message-id={message.id} className={`relative w-fit max-w-[85%] rounded-xl px-3 py-2 shadow-sm sm:max-w-[70%] ${outbound ? 'bg-[#d9fdd3] text-slate-900' : 'bg-white text-slate-900'} ${grouped ? '' : outbound ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}>
-      {!grouped && <p className={`mb-0.5 text-[11px] font-semibold ${outbound ? 'text-emerald-700' : 'text-sky-700'}`}>{outbound ? agent ?? 'Agent' : 'Customer'}</p>}
-      {message.reaction && <div className="text-sm"><span className="text-2xl">{message.reaction.emoji || '—'}</span><p className="text-xs text-slate-500">{message.reaction.emoji ? 'Reacted to: ' : 'Reaction removed from: '}{messages.find(m => m.meta_id === message.reaction?.target)?.content || 'an earlier message'}</p></div>}
-      {!message.reaction && (message.content || !message.media_id) && <p className="whitespace-pre-wrap break-words text-[14px] leading-snug">{message.content || (message.kind === 'revoke' ? <i className="text-slate-500">This message was deleted</i> : message.kind === 'media_placeholder' ? <i className="text-slate-500">📎 Photo, video, voice note or file from chat history. WhatsApp did not share the file itself.</i> : <i className="text-slate-500">This message format is not available yet.</i>)}</p>}
+  return <div className={`flex ${outbound ? 'justify-end' : 'justify-start'} ${grouped ? '' : 'pt-2.5'}`}>
+    <article data-message-id={message.id} className={`relative w-fit max-w-[85%] rounded-3xl px-4 py-2.5 shadow-sm sm:max-w-[68%] ${outbound ? 'bubble-agent' : 'bubble-customer'} ${grouped ? '' : outbound ? 'rounded-br-lg' : 'rounded-bl-lg'}`}>
+      {!grouped && <p className={`mb-0.5 text-[11px] font-semibold ${outbound ? 'text-[#C0DD11] dark:text-[#121316]/70' : 'text-muted-foreground'}`}>{outbound ? agent ?? 'Agent' : 'Customer'}</p>}
+      {message.reaction && <div className="text-sm"><span className="text-2xl">{message.reaction.emoji || '—'}</span><p className="text-xs opacity-60">{message.reaction.emoji ? 'Reacted to: ' : 'Reaction removed from: '}{messages.find(m => m.meta_id === message.reaction?.target)?.content || 'an earlier message'}</p></div>}
+      {!message.reaction && (message.content || !message.media_id) && <p className="bubble-text whitespace-pre-wrap break-words">{message.content || (message.kind === 'revoke' ? <i className="opacity-60">This message was deleted</i> : message.kind === 'media_placeholder' ? <i className="opacity-60">📎 Media from chat history (WhatsApp did not share the file)</i> : <i className="opacity-60">This message type isn’t shown yet</i>)}</p>}
       <MessageMedia message={message} />
-      <time title={new Date(message.sent_at).toLocaleString()} className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-slate-500">{new Date(message.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}{outbound && <CheckCheck size={12} className="text-sky-500" />}</time>
+      <time title={new Date(message.sent_at).toLocaleString()} className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-60">{clock(message.sent_at)}{outbound && <CheckCheck size={12} />}</time>
     </article>
   </div>
 }
 
-function NoteBubble({ note }: { note: InternalNote }) {
-  return <div className="flex justify-end pt-2">
-    <article className="w-fit max-w-[85%] rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 shadow-sm sm:max-w-[70%]">
-      <p className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-amber-800"><LockKeyhole size={11} />Private note · {note.author}</p>
-      <p className="whitespace-pre-wrap break-words text-[14px] leading-snug text-amber-950">{note.body}</p>
-      <time className="mt-0.5 block text-right text-[10px] text-amber-700/80">{new Date(note.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>
+function NoteBubble({ note, clock }: { note: InternalNote; clock: Clock }) {
+  return <div className="flex justify-end pt-2.5">
+    <article className="w-fit max-w-[85%] rounded-3xl rounded-br-lg border border-amber-200 bg-amber-50 px-4 py-2.5 shadow-sm sm:max-w-[68%] dark:border-amber-500/30 dark:bg-amber-500/10">
+      <p className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300"><LockKeyhole size={11} />Private note · {note.author}</p>
+      <p className="bubble-text whitespace-pre-wrap break-words text-amber-950 dark:text-amber-100">{note.body}</p>
+      <time className="mt-1 block text-right text-[10px] text-amber-700/80 dark:text-amber-300/70">{clock(note.created_at)}</time>
     </article>
   </div>
 }
@@ -309,13 +316,13 @@ function NoteComposer({ endpoint, onSaved }: { endpoint: string; onSaved: () => 
     try { await api(endpoint, sendJson('POST', pendingNote.current)); pendingNote.current = null; setBody(''); onSaved() }
     catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }
-  return <div className="p-3">
-    <div className="rounded-xl border border-amber-200 bg-amber-50/60 focus-within:ring-2 focus-within:ring-amber-200">
-      <textarea aria-label="Private note" className="block max-h-40 min-h-16 w-full resize-none bg-transparent px-3 py-2.5 text-sm outline-none placeholder:text-amber-900/50" value={body} maxLength={5000} disabled={busy}
+  return <div className="p-3 sm:px-5">
+    <div className="flex items-end gap-2 rounded-3xl bg-muted/70 py-1.5 pl-4 pr-1.5 focus-within:ring-2 focus-within:ring-amber-300">
+      <LockKeyhole size={15} className="mb-3 shrink-0 text-amber-600" aria-hidden="true" />
+      <textarea aria-label="Private note" rows={1} className="block max-h-40 min-h-10 flex-1 resize-none bg-transparent py-2.5 text-sm outline-none placeholder:text-muted-foreground" value={body} maxLength={5000} disabled={busy}
         onChange={e => setBody(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void save() } }}
-        placeholder="Add a private note for management. Agents and customers never see it." />
-      <div className="flex items-center justify-between gap-2 px-3 pb-2"><span className="flex items-center gap-1 text-[11px] text-amber-800/80"><LockKeyhole size={11} />Visible to management only · Ctrl+Enter to save</span>
-        <button className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-40" disabled={busy || !body.trim()} onClick={() => void save()}>{busy ? 'Saving…' : 'Add note'}</button></div>
+        placeholder="Write a private note (only your team sees it)" />
+      <button aria-label="Add note" title="Add note (Ctrl+Enter)" className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-30" disabled={busy || !body.trim()} onClick={() => void save()}>{busy ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}</button>
     </div>
     {error && <p role="alert" className="mt-1 text-xs text-red-700">{error}</p>}
   </div>

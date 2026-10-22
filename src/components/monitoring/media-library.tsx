@@ -55,10 +55,10 @@ export function MediaLibrary({ channels, refresh, onOpen }: { channels: Monitori
   }, [items])
 
   return <section className="space-y-4">
-    <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-2">
+    <div className="flex flex-wrap items-center gap-2 crm-card p-2">
       <div role="tablist" aria-label="Media type" className="flex flex-wrap gap-1">
         {tabs.map(t => <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => { setTab(t.id); setPage(0); setViewer(null) }}
-          className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium ${tab === t.id ? 'bg-[#121316] text-white' : 'text-muted-foreground hover:bg-muted'}`}><t.icon size={15} />{t.label}</button>)}
+          className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium ${tab === t.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}><t.icon size={15} />{t.label}</button>)}
       </div>
       <div className="flex flex-wrap gap-2 lg:ml-auto">
         <select aria-label="Business number" className={field} value={filters.channel} onChange={e => filter('channel', e.target.value)}><option value="">All numbers</option>{channels.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select>
@@ -74,7 +74,7 @@ export function MediaLibrary({ channels, refresh, onOpen }: { channels: Monitori
       <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.day}</h3>
       {tab === 'visual'
         ? <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">{group.items.map(({ item, index }) => <Tile key={item.id} item={item} onClick={() => setViewer(index)} />)}</div>
-        : <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">{group.items.map(({ item }) => <li key={item.id} className="flex flex-wrap items-center gap-3 p-3">
+        : <ul className="divide-y divide-border overflow-hidden crm-card">{group.items.map(({ item }) => <li key={item.id} className="flex flex-wrap items-center gap-3 p-3">
           <Avatar name={item.customer_name || item.customer} seed={item.customer} size="sm" />
           <div className="min-w-[10rem] flex-1">
             <p className="truncate text-sm font-medium">{item.customer_name || `+${item.customer}`}</p>
