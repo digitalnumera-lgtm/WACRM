@@ -29,9 +29,16 @@ async function metaError(response: Response): Promise<MetaError> {
 const options = (init: RequestInit = {}): RequestInit => ({ cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(20000), ...init })
 
 /** Exchanges the one-time Embedded Signup code (valid ~30 seconds) for a business token. */
-export async function exchangeSignupCode(code: string): Promise<string> {
-  const secret = process.env.META_APP_SECRET?.trim()
+// META_APP_SECRET may list several secrets (comma-separated, for rotation);
+// the first one is the app's current secret.
+function appSecret(): string {
+  const secret = (process.env.META_APP_SECRET ?? '').split(',').map(s => s.trim()).find(Boolean)
   if (!secret) throw new ConnectError('The Meta app secret is not configured on the server.', 503)
+  return secret
+}
+
+export async function exchangeSignupCode(code: string): Promise<string> {
+  const secret = appSecret()
   const url = new URL(`${GRAPH}/oauth/access_token`)
   url.searchParams.set('client_id', META_APP_ID)
   url.searchParams.set('client_secret', secret)
@@ -46,6 +53,25 @@ export async function exchangeSignupCode(code: string): Promise<string> {
   const data = await response.json() as { access_token?: unknown }
   if (typeof data.access_token !== 'string' || !data.access_token) throw new ConnectError('Meta did not return an access token. Please run Connect again.', 502)
   return data.access_token
+}
+
+/**
+ * WhatsApp accounts the signed-in business shared with this app, read from the
+ * token's granular scopes. Used when Meta's popup does not report the account.
+ */
+export async function sharedWhatsAppAccounts(token: string): Promise<string[]> {
+  const url = new URL(`${GRAPH}/debug_token`)
+  url.searchParams.set('input_token', token)
+  url.searchParams.set('access_token', `${META_APP_ID}|${appSecret()}`)
+  const response = await fetch(url, options())
+  if (!response.ok) return []
+  const body = await response.json().catch(() => null) as { data?: { granular_scopes?: { scope?: string; target_ids?: unknown[] }[] } } | null
+  const ids = new Set<string>()
+  for (const scope of body?.data?.granular_scopes ?? []) {
+    if (scope.scope !== 'whatsapp_business_management' && scope.scope !== 'whatsapp_business_messaging') continue
+    for (const id of scope.target_ids ?? []) if (typeof id === 'string' && /^\d+$/.test(id)) ids.add(id)
+  }
+  return [...ids]
 }
 
 /** Requests the one-time contacts or chat-history sync for a coexistence number. */

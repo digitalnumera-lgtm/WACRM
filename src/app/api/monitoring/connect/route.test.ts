@@ -16,6 +16,7 @@ let writes: { table: string; op: string; value: unknown }[]
 let rpc: ReturnType<typeof vi.fn>
 let calls: { url: string; body?: string }[]
 let exchange: { ok: boolean; body: unknown }
+let shared: string[][]
 
 function database() {
   return {
@@ -41,7 +42,7 @@ function database() {
 beforeEach(() => {
   vi.stubEnv('META_APP_SECRET', 'app-secret'); vi.stubEnv('ENCRYPTION_KEY', '0'.repeat(64))
   tables = { monitoring_channels: [], monitoring_credentials: [], monitoring_events: [] }
-  writes = []; calls = []; exchange = { ok: true, body: { access_token: 'business-token' } }
+  writes = []; calls = []; shared = []; exchange = { ok: true, body: { access_token: 'business-token' } }
   rpc = vi.fn(async (_name: string, args: Row) => { tables.monitoring_channels.push({ id: channel, account_id: company, phone_number_id: args.p_phone, active: true }); return { error: null } })
   mocks.role.mockResolvedValue({ role: 'admin',  supabase: database(), accountId: company, userId: 'manager' })
   mocks.admin.mockImplementation(() => database())
@@ -51,6 +52,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async (input: string | URL, init?: RequestInit) => {
     const url = String(input); calls.push({ url, body: init?.body as string | undefined })
     if (url.includes('/oauth/access_token')) return new Response(JSON.stringify(exchange.body), { status: exchange.ok ? 200 : 400 })
+    if (url.includes('/debug_token')) return new Response(JSON.stringify({ data: { granular_scopes: shared.map(ids => ({ scope: 'whatsapp_business_management', target_ids: ids })) } }), { status: 200 })
     if (url.includes('/smb_app_data')) return new Response(JSON.stringify({ messaging_product: 'whatsapp', request_id: `req-${calls.length}` }), { status: 200 })
     return new Response('{}', { status: 404 })
   }))
@@ -91,6 +93,27 @@ describe('Connect number', () => {
     expect((await connect(json(input))).status).toBe(400)
     expect((await connect(json({ ...input, phone_number_id: '666' }))).status).toBe(201)
     expect(rpc).toHaveBeenCalledTimes(1)
+  })
+  it('finds the WhatsApp account from the token when Meta’s popup does not report it', async () => {
+    shared = [['1192605976360851']]
+    const response = await connect(json({ code: 'one-time-code', label: 'Ali Anwar' }))
+    expect(response.status).toBe(201)
+    expect(mocks.subscribe).toHaveBeenCalledWith({ wabaId: '1192605976360851', accessToken: 'business-token' })
+    const debug = new URL(calls.find(c => c.url.includes('/debug_token'))!.url)
+    expect(debug.searchParams.get('access_token')).toBe('1121820883867005|app-secret')
+  })
+  it('asks to reconnect when no account or several accounts were shared', async () => {
+    expect((await connect(json({ code: 'one-time-code', label: 'Ali Anwar' }))).status).toBe(400)
+    shared = [['111', '222']]
+    mocks.list.mockResolvedValue([{ id: '555' }])
+    const body = await (await connect(json({ code: 'one-time-code', label: 'Ali Anwar' }))).json()
+    expect(body.error).toMatch(/2 WhatsApp accounts/)
+    expect(rpc).not.toHaveBeenCalled()
+  })
+  it('uses the first app secret when several are configured for rotation', async () => {
+    vi.stubEnv('META_APP_SECRET', ' new-secret , old-secret')
+    await connect(json(input))
+    expect(new URL(calls[0].url).searchParams.get('client_secret')).toBe('new-secret')
   })
   it('stops before saving when the webhook subscription fails', async () => {
     mocks.subscribe.mockRejectedValue(new Error('denied'))

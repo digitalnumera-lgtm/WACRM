@@ -1,7 +1,7 @@
 import { assertAllNumbers, requireMonitoring } from '@/lib/monitoring/team-access'
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { MonitoringInputError, monitoringError, privateJson, readJson, requiredText } from '@/lib/monitoring/http'
-import { ConnectError, exchangeSignupCode, readConnection, requestSync, SYNC_TYPES, writeConnection, type ConnectionRecord } from '@/lib/monitoring/connect'
+import { ConnectError, exchangeSignupCode, readConnection, requestSync, sharedWhatsAppAccounts, SYNC_TYPES, writeConnection, type ConnectionRecord } from '@/lib/monitoring/connect'
 import { decrypt, encrypt } from '@/lib/whatsapp/encryption'
 import { listWabaPhoneNumbers, subscribeWabaToApp, verifyPhoneNumber } from '@/lib/whatsapp/meta-api'
 
@@ -21,15 +21,32 @@ export async function POST(request: Request) {
     const { accountId, userId } = access
     const body = await readJson(request)
     const code = requiredText(body, 'code', 2048)
-    const waba = requiredText(body, 'waba_id', 40)
+    const reportedWaba = typeof body.waba_id === 'string' && body.waba_id ? body.waba_id : null
     const label = requiredText(body, 'label', 120)
     const requestedPhone = typeof body.phone_number_id === 'string' && body.phone_number_id ? body.phone_number_id : null
-    if (!/^\d+$/.test(waba) || (requestedPhone && !/^\d+$/.test(requestedPhone))) throw new MonitoringInputError('Meta IDs must contain digits only')
+    if ((reportedWaba && !/^\d+$/.test(reportedWaba)) || (requestedPhone && !/^\d+$/.test(requestedPhone))) throw new MonitoringInputError('Meta IDs must contain digits only')
 
     let token: string
     try { token = await exchangeSignupCode(code) } catch (error) {
       if (error instanceof ConnectError) return privateJson({ error: error.message }, error.status)
       return privateJson({ error: 'Meta could not be reached. Please run Connect again.' }, 503)
+    }
+
+    // Meta's popup normally reports the WhatsApp account. If it did not, read
+    // the account(s) the business shared from the new token instead.
+    let waba = reportedWaba
+    if (!waba) {
+      const shared = await sharedWhatsAppAccounts(token).catch(() => [] as string[])
+      if (shared.length === 1) waba = shared[0]
+      else if (shared.length > 1) {
+        const owners: string[] = []
+        for (const id of shared.slice(0, 20)) {
+          const numbers = await listWabaPhoneNumbers({ wabaId: id, accessToken: token }).catch(() => [])
+          if (requestedPhone ? numbers.some(n => n.id === requestedPhone) : numbers.length > 0) owners.push(id)
+        }
+        if (owners.length === 1) waba = owners[0]
+        else return privateJson({ error: `Meta shared ${shared.length} WhatsApp accounts. Run Connect again and select only this agent’s WhatsApp account and number.` }, 400)
+      } else return privateJson({ error: 'Meta did not share a WhatsApp account. Run Connect again and, in Meta’s window, select the agent’s WhatsApp Business account and number.' }, 400)
     }
 
     // Resolve the number inside the shared WhatsApp account. A coexistence

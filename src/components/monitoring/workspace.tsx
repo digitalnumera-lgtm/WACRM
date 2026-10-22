@@ -207,8 +207,8 @@ function Workspace({ accountName, me, initialView = 'Inbox', initialSection }: {
               {section === 'preferences' && <PreferencesSettings />}
               {section === 'team' && me.full && <TeamSettings channels={inbox.channels} />}
               {section === 'numbers' && can(me, 'manage_numbers') && <Panel><ConnectNumber onConnected={bump} /><BusinessNumbers channels={inbox.channels} refresh={refresh} onSaved={bump} onOpen={id => showInbox({ tab: 'all', channel: id })} />
-                <details className="crm-card p-4"><summary className="cursor-pointer font-medium">Add from Meta portfolio (no history)</summary><PortfolioPicker onSaved={bump} /></details>
-                <details className="crm-card p-4"><summary className="cursor-pointer font-medium">Enter number details manually</summary><ChannelManager channels={inbox.channels} onSaved={bump} /></details></Panel>}
+                <details className="crm-card p-4"><summary className="cursor-pointer text-sm font-medium text-muted-foreground">Advanced: add a number without chat history</summary>
+                  <div className="mt-4 space-y-6"><div><h4 className="text-sm font-semibold">From the Meta business portfolio</h4><PortfolioPicker onSaved={bump} /></div><div><h4 className="text-sm font-semibold">By phone number ID and token</h4><ChannelManager channels={inbox.channels} onSaved={bump} /></div></div></details></Panel>}
               {section === 'storage' && can(me, 'manage_settings') && <StorageSettings />}
               {section === 'labels' && can(me, 'manage_labels') && <LabelsSettings labels={labels} ready={labelsReady} onChanged={() => { reloadLabels(); bump() }} />}
               {section === 'replies' && me.full && <QuickRepliesPanel />}
