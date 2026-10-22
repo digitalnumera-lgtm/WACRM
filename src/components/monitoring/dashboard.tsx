@@ -5,7 +5,7 @@ import { ArrowDownRight, ArrowUpRight, CheckCheck, Clock, Inbox, MailWarning, Me
 import type { MonitoringChannel } from '@/lib/monitoring/types'
 import type { InboxTab } from './inbox-list'
 import { api, waitingFor } from './ui'
-import { ActivePill } from './motion'
+import { ActivePill, CountUp } from './motion'
 
 type Overview = {
   days: number; workflowReady: boolean
@@ -29,7 +29,7 @@ function Kpi({ label, value, icon: Icon, children, dark }: { label: string; valu
   return <div className={`rounded-3xl p-5 ${dark ? 'bg-[var(--ink)] text-[var(--ink-fg)] dark:bg-[var(--hl)] dark:text-[var(--hl-fg)]' : 'crm-card'}`}>
     <div className="flex items-center justify-between"><span className={`flex size-9 items-center justify-center rounded-full ${dark ? 'bg-white/10 dark:bg-black/10' : 'bg-muted'}`}><Icon size={17} /></span>{children}</div>
     <p className={`mt-5 text-sm ${dark ? 'opacity-70' : 'text-muted-foreground'}`}>{label}</p>
-    <p className="font-display mt-1 text-4xl font-semibold tracking-tight">{value === undefined ? '—' : value.toLocaleString()}</p>
+    <p className="font-display mt-1 text-4xl font-semibold tracking-tight"><CountUp value={value} /></p>
   </div>
 }
 
@@ -66,7 +66,7 @@ export function Dashboard({ refresh, channels, onTab, onChannel }: { refresh: nu
     <section className="crm-card p-5">
       <h2 className="font-display text-lg font-semibold">Needs attention</h2>
       <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{attention.map(a => <button key={a.tab} onClick={() => onTab(a.tab)} className="flex items-center gap-3 rounded-2xl bg-muted/60 p-3 text-left hover:bg-muted">
-        <a.icon size={18} className={a.tone || 'text-muted-foreground'} /><span className="flex-1 text-sm">{a.label}</span><span className={`text-lg font-semibold ${a.tone}`}>{a.value?.toLocaleString() ?? '—'}</span></button>)}</div>
+        <a.icon size={18} className={a.tone || 'text-muted-foreground'} /><span className="flex-1 text-sm">{a.label}</span><span className={`text-lg font-semibold ${a.tone}`}><CountUp value={a.value} /></span></button>)}</div>
       {data && !data.workflowReady && <p className="mt-2 text-xs text-muted-foreground">Status counts need the inbox database update.</p>}
     </section>
     <section>
@@ -75,8 +75,8 @@ export function Dashboard({ refresh, channels, onTab, onChannel }: { refresh: nu
         <div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-full bg-[var(--ink)] text-sm font-bold text-[var(--ink-accent)]">{channel.label.slice(0, 2).toUpperCase()}</span>
           <div className="min-w-0 flex-1"><p className="truncate font-semibold">{channel.label}</p><p className="truncate text-xs text-muted-foreground">{channel.display_number}</p></div></div>
         <div className="mt-4 flex items-end justify-between">
-          <div className="flex gap-6"><div><p className="text-xs text-muted-foreground">Waiting</p><p className={`text-2xl font-semibold ${w?.count ? 'text-red-600 dark:text-red-400' : ''}`}>{w?.count ?? 0}</p></div>
-            <div><p className="text-xs text-muted-foreground">New today</p><p className="text-2xl font-semibold">{data?.newNumbers?.byChannel[channel.id] ?? 0}</p></div></div>
+          <div className="flex gap-6"><div><p className="text-xs text-muted-foreground">Waiting</p><p className={`text-2xl font-semibold ${w?.count ? 'text-red-600 dark:text-red-400' : ''}`}><CountUp value={w?.count ?? 0} /></p></div>
+            <div><p className="text-xs text-muted-foreground">New today</p><p className="text-2xl font-semibold"><CountUp value={data?.newNumbers?.byChannel[channel.id] ?? 0} /></p></div></div>
           <p className="text-right text-xs text-muted-foreground">{w ? `Longest ${waitingFor(w.oldest)}` : 'Nobody waiting'}<br />Last activity {channel.last_event_at ? new Date(channel.last_event_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '—'}</p>
         </div>
       </button> })}</div>
