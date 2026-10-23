@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Funnel_Display, Funnel_Sans } from "next/font/google";
+import { AreaTranslations } from "@/lib/i18n/area-translations";
 
 // Auth pages are never indexed.
 export const metadata: Metadata = {
@@ -20,7 +21,7 @@ function Bubble({ from, children, time }: { from: "customer" | "agent"; children
 }
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
-  return <div className={`numera-auth ${sans.variable} ${display.variable} grid min-h-dvh lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]`}>
+  return <AreaTranslations path="/signup"><div className={`numera-auth ${sans.variable} ${display.variable} grid min-h-dvh lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]`}>
     <aside className="relative hidden flex-col justify-between overflow-hidden bg-[#121316] p-12 text-[#F3F3EE] lg:flex">
       {/* eslint-disable-next-line @next/next/no-img-element -- small static brand file */}
       <div className="flex items-center gap-3"><img src="/brand/numera-logo-white.png" alt="Numera Digital" width={1200} height={347} className="h-10 w-auto" /><span className="rounded-full bg-[#C0DD11] px-2.5 py-0.5 text-xs font-semibold text-[#121316]">CRM</span></div>
@@ -40,5 +41,5 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       <div className="flex items-center gap-2.5 px-6 pt-6 lg:hidden"><img src="/brand/numera-logo.png" alt="Numera Digital" width={1200} height={347} className="h-8 w-auto" /><span className="rounded-full bg-[#121316] px-2 py-0.5 text-[11px] font-semibold text-[#C0DD11]">CRM</span></div>
       <div className="flex-1">{children}</div>
     </main>
-  </div>;
+  </div></AreaTranslations>;
 }
