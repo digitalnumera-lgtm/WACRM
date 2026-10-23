@@ -107,32 +107,71 @@ export function TrackerOverview({ data, onClient, onDeals }: { data: TrackerView
   </div>
 }
 
+type SortKey = 'newest' | 'oldest' | 'owed' | 'total' | 'client'
+type DealFilters = { q: string; stage: string; agent: string; team: string; month: string; type: string; pay: string; work: string; sort: SortKey }
+const EMPTY_FILTERS: DealFilters = { q: '', stage: '', agent: '', team: '', month: '', type: '', pay: '', work: '', sort: 'newest' }
+const SORTS: Record<SortKey, { label: string; money?: boolean; fn: (a: TrackerDeal, b: TrackerDeal) => number }> = {
+  newest: { label: 'Newest first', fn: (a, b) => dayKey(b.dateClosed).localeCompare(dayKey(a.dateClosed)) || b.id.localeCompare(a.id) },
+  oldest: { label: 'Oldest first', fn: (a, b) => dayKey(a.dateClosed).localeCompare(dayKey(b.dateClosed)) || a.id.localeCompare(b.id) },
+  owed: { label: 'Most owed', money: true, fn: (a, b) => (b.money?.remaining ?? 0) - (a.money?.remaining ?? 0) },
+  total: { label: 'Biggest deal', money: true, fn: (a, b) => (b.money?.total ?? 0) - (a.money?.total ?? 0) },
+  client: { label: 'Client A–Z', fn: (a, b) => (a.brand || a.client).localeCompare(b.brand || b.client) },
+}
+/** ClickUp progress: all subtasks done, some open, or no project yet. */
+function workState(d: TrackerDeal): 'done' | 'open' | 'none' {
+  if (!d.clickup) return 'none'
+  const teams = Object.values(d.clickup.teams)
+  return teams.length && teams.every(([done, total]) => done >= total) ? 'done' : 'open'
+}
+/** Filters stay while moving between pages and after a refresh (this browser tab only). */
+function loadFilters(): DealFilters {
+  try { return { ...EMPTY_FILTERS, ...JSON.parse(window.sessionStorage.getItem('numera-deal-filters') ?? '{}') } } catch { return EMPTY_FILTERS }
+}
+function saveFilters(f: DealFilters) { try { window.sessionStorage.setItem('numera-deal-filters', JSON.stringify(f)) } catch { /* Private mode. */ } }
+
 export function TrackerDeals({ data, openClient, onClient, canEdit, onChanged }: { data: TrackerView; openClient: string | null; onClient: (key: string | null) => void; canEdit: boolean; onChanged: Changed }) {
   const [adding, setAdding] = useState(false)
-  const [q, setQ] = useState('')
-  const [agent, setAgent] = useState('')
-  const [status, setStatus] = useState('')
-  const [payment, setPayment] = useState('')
-  const [month, setMonth] = useState('')
+  const [f, setF] = useState<DealFilters>(() => loadFilters())
+  const set = (patch: Partial<DealFilters>) => setF(x => { const next = { ...x, ...patch }; saveFilters(next); return next })
   const money = !!data.summary.money
   const options = useMemo(() => ({
     agents: [...new Set(data.deals.map(d => d.agent).filter(Boolean))].sort(),
-    statuses: [...new Set(data.deals.map(d => d.clientStatus).filter(Boolean))].sort(),
-    payments: [...new Set(data.deals.map(d => d.money?.paymentStatus ?? '').filter(Boolean))].sort(),
+    teams: [...new Set(data.deals.map(d => d.team).filter(Boolean))].sort(),
     months: [...new Set(data.deals.map(d => d.month).filter(Boolean))].sort().reverse(),
+    types: [...new Set(data.deals.map(d => d.dealType).filter(Boolean))].sort(),
   }), [data.deals])
-  const digits = q.replace(/\D/g, '').replace(/^(92|0)/, '')
-  const rows = data.deals.filter(d => (!agent || d.agent === agent) && (!status || d.clientStatus === status) && (!payment || d.money?.paymentStatus === payment) && (!month || d.month === month) &&
-    (!q.trim() || [d.id, d.clientId, d.client, d.brand, d.email, d.services].some(v => v.toLowerCase().includes(q.trim().toLowerCase())) || (digits.length >= 5 && d.phone.replace(/\D/g, '').includes(digits))))
+  const digits = f.q.replace(/\D/g, '').replace(/^(92|0)/, '')
+  const text = f.q.trim().toLowerCase()
+  const matchesExceptStage = (d: TrackerDeal) => (!f.agent || d.agent === f.agent) && (!f.team || d.team === f.team) && (!f.type || d.dealType === f.type) &&
+    (!f.month || d.month === f.month) && (!f.work || workState(d) === f.work) &&
+    (!f.pay || (f.pay === 'owes' ? (d.money?.remaining ?? 0) > 0 : f.pay === 'paid' ? (d.money?.remaining ?? 1) <= 0 && !!d.money : /refund/i.test(d.money?.paymentStatus ?? ''))) &&
+    (!text || [d.id, d.clientId, d.client, d.brand, d.email, d.services, d.notes].some(v => v.toLowerCase().includes(text)) || (digits.length >= 5 && d.phone.replace(/\D/g, '').includes(digits)))
+  const base = data.deals.filter(matchesExceptStage)
+  const stageOf = (d: TrackerDeal) => d.approved === false ? 'approval' : (d.clientStatus || 'Not set')
+  const stages = [['', 'All'], ['approval', 'Waiting for approval'], ['Onboarding', 'Onboarding'], ['Active', 'Active'], ['On Hold', 'On hold'], ['Offboarded', 'Offboarded']] as const
+  const sorted = base.filter(d => !f.stage || stageOf(d) === f.stage).sort(SORTS[f.sort].fn)
+  const rows = sorted
+  const active = ['agent', 'team', 'type', 'month', 'pay', 'work'].filter(k => f[k as keyof DealFilters]).length + (f.q ? 1 : 0)
   const total = rows.reduce((s, d) => s + (d.money?.total ?? 0), 0), owed = rows.reduce((s, d) => s + Math.max(0, d.money?.remaining ?? 0), 0)
-  return <div className="space-y-4">
-    <div className="crm-card flex flex-wrap items-center gap-2 p-3">
-      <label className="relative min-w-52 flex-1"><Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input className={`${inputClass} pl-9`} value={q} onChange={e => setQ(e.target.value)} placeholder="Search client, brand, deal, phone" aria-label="Search deals" /></label>
-      <select className={field} value={agent} onChange={e => setAgent(e.target.value)} aria-label="Sales agent"><option value="">All agents</option>{options.agents.map(a => <option key={a}>{a}</option>)}</select>
-      <select className={field} value={status} onChange={e => setStatus(e.target.value)} aria-label="Client status"><option value="">Any status</option>{options.statuses.map(a => <option key={a}>{a}</option>)}</select>
-      {money && <select className={field} value={payment} onChange={e => setPayment(e.target.value)} aria-label="Payment status"><option value="">Any payment</option>{options.payments.map(a => <option key={a}>{a}</option>)}</select>}
-      <select className={field} value={month} onChange={e => setMonth(e.target.value)} aria-label="Month closed"><option value="">Any month</option>{options.months.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}</select>
+  return <div className="space-y-3">
+    <div className="flex flex-wrap items-center gap-2">
+      <label className="relative min-w-52 flex-1"><Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input className={`${inputClass} pl-9`} value={f.q} onChange={e => set({ q: e.target.value })} placeholder="Search client, brand, deal ID, phone, notes" aria-label="Search deals" /></label>
+      <select className={field} value={f.sort} onChange={e => set({ sort: e.target.value as SortKey })} aria-label="Sort">{(Object.keys(SORTS) as SortKey[]).filter(k => money || !SORTS[k].money).map(k => <option key={k} value={k}>{SORTS[k].label}</option>)}</select>
       {canEdit && <button className={primaryButton} onClick={() => setAdding(true)}><Plus size={15} />Add deal</button>}
+    </div>
+    <div role="tablist" aria-label="Client stage" className="flex gap-1 overflow-x-auto pb-1">{stages.map(([id, label]) => {
+      const n = id ? base.filter(d => stageOf(d) === id).length : base.length
+      return <button key={id} role="tab" aria-selected={f.stage === id} onClick={() => set({ stage: id })}
+        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium ${f.stage === id ? 'border-transparent bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:text-foreground'}`}>{label}<span className={`rounded-full px-1.5 text-xs tabular-nums ${f.stage === id ? 'bg-white/20' : 'bg-muted'}`}>{n}</span></button>
+    })}</div>
+    <div className="flex flex-wrap items-center gap-2">
+      <select className={field} value={f.agent} onChange={e => set({ agent: e.target.value })} aria-label="Sales agent"><option value="">All agents</option>{options.agents.map(a => <option key={a}>{a}</option>)}</select>
+      <select className={field} value={f.team} onChange={e => set({ team: e.target.value })} aria-label="Team"><option value="">All teams</option>{options.teams.map(a => <option key={a}>{a}</option>)}</select>
+      <select className={field} value={f.month} onChange={e => set({ month: e.target.value })} aria-label="Month closed"><option value="">Any month</option>{options.months.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}</select>
+      {options.types.length > 1 && <select className={field} value={f.type} onChange={e => set({ type: e.target.value })} aria-label="Deal type"><option value="">New and repeat</option>{options.types.map(a => <option key={a}>{a}</option>)}</select>}
+      {money && <select className={field} value={f.pay} onChange={e => set({ pay: e.target.value })} aria-label="Payment"><option value="">Any payment</option><option value="owes">Still owes</option><option value="paid">Fully paid</option><option value="refund">Refunded</option></select>}
+      <select className={field} value={f.work} onChange={e => set({ work: e.target.value })} aria-label="ClickUp work"><option value="">Any work progress</option><option value="open">Work in progress</option><option value="done">All tasks done</option><option value="none">No ClickUp project</option></select>
+      {active > 0 && <button className="text-sm font-medium text-muted-foreground underline" onClick={() => set({ ...EMPTY_FILTERS, sort: f.sort, stage: f.stage })}>Clear {active} filter{active === 1 ? '' : 's'}</button>}
     </div>
     {adding && <AddDealDialog data={data} onClose={() => setAdding(false)} onChanged={(view, result) => { onChanged(view, result); const id = result?.dealId; const d = view.deals.find(x => x.id === id); if (d) onClient(clientKey(d)) }} />}
     <p className="px-1 text-sm text-muted-foreground">{rows.length} deal{rows.length === 1 ? '' : 's'}{money && <> · total {pkr(total)} · still owed {pkr(owed)}</>}</p>
