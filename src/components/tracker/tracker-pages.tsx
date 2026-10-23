@@ -12,7 +12,9 @@ import { Avatar, buttonClass, Icon3D, inputClass, primaryButton } from '@/compon
 export const pkr = (n: number | null | undefined) => n == null ? '—' : `Rs ${Math.round(n).toLocaleString()}`
 const clientKey = (d: Pick<TrackerDeal, 'clientId' | 'client'>) => d.clientId || d.client
 const monthLabel = (m: string) => { if (!m) return ''; const [y, mo] = m.split('-').map(Number); return new Date(y, mo - 1, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) }
-const field = `${inputClass} w-auto min-w-0`
+/** Compact filter control: sized to its text, never the full row. */
+const field = 'h-9 w-auto max-w-full shrink-0 cursor-pointer rounded-full border border-border bg-card pl-3 pr-8 text-sm outline-none hover:border-foreground/30 focus:border-foreground/30 focus:ring-2 focus:ring-[var(--hl)]/60'
+const fieldOn = 'border-foreground/40 bg-muted font-medium'
 
 const statusTone: Record<string, string> = {
   active: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
@@ -156,7 +158,7 @@ export function TrackerDeals({ data, openClient, onClient, canEdit, onChanged }:
   const total = rows.reduce((s, d) => s + (d.money?.total ?? 0), 0), owed = rows.reduce((s, d) => s + Math.max(0, d.money?.remaining ?? 0), 0)
   return <div className="space-y-3">
     <div className="flex flex-wrap items-center gap-2">
-      <label className="relative min-w-52 flex-1"><Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input className={`${inputClass} pl-9`} value={f.q} onChange={e => set({ q: e.target.value })} placeholder="Search client, brand, deal ID, phone, notes" aria-label="Search deals" /></label>
+      <label className="relative min-w-0 basis-64 flex-1"><Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input className={`${inputClass} pl-9`} value={f.q} onChange={e => set({ q: e.target.value })} placeholder="Search client, brand, deal ID, phone, notes" aria-label="Search deals" /></label>
       <select className={field} value={f.sort} onChange={e => set({ sort: e.target.value as SortKey })} aria-label="Sort">{(Object.keys(SORTS) as SortKey[]).filter(k => money || !SORTS[k].money).map(k => <option key={k} value={k}>{SORTS[k].label}</option>)}</select>
       {canEdit && <button className={primaryButton} onClick={() => setAdding(true)}><Plus size={15} />Add deal</button>}
     </div>
@@ -166,12 +168,12 @@ export function TrackerDeals({ data, openClient, onClient, canEdit, onChanged }:
         className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium ${f.stage === id ? 'border-transparent bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:text-foreground'}`}>{label}<span className={`rounded-full px-1.5 text-xs tabular-nums ${f.stage === id ? 'bg-white/20' : 'bg-muted'}`}>{n}</span></button>
     })}</div>
     <div className="flex flex-wrap items-center gap-2">
-      <select className={field} value={f.agent} onChange={e => set({ agent: e.target.value })} aria-label="Sales agent"><option value="">All agents</option>{options.agents.map(a => <option key={a}>{a}</option>)}</select>
-      <select className={field} value={f.team} onChange={e => set({ team: e.target.value })} aria-label="Team"><option value="">All teams</option>{options.teams.map(a => <option key={a}>{a}</option>)}</select>
-      <select className={field} value={f.month} onChange={e => set({ month: e.target.value })} aria-label="Month closed"><option value="">Any month</option>{options.months.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}</select>
-      {options.types.length > 1 && <select className={field} value={f.type} onChange={e => set({ type: e.target.value })} aria-label="Deal type"><option value="">New and repeat</option>{options.types.map(a => <option key={a}>{a}</option>)}</select>}
-      {money && <select className={field} value={f.pay} onChange={e => set({ pay: e.target.value })} aria-label="Payment"><option value="">Any payment</option><option value="owes">Still owes</option><option value="paid">Fully paid</option><option value="refund">Refunded</option></select>}
-      <select className={field} value={f.work} onChange={e => set({ work: e.target.value })} aria-label="ClickUp work"><option value="">Any work progress</option><option value="open">Work in progress</option><option value="done">All tasks done</option><option value="none">No ClickUp project</option></select>
+      <select className={`${field} ${f.agent ? fieldOn : ''}`} value={f.agent} onChange={e => set({ agent: e.target.value })} aria-label="Sales agent"><option value="">All agents</option>{options.agents.map(a => <option key={a}>{a}</option>)}</select>
+      <select className={`${field} ${f.team ? fieldOn : ''}`} value={f.team} onChange={e => set({ team: e.target.value })} aria-label="Team"><option value="">All teams</option>{options.teams.map(a => <option key={a}>{a}</option>)}</select>
+      <select className={`${field} ${f.month ? fieldOn : ''}`} value={f.month} onChange={e => set({ month: e.target.value })} aria-label="Month closed"><option value="">Any month</option>{options.months.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}</select>
+      {options.types.length > 1 && <select className={`${field} ${f.type ? fieldOn : ''}`} value={f.type} onChange={e => set({ type: e.target.value })} aria-label="Deal type"><option value="">New and repeat</option>{options.types.map(a => <option key={a}>{a}</option>)}</select>}
+      {money && <select className={`${field} ${f.pay ? fieldOn : ''}`} value={f.pay} onChange={e => set({ pay: e.target.value })} aria-label="Payment"><option value="">Any payment</option><option value="owes">Still owes</option><option value="paid">Fully paid</option><option value="refund">Refunded</option></select>}
+      <select className={`${field} ${f.work ? fieldOn : ''}`} value={f.work} onChange={e => set({ work: e.target.value })} aria-label="ClickUp work"><option value="">Any work progress</option><option value="open">Work in progress</option><option value="done">All tasks done</option><option value="none">No ClickUp project</option></select>
       {active > 0 && <button className="text-sm font-medium text-muted-foreground underline" onClick={() => set({ ...EMPTY_FILTERS, sort: f.sort, stage: f.stage })}>Clear {active} filter{active === 1 ? '' : 's'}</button>}
     </div>
     {adding && <AddDealDialog data={data} onClose={() => setAdding(false)} onChanged={(view, result) => { onChanged(view, result); const id = result?.dealId; const d = view.deals.find(x => x.id === id); if (d) onClient(clientKey(d)) }} />}
