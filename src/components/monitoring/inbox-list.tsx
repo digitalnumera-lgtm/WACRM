@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowDownUp, CheckCheck, ChevronDown, Clock, Contact, FileText, Image as ImageIcon, MapPin, Mic, Paperclip, Pin, Search, SlidersHorizontal, Smile, Sticker, Video, X } from 'lucide-react'
 import { leadStatuses, type MonitoringChannel, type MonitoringThread } from '@/lib/monitoring/types'
 import type { MonitoringLabel } from '@/lib/monitoring/workflow-types'
+import { readCache, writeCache } from '@/lib/monitoring/view-cache'
 import { api, Avatar, buttonClass, inputClass, LabelChip, Menu, MenuItem, PriorityIcon, priorityMeta, waitingFor, Icon3D } from './ui'
 import { ActivePill, pop } from './motion'
 import { AnimatePresence, m } from 'motion/react'
@@ -58,10 +59,17 @@ export function useInbox(filters: InboxFilters, refresh: number) {
     const key = JSON.stringify(filters)
     const changed = previous.current !== key
     previous.current = key
-    if (changed) { loaded.current = false; setThreads([]); cursor.current = null; setMore(false) }
+    const cacheKey = `inbox:${key}`
+    if (changed) {
+      loaded.current = false; cursor.current = null; setMore(false)
+      // Last list for these filters in this tab: shown at once, replaced when the fresh page arrives.
+      const cached = readCache<InboxPage>(cacheKey, 30 * 60_000)
+      setThreads(cached?.threads ?? []); if (cached) { setChannels(cached.channels); if (cached.total !== null) setTotal(cached.total) }
+    }
     setLoading(true)
     api<InboxPage>(`/api/monitoring?${params(filters)}`, { signal: controller.signal }).then(data => {
       if (controller.signal.aborted) return
+      if (changed) writeCache(cacheKey, { ...data, threads: data.threads.slice(0, 50) })
       setChannels(data.channels); setWorkflowReady(data.workflowReady)
       // Refreshes merge the newest page; a changed tab/filter replaces the list.
       setThreads(old => changed ? data.threads : combine(old.filter(t => matchesTabLocally(t, filters.tab)), data.threads))

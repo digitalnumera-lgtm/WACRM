@@ -1,6 +1,6 @@
 // Per-user CRM preferences, stored in the user's Supabase Auth metadata.
 
-export const STYLES = ['numera', 'lavender', 'blue', 'glass', 'mono', 'sky'] as const
+export const STYLES = ['numera', 'lavender', 'blue', 'glass', 'ios', 'mono', 'sky'] as const
 export type CrmStyle = typeof STYLES[number]
 
 export interface Preferences {

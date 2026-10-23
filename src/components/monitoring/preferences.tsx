@@ -134,12 +134,13 @@ const styleSwatches: { id: CrmStyle; name: string; canvas: string; card: string;
   { id: 'lavender', name: 'Lavender', canvas: 'linear-gradient(135deg, #dfe5ff, #f7e4f5)', card: '#ffffff', ink: '#1d1a3a', accent: '#5b3df5' },
   { id: 'blue', name: 'Clear blue', canvas: '#eef2f9', card: '#ffffff', ink: '#0f172a', accent: '#2563eb' },
   { id: 'glass', name: 'Glass', canvas: 'linear-gradient(135deg, #d4e1f3, #edf0d8)', card: 'rgb(255 255 255 / 0.6)', ink: '#0e1116', accent: '#f2e64d' },
+  { id: 'ios', name: 'iOS glass', canvas: 'linear-gradient(135deg, #b8d7ff, #f9c9e6 55%, #c8f2e4)', card: 'rgb(255 255 255 / 0.55)', ink: 'rgb(28 28 30 / 0.86)', accent: '#007aff' },
   { id: 'mono', name: 'Mono', canvas: '#f3f2ee', card: '#ffffff', ink: '#151515', accent: '#151515' },
   { id: 'sky', name: 'Sky', canvas: 'linear-gradient(180deg, #c6daf1, #edf3f9)', card: '#ffffff', ink: '#1c2633', accent: '#2f7fe0' },
 ]
 
 function StylePicker({ value, onChange }: { value: CrmStyle; onChange: (v: CrmStyle) => void }) {
-  return <div role="radiogroup" aria-label="Style" className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+  return <div role="radiogroup" aria-label="Style" className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
     {styleSwatches.map(s => <button key={s.id} type="button" role="radio" aria-checked={value === s.id} onClick={() => onChange(s.id)}
       className={`group rounded-2xl p-1.5 text-left transition-shadow ${value === s.id ? 'ring-2 ring-primary' : 'ring-1 ring-border hover:ring-muted-foreground/40'}`}>
       <span aria-hidden="true" className="flex h-20 gap-1.5 rounded-xl p-2" style={{ background: s.canvas }}>

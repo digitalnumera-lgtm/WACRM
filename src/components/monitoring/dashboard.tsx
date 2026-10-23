@@ -5,6 +5,7 @@ import { ArrowDownRight, ArrowUpRight, CheckCheck, Clock, Inbox, MailWarning } f
 import type { MonitoringChannel } from '@/lib/monitoring/types'
 import type { InboxTab } from './inbox-list'
 import { api, Icon3D, waitingFor } from './ui'
+import { readCache, writeCache } from '@/lib/monitoring/view-cache'
 import { ActivePill, CountUp } from './motion'
 
 type Overview = {
@@ -38,9 +39,11 @@ export function Dashboard({ refresh, channels, onTab, onChannel }: { refresh: nu
   const [data, setData] = useState<Overview | null>(null)
   const [error, setError] = useState('')
   useEffect(() => {
+    const cached = readCache<Overview>(`overview:${days}`, 30 * 60_000)
+    if (cached) setData(cached) // eslint-disable-line react-hooks/set-state-in-effect -- instant paint from the tab cache
     const controller = new AbortController()
     const midnight = new Date(); midnight.setHours(0, 0, 0, 0)
-    api<Overview>(`/api/monitoring/overview?days=${days}&today=${encodeURIComponent(midnight.toISOString())}`, { signal: controller.signal }).then(d => { setData(d); setError('') }).catch(e => { if (!controller.signal.aborted) setError(e.message) })
+    api<Overview>(`/api/monitoring/overview?days=${days}&today=${encodeURIComponent(midnight.toISOString())}`, { signal: controller.signal }).then(d => { setData(d); setError(''); writeCache(`overview:${days}`, d) }).catch(e => { if (!controller.signal.aborted) setError(e.message) })
     return () => controller.abort()
   }, [days, refresh])
   const counts = data?.counts

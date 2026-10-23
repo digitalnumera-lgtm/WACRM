@@ -8,12 +8,13 @@ import { atLeast, type TrackerLevel, type TrackerView } from '@/lib/tracker/mode
 import { MonitoringSignOut } from '@/components/monitoring/workspace'
 import { ActivePill, MotionRoot } from '@/components/monitoring/motion'
 import { PreferencesProvider, useDarkMode, usePreferences } from '@/components/monitoring/preferences'
-import { api, buttonClass, Icon3D, timeAgo } from '@/components/monitoring/ui'
+import { api, buttonClass, Icon3D, LoadingOrb, timeAgo } from '@/components/monitoring/ui'
+import { readCache, writeCache } from '@/lib/monitoring/view-cache'
 import { rememberPanel, restorePage, savePage } from './panel'
 import { PanelSwitchButton } from './panel-switch'
 import { SectionBoundary } from '@/components/monitoring/error-boundary'
 
-const loading = () => <div className="crm-card h-48 animate-pulse" />
+const loading = () => <LoadingOrb />
 const Overview = dynamic(() => import('./tracker-pages').then(m => m.TrackerOverview), { loading })
 const Deals = dynamic(() => import('./tracker-pages').then(m => m.TrackerDeals), { loading })
 const Payments = dynamic(() => import('./tracker-pages').then(m => m.TrackerPayments), { loading })
@@ -43,12 +44,14 @@ function useTracker() {
   const load = useCallback(async (force = false) => {
     if (running.current) return
     running.current = true; setBusy(true)
-    try { setData(await api<TrackerView>(`/api/tracker${force ? '?refresh=1' : ''}`)); setError(null) }
+    try { const view = await api<TrackerView>(`/api/tracker${force ? '?refresh=1' : ''}`); setData(view); setError(null); writeCache('tracker-view', view) }
     catch (e) { setError({ message: (e as Error).message, code: (e as { code?: string }).code }) }
     finally { running.current = false; setBusy(false) }
   }, [])
   useEffect(() => {
-    // Show the saved copy at once, then read the Sheet again (a page reload is a refresh too).
+    // Show this tab's last copy instantly, then the saved copy, then read the Sheet again (a reload is a refresh too).
+    const cached = readCache<TrackerView>('tracker-view')
+    if (cached) setData(cached) // eslint-disable-line react-hooks/set-state-in-effect -- instant paint from the tab cache
     void load().then(() => load(true)) // eslint-disable-line react-hooks/set-state-in-effect -- initial fetch
     const full = window.setInterval(() => { if (!document.hidden) void load() }, 120_000)
     const check = window.setInterval(async () => {
@@ -120,7 +123,7 @@ function Workspace({ accountName, level, crm }: { accountName: string; level: Tr
       <SectionBoundary resetKey={page}>
       {page === 'Settings' ? <TrackerSettings level={level} onConnected={() => void tracker.reload(true)} data={d} onChanged={view => tracker.setData(view)} />
         : page === 'Help' ? <Help />
-        : !d ? tracker.error ? <NotReady error={tracker.error} owner={level === 'owner'} onSettings={() => setPage('Settings')} onRetry={() => void tracker.reload(true)} /> : loading()
+        : !d ? tracker.error ? <NotReady error={tracker.error} owner={level === 'owner'} onSettings={() => setPage('Settings')} onRetry={() => void tracker.reload(true)} /> : <LoadingOrb label="Reading the Sheet…" />
           : <>
             {page === 'Overview' && <Overview data={d} onClient={showClient} onDeals={() => setPage('Deals')} />}
             {page === 'Deals' && <Deals data={d} openClient={openClient} onClient={setOpenClient} canEdit={canEdit} onChanged={view => tracker.setData(view)} />}

@@ -21,9 +21,10 @@ import { PanelSwitchButton } from '@/components/tracker/panel-switch'
 import { ActivePill, MotionRoot } from './motion'
 import { playChime, PreferencesProvider, PreferencesSettings, useDarkMode, usePreferences } from './preferences'
 import { MonitoringSettings } from './settings-panel'
-import { api, buttonClass, Icon3D } from './ui'
+import { api, buttonClass, Icon3D, LoadingOrb } from './ui'
+import { clearCaches } from '@/lib/monitoring/view-cache'
 
-const loading = () => <div className="crm-card h-48 animate-pulse" />
+const loading = () => <LoadingOrb />
 const Dashboard = dynamic(() => import('./dashboard').then(m => m.Dashboard), { loading })
 const LeadsBoard = dynamic(() => import('./leads-board').then(m => m.LeadsBoard), { loading })
 const ContactsPanel = dynamic(() => import('./contacts-panel').then(m => m.ContactsPanel), { loading })
@@ -75,6 +76,7 @@ export function MonitoringSignOut({ compact }: { compact?: boolean }) {
   const [error, setError] = useState('')
   const router = useRouter()
   const signOut = async () => {
+    clearCaches()
     const result = await createClient().auth.signOut()
     if (result.error) { setError('Unable to sign out. Please try again.'); return }
     router.replace('/login'); router.refresh()

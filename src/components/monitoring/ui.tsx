@@ -115,3 +115,16 @@ export function Icon3D({ name, size = 48, className = '' }: { name: string; size
   // eslint-disable-next-line @next/next/no-img-element -- small static PNGs; no optimizer needed
   return <img src={`/icons/3d/${name}.webp`} width={size} height={size} alt="" aria-hidden="true" draggable={false} loading="lazy" decoding="async" className={`shrink-0 select-none drop-shadow-sm ${className}`} />
 }
+
+/** The loading animation: a glowing ribbon wound into a ball (still for people who prefer less motion). */
+export function LoadingOrb({ label = 'Loading…', className = '' }: { label?: string; className?: string }) {
+  // Each loop is one turn of the ribbon: width follows a circle, so together they read as a ball.
+  const loops = [[-26, 15], [-16, 25], [-5, 29], [6, 28], [17, 23], [27, 13]]
+  return <div role="status" aria-live="polite" className={`flex flex-col items-center justify-center gap-4 py-16 ${className}`}>
+    <svg className="loading-orb" viewBox="-42 -42 84 84" aria-hidden="true">
+      <defs><linearGradient id="orb-gradient" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stopColor="#5eead4" /><stop offset="50%" stopColor="#38bdf8" /><stop offset="100%" stopColor="#3b82f6" /></linearGradient></defs>
+      <g className="ball">{loops.map(([y, r], i) => <path key={i} className="loop" d={`M ${-r} ${y} C ${-r} ${y - 7}, ${r} ${y - 7}, ${r} ${y} S ${-r * 0.6} ${y + 9}, ${-r * 0.2} ${y + 5}`} />)}</g>
+    </svg>
+    <span className="text-sm font-medium text-muted-foreground">{label}</span>
+  </div>
+}
