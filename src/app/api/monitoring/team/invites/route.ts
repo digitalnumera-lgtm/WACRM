@@ -9,7 +9,7 @@ export const runtime = 'nodejs'
 const INVITE_DAYS = 7
 
 /**
- * Invite a colleague by email (@digitalnumera.com only). Returns a one-time
+ * Invite a colleague at any valid email address. Returns a one-time
  * join link to send them; it works only when they sign in with that email.
  */
 export async function POST(request: Request) {

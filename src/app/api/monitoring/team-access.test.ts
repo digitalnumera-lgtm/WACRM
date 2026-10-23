@@ -95,7 +95,7 @@ beforeEach(() => {
     profiles: [{ user_id: 'owner', account_id: company, account_role: 'owner', email: 'numeradigital@gmail.com' }],
   }
 })
-afterEach(() => vi.clearAllMocks())
+afterEach(() => { vi.clearAllMocks(); vi.unstubAllEnvs() })
 
 describe('team member access', () => {
   it('reports the role, permissions and numbers to the UI', async () => {
@@ -181,15 +181,35 @@ describe('dashboard overview', () => {
 })
 
 describe('team management', () => {
-  it('only invites the company email domain and binds the link to that email', async () => {
+  beforeEach(() => vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://crm.test'))
+
+  it.each([' Sara@NumeraDigital.com ', 'someone@gmail.com', 'manager@outlook.com', 'audit+crm@another-business.org'])('invites %s and binds the link to that email and assigned access', async (email) => {
     asOwner()
-    expect((await invite(send('/api/monitoring/team/invites', 'POST', { email: 'someone@gmail.com', access: auditor, channel_ids: null }))).status).toBe(400)
-    const response = await invite(send('/api/monitoring/team/invites', 'POST', { email: 'Sara@DigitalNumera.com', access: auditor, channel_ids: [chanA] }))
+    vi.stubEnv('NUMERA_TEAM_EMAIL_DOMAIN', 'digitalnumera.com')
+    const response = await invite(send('/api/monitoring/team/invites', 'POST', { email, access: auditor, channel_ids: [chanA] }))
     expect(response.status).toBe(201)
     const body = await response.json()
     expect(body.url).toMatch(/^https:\/\/crm\.test\/join\/[A-Za-z0-9_-]+$/)
     expect(writes.find(w => w.table === 'account_invitations')?.value).toMatchObject({ account_id: company, role: 'viewer' })
-    expect(writes.find(w => w.table === 'monitoring_invites')?.value).toMatchObject({ email: 'sara@digitalnumera.com', role_id: auditor, channel_ids: [chanA] })
+    expect(writes.find(w => w.table === 'monitoring_invites')?.value).toMatchObject({ email: email.trim().toLowerCase(), role_id: auditor, channel_ids: [chanA] })
+  })
+
+  it.each(['', 'missing-at.example.com', 'user@', 'one@example.com,two@example.com', 'Name <one@example.com>', { email: 'one@example.com' }])('rejects malformed email %j before writing', async (email) => {
+    asOwner()
+    expect((await invite(send('/api/monitoring/team/invites', 'POST', { email, access: auditor }))).status).toBe(400)
+    expect(writes).toEqual([])
+  })
+
+  it('prevents a scoped member from creating invitations', async () => {
+    asMember()
+    expect((await invite(send('/api/monitoring/team/invites', 'POST', { email: 'someone@gmail.com', access: 'admin' }))).status).toBe(403)
+    expect(writes).toEqual([])
+  })
+
+  it('rejects an existing member regardless of email case', async () => {
+    asOwner()
+    expect((await invite(send('/api/monitoring/team/invites', 'POST', { email: 'NUMERADIGITAL@gmail.com', access: auditor }))).status).toBe(409)
+    expect(writes).toEqual([])
   })
 
   it('rejects numbers from outside the company', async () => {

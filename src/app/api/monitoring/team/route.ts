@@ -1,7 +1,6 @@
 import { monitoringAdmin } from '@/lib/monitoring/admin'
 import { monitoringError, privateJson } from '@/lib/monitoring/http'
 import { requireMonitoring } from '@/lib/monitoring/team-access'
-import { allowedTeamDomain } from '@/lib/monitoring/team'
 
 export const runtime = 'nodejs'
 
@@ -19,7 +18,7 @@ export async function GET() {
       db.from('monitoring_member_access').select('user_id,role_id,channel_ids').eq('account_id', accountId),
       db.from('monitoring_invites').select('invitation_id,email,role_id,channel_ids,account_invitations(expires_at,accepted_at,created_at)').eq('account_id', accountId),
     ])
-    if (roles.error && ['PGRST205', '42P01'].includes(roles.error.code)) return privateJson({ ready: false, roles: [], members: [], invites: [], domain: allowedTeamDomain() })
+    if (roles.error && ['PGRST205', '42P01'].includes(roles.error.code)) return privateJson({ ready: false, roles: [], members: [], invites: [] })
     for (const result of [roles, profiles, access, invites]) if (result.error) throw result.error
     const grants = new Map((access.data as AccessRow[]).map(row => [row.user_id, row]))
     const rank: Record<string, number> = { owner: 0, admin: 1, agent: 2, viewer: 3 }
@@ -36,6 +35,6 @@ export async function GET() {
     })
     const counts = new Map<string, number>()
     for (const m of members) if (m.role_id) counts.set(m.role_id, (counts.get(m.role_id) ?? 0) + 1)
-    return privateJson({ ready: true, domain: allowedTeamDomain(), roles: (roles.data ?? []).map(r => ({ ...r, members: counts.get(r.id) ?? 0 })), members, invites: pending })
+    return privateJson({ ready: true, roles: (roles.data ?? []).map(r => ({ ...r, members: counts.get(r.id) ?? 0 })), members, invites: pending })
   } catch (error) { return monitoringError(error) }
 }

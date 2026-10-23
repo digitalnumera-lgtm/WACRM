@@ -3,16 +3,10 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { checkedId, MonitoringInputError } from './http'
 import { isPermission, type Permission } from './permissions'
 
-/** Only people with an email at this domain can be invited (default digitalnumera.com). */
-export function allowedTeamDomain(): string {
-  return (process.env.NUMERA_TEAM_EMAIL_DOMAIN || 'digitalnumera.com').trim().toLowerCase().replace(/^@/, '')
-}
-
+/** Invitations bind to a specific email, not to the company's email domain. */
 export function teamEmail(value: unknown): string {
-  const email = String(value ?? '').trim().toLowerCase()
-  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new MonitoringInputError('Enter a valid email address.')
-  const domain = allowedTeamDomain()
-  if (!email.endsWith(`@${domain}`)) throw new MonitoringInputError(`Only @${domain} email addresses can be invited.`)
+  const email = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (email.length > 254 || !/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(email)) throw new MonitoringInputError('Enter a valid email address.')
   return email
 }
 
