@@ -90,7 +90,7 @@ function Workspace({ accountName, level, crm }: { accountName: string; level: Tr
     <Icon size={19} />
   </button>
   const showClient = (clientKey: string) => { setOpenClient(clientKey); setPage('Deals') }
-  const title = pages.find(p => p.name === page)?.label ?? page
+  const title = pages.find(p => p.name === page)?.label ?? (page === 'Help' ? 'Clients help' : page)
   const d = tracker.data
 
   return <MotionRoot><div data-density={prefs.density} data-style={prefs.style} className={`monitoring-panel flex h-dvh flex-col overflow-hidden text-foreground md:flex-row md:gap-3 md:p-3 ${dark ? 'dark' : ''}`}>

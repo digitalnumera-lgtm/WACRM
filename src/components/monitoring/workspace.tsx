@@ -257,7 +257,7 @@ function Workspace({ accountName, me, initialView, initialSection, tracker = fal
           <header className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-sm text-muted-foreground">{accountName}</p><h1 className="font-display text-3xl font-semibold tracking-tight">{view === 'Leads' ? 'Leads board' : view}</h1></div>
             <span className="md:hidden"><MonitoringSignOut compact /></span></header>
           <SectionBoundary resetKey={`${view}:${section}:${reportsTab}`}>
-          {view === 'Help' && <div className="space-y-5"><div className="flex items-center gap-3 px-1"><Icon3D name="help" size={40} /><h1 className="font-display text-2xl font-semibold tracking-tight">Help</h1></div><CrmHelp /></div>}
+          {view === 'Help' && <div className="space-y-5"><div className="flex items-center gap-3 px-1"><Icon3D name="help" size={40} /><h1 className="font-display text-2xl font-semibold tracking-tight">Chats help</h1></div><CrmHelp /></div>}
           {view === 'Dashboard' && <Dashboard refresh={refresh} channels={liveChannels} onTab={tab => showInbox({ tab, sort: tab === 'waiting' ? 'oldest' : prefs.defaultSort })} onChannel={id => showInbox({ tab: 'all', channel: id })} />}
           {view === 'Leads' && <LeadsBoard channels={liveChannels} refresh={refresh} onOpen={open} />}
           {view === 'Contacts' && <ContactsPanel channels={liveChannels} onOpen={open} />}
