@@ -107,3 +107,14 @@ describe('google error pages', () => {
     expect(googleError('<html><head><title>Google Drive - Page Not Found</title></head></html>')).toBe('Google Drive - Page Not Found')
   })
 })
+
+describe('payment proof links', () => {
+  it('keeps only Google Drive file IDs and only for amounts level and up', async () => {
+    const { driveFileIds } = await import('./model')
+    expect(driveFileIds('https://drive.google.com/open?id=1lzxibJkkF9aWj6DONvXCc5HjyxdWGKKY, https://drive.google.com/file/d/1btsNeYKdDUHjmUN7Co6jwJkNi6jdZNYF/view')).toEqual(['1lzxibJkkF9aWj6DONvXCc5HjyxdWGKKY', '1btsNeYKdDUHjmUN7Co6jwJkNi6jdZNYF'])
+    expect(driveFileIds('https://evil.example/open?id=1lzxibJkkF9aWj6DONvXCc5Hjy javascript:alert(1)')).toEqual([])
+    const withProof: RawSnapshot = { ...raw, tabs: { ...raw.tabs, 'Payment Log': { headers: [...raw.tabs['Payment Log'].headers, 'Proof'], rows: raw.tabs['Payment Log'].rows.map(r => [...r, 'https://drive.google.com/open?id=1lzxibJkkF9aWj6DONvXCc5HjyxdWGKKY']) } } }
+    expect(buildView(withProof, 'amounts', 'x', now).payments?.[0].proof).toHaveLength(1)
+    expect(buildView(withProof, 'view', 'x', now).payments).toBeUndefined()
+  })
+})

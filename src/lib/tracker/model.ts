@@ -19,11 +19,11 @@ export interface TrackerDeal {
   clickupUrl: string; driveUrl: string; clickup: ClickUpSummary | null
   marketing: { services: string; region: string; days: string; start: string; end: string; status: string } | null
   money?: {
-    total: number; advance: number | null; paid: number | null; remaining: number | null; paymentStatus: string
+    total: number; advance: number | null; advanceProof: string[]; paid: number | null; remaining: number | null; paymentStatus: string
     fullyPaidOn: string; refundedOn: string; lastPayment: string; website: number; hosting: number; marketing: number; other: number; commissionable: number | null
   }
 }
-export interface TrackerPayment { id: string; date: string; month: string; dealId: string; client: string; amount: number; collectedBy: string; type: string; method: string; note: string; addedBy: string }
+export interface TrackerPayment { id: string; date: string; month: string; dealId: string; client: string; amount: number; collectedBy: string; type: string; method: string; note: string; addedBy: string; proof: string[] }
 export interface TrackerSummary {
   month: string; deals: number; dealsThisMonth: number; clients: number
   byStatus: Record<string, number>
@@ -67,6 +67,19 @@ export function rateOf(value: unknown): number | null {
   if (!Number.isFinite(n)) return null
   return t.endsWith('%') || n > 1 ? n / 100 : n
 }
+/** Drive file IDs in a proof cell ("https://drive.google.com/open?id=…", several separated by commas). */
+export function driveFileIds(value: string): string[] {
+  const ids = new Set<string>()
+  for (const part of String(value ?? '').split(/[\s,]+/)) {
+    try {
+      const u = new URL(part)
+      if (u.protocol !== 'https:' || !/^(drive|docs)\.google\.com$/.test(u.hostname)) continue
+      const id = u.searchParams.get('id') ?? /\/d\/([\w-]{10,})/.exec(u.pathname)?.[1]
+      if (id && /^[\w-]{10,200}$/.test(id)) ids.add(id)
+    } catch { /* Not a link. */ }
+  }
+  return [...ids]
+}
 const blankOr = (value: unknown) => String(value ?? '').trim() === '' ? null : amount(value)
 
 function records(table: SheetTable | undefined): Record<string, string>[] {
@@ -104,7 +117,7 @@ export function buildView(raw: RawSnapshot, level: TrackerLevel, fetchedAt: stri
       marketing: r['Marketing Services'] ? { services: r['Marketing Services'], region: r['Marketing Region'] ?? '', days: r['Marketing Days'] ?? '', start: r['Marketing Start'] ?? '', end: r['Marketing End'] ?? '', status: r['Marketing Status'] ?? '' } : null,
     }
     if (money) deal.money = {
-      total: amount(r['Deal Total']), advance: blankOr(appr?.['Advance']), paid: bal ? amount(bal['Paid']) : null, remaining: bal ? amount(bal['Remaining']) : null,
+      total: amount(r['Deal Total']), advance: blankOr(appr?.['Advance']), advanceProof: driveFileIds(r['Advance Proof'] || appr?.['Advance Proof'] || ''), paid: bal ? amount(bal['Paid']) : null, remaining: bal ? amount(bal['Remaining']) : null,
       paymentStatus: bal?.['Payment Status'] ?? '', fullyPaidOn: bal?.['Fully Paid On'] ?? '', refundedOn: bal?.['Refunded On'] ?? '', lastPayment: bal?.['Last Payment'] ?? '',
       website: amount(r['Website Amount']), hosting: amount(r['Hosting Amount']), marketing: amount(r['Marketing Amount']), other: amount(r['Other Amount']),
       commissionable: blankOr(r['Commission Amount']),
@@ -114,7 +127,7 @@ export function buildView(raw: RawSnapshot, level: TrackerLevel, fetchedAt: stri
 
   const payments: TrackerPayment[] = records(raw.tabs['Payment Log']).filter(r => /^P-\d+/.test(r['Payment ID'])).map(r => ({
     id: r['Payment ID'], date: r['Date'] ?? '', month: monthOf(r['Date'] ?? ''), dealId: r['Deal ID'] ?? '', client: r['Client'] ?? '',
-    amount: amount(r['Amount']), collectedBy: r['Collected By'] ?? '', type: r['Type'] ?? '', method: r['Method'] ?? '', note: r['Note'] ?? '', addedBy: r['Added By'] ?? '',
+    amount: amount(r['Amount']), collectedBy: r['Collected By'] ?? '', type: r['Type'] ?? '', method: r['Method'] ?? '', note: r['Note'] ?? '', addedBy: r['Added By'] ?? '', proof: driveFileIds(r['Proof'] ?? ''),
   })).sort((a, b) => dayKey(b.date).localeCompare(dayKey(a.date)) || b.id.localeCompare(a.id))
 
   const byStatus: Record<string, number> = {}

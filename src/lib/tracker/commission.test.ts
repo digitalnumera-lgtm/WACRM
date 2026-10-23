@@ -6,7 +6,7 @@ const defaults: CommissionDefaults = { target: 150000, rateBelow: 0.05, rateAbov
 const deal = (id: string, agent: string, team: string, closed: string, base: number, fullyPaidOn: string): TrackerDeal => ({
   id, clientId: '', dateClosed: closed, month: `2026-${closed.slice(3, 6) === 'Oct' ? '10' : '11'}`, agent, client: id, brand: id, team, phone: '', email: '', country: '',
   services: '', dealType: '', previousDeal: '', clientStatus: '', approved: true, offboardDate: '', offboardReason: '', notes: '', clickupUrl: '', driveUrl: '', clickup: null, marketing: null,
-  money: { total: base, advance: null, paid: base, remaining: 0, paymentStatus: 'Fully Paid', fullyPaidOn, refundedOn: '', lastPayment: fullyPaidOn, website: base, hosting: 0, marketing: 0, other: 0, commissionable: base },
+  money: { total: base, advance: null, advanceProof: [], paid: base, remaining: 0, paymentStatus: 'Fully Paid', fullyPaidOn, refundedOn: '', lastPayment: fullyPaidOn, website: base, hosting: 0, marketing: 0, other: 0, commissionable: base },
 })
 const deals = [
   deal('D-0001', 'Ali Anwar', 'Usman', '02-Oct-2026', 86420, '10-Oct-2026'),  // 5% → 4,321
@@ -41,7 +41,7 @@ describe('commission statement by date', () => {
     expect(rows.find(r => r.person === 'Somia')).toBeUndefined()
   })
   it('takes commission back on a refund after full payment', () => {
-    const refund: TrackerPayment = { id: 'P-9', date: '20-Oct-2026', month: '2026-10', dealId: 'D-0001', client: '', amount: -20000, collectedBy: '', type: 'Refund', method: '', note: '', addedBy: '' }
+    const refund: TrackerPayment = { id: 'P-9', date: '20-Oct-2026', month: '2026-10', dealId: 'D-0001', client: '', amount: -20000, collectedBy: '', type: 'Refund', method: '', note: '', addedBy: '', proof: [] }
     const ali = run('2026-10-31', true, [], [refund]).find(r => r.person === 'Ali Anwar')!
     expect(ali.earned).toBe(4321 - 1000)
   })

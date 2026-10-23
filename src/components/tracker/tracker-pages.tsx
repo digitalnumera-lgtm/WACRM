@@ -5,6 +5,7 @@ import { ExternalLink, FolderOpen, Pencil, Plus, Search, X } from 'lucide-react'
 import { dayKey, signed, type SheetTable, type TrackerDeal, type TrackerView } from '@/lib/tracker/model'
 import { AddDealDialog, DealActions, PaymentRowActions, PayoutDialog, type Changed } from './tracker-edit'
 import { CommissionPayouts, CommissionRates, CommissionStatement } from './tracker-commission'
+import { ProofButton } from './proof'
 import { CountUp } from '@/components/monitoring/motion'
 import { Avatar, buttonClass, Icon3D, inputClass, primaryButton } from '@/components/monitoring/ui'
 
@@ -233,7 +234,7 @@ function ClientSheet({ data, clientKey: key, onClose, canEdit, onChanged }: { da
           <div><p className="text-xs text-muted-foreground">Total</p><p className="font-semibold tabular-nums">{pkr(d.money.total)}</p></div>
           <div><p className="text-xs text-muted-foreground">Paid</p><p className="font-semibold tabular-nums">{pkr(d.money.paid)}</p></div>
           <div><p className="text-xs text-muted-foreground">Owed</p><p className={`font-semibold tabular-nums ${(d.money.remaining ?? 0) > 0 ? 'text-amber-700 dark:text-amber-400' : ''}`}>{pkr(d.money.remaining)}</p></div>
-          <p className="col-span-3"><PaymentBadge status={d.money.paymentStatus} />{d.money.fullyPaidOn && <span className="text-xs text-muted-foreground"> · {d.money.fullyPaidOn}</span>}</p>
+          <p className="col-span-3 flex flex-wrap items-center justify-center gap-2"><span><PaymentBadge status={d.money.paymentStatus} />{d.money.fullyPaidOn && <span className="text-xs text-muted-foreground"> · {d.money.fullyPaidOn}</span>}</span><ProofButton ids={d.money.advanceProof} label="Advance proof" compact /></p>
         </div>}
         <Progress deal={d} />
         {d.notes && <p className="rounded-xl bg-muted/50 px-3 py-2 text-xs">{d.notes}</p>}
@@ -247,7 +248,7 @@ function ClientSheet({ data, clientKey: key, onClose, canEdit, onChanged }: { da
         <h3 className="mb-2 font-semibold">Payments</h3>
         <ul className="crm-card divide-y divide-border">{payments.map(p => <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
           <span><span className="font-medium">{p.type || 'Payment'}</span> <span className="text-muted-foreground">· {p.dealId} · {p.date}{p.collectedBy && ` · ${p.collectedBy}`}</span>{p.note && <span className="block text-xs text-muted-foreground">{p.note}</span>}</span>
-          <span className="flex items-center gap-2"><span className={`font-semibold tabular-nums ${signed(p) < 0 ? 'text-red-600 dark:text-red-400' : ''}`}>{pkr(signed(p))}</span>{canEdit && <PaymentRowActions payment={p} onChanged={onChanged} />}</span>
+          <span className="flex items-center gap-2"><ProofButton ids={p.proof} compact /><span className={`font-semibold tabular-nums ${signed(p) < 0 ? 'text-red-600 dark:text-red-400' : ''}`}>{pkr(signed(p))}</span>{canEdit && <PaymentRowActions payment={p} onChanged={onChanged} />}</span>
         </li>)}</ul>
       </section>}
     </aside>
@@ -269,16 +270,17 @@ export function TrackerPayments({ data, onClient }: { data: TrackerView; onClien
     </div>
     <p className="px-1 text-sm text-muted-foreground">{rows.length} payment{rows.length === 1 ? '' : 's'} · collected {pkr(net)}{month ? ` in ${monthLabel(month)}` : ''}</p>
     <div className="crm-card overflow-x-auto"><table className="w-full min-w-[680px] text-sm">
-      <thead className="text-left text-xs text-muted-foreground"><tr><th className="px-4 py-3 font-medium">Date</th><th className="px-3 py-3 font-medium">Client</th><th className="px-3 py-3 font-medium">Type</th><th className="px-3 py-3 font-medium">Collected by</th><th className="px-3 py-3 font-medium">Method</th><th className="px-4 py-3 text-right font-medium">Amount</th></tr></thead>
+      <thead className="text-left text-xs text-muted-foreground"><tr><th className="px-4 py-3 font-medium">Date</th><th className="px-3 py-3 font-medium">Client</th><th className="px-3 py-3 font-medium">Type</th><th className="px-3 py-3 font-medium">Collected by</th><th className="px-3 py-3 font-medium">Method</th><th className="px-3 py-3 font-medium">Proof</th><th className="px-4 py-3 text-right font-medium">Amount</th></tr></thead>
       <tbody>{rows.map(p => { const d = byDeal.get(p.dealId); return <tr key={p.id} className={`border-t border-border ${d ? 'cursor-pointer hover:bg-muted/40' : ''}`} onClick={() => d && onClient(clientKey(d))}>
         <td className="whitespace-nowrap px-4 py-2.5">{p.date}<span className="block text-xs text-muted-foreground">{p.id}</span></td>
         <td className="px-3 py-2.5"><span className="block font-medium">{d?.brand || p.client}</span><span className="block text-xs text-muted-foreground">{p.dealId}</span></td>
         <td className="px-3 py-2.5">{p.type}{p.note && <span className="block max-w-56 truncate text-xs text-muted-foreground" title={p.note}>{p.note}</span>}</td>
         <td className="px-3 py-2.5">{p.collectedBy}</td>
         <td className="px-3 py-2.5 text-muted-foreground">{p.method || '—'}</td>
+        <td className="px-3 py-2.5"><ProofButton ids={p.proof} compact /></td>
         <td className={`px-4 py-2.5 text-right font-semibold tabular-nums ${signed(p) < 0 ? 'text-red-600 dark:text-red-400' : ''}`}>{pkr(signed(p))}</td>
       </tr> })}
-      {rows.length === 0 && <tr><td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">No payments match.</td></tr>}</tbody>
+      {rows.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">No payments match.</td></tr>}</tbody>
     </table></div>
   </div>
 }

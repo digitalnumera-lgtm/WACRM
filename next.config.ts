@@ -55,7 +55,7 @@ const SECURITY_HEADERS = [
       // server-side, so graph.facebook.com does not belong here.
       // facebook.com: the Embedded Signup SDK's own requests and frames.
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.facebook.com",
-      "frame-src https://*.facebook.com",
+      "frame-src https://*.facebook.com https://drive.google.com",
       "frame-ancestors 'none'",
       "object-src 'none'",
       "worker-src 'self' blob:",

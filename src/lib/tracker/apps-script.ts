@@ -6,7 +6,7 @@
 // exactly as with the forms and the Approvals / Tools tabs. Every name here
 // starts with crm so it cannot clash with the main script (except doPost,
 // which the main script does not use).
-export const TRACKER_SCRIPT_VERSION = 3
+export const TRACKER_SCRIPT_VERSION = 4
 
 export const TRACKER_APPS_SCRIPT = String.raw`/**
  * Numera CRM connection. Version ${TRACKER_SCRIPT_VERSION}.
@@ -59,7 +59,7 @@ function crmKeyMatches_(given) {
   return diff === 0;
 }
 
-/** Every tab as shown in the Sheet. Payment proof links are left out. */
+/** Every tab as shown in the Sheet (proof is only a link: the files stay in Drive). */
 function crmSnapshot_() {
   const ss = SpreadsheetApp.openById(CRM_SHEET_ID);
   const tabs = {};
@@ -75,7 +75,7 @@ function crmSnapshot_() {
     for (let c = 0; c < header.length; c++) {
       const h = String(header[c]).trim();
       if (!h) break; // Side tables to the right are left out.
-      if (/proof|assets/i.test(h)) continue;
+      if (/assets/i.test(h)) continue; // Proof links stay: the files themselves stay in Drive.
       keep.push(c);
     }
     const notes = grid.slice(0, headerRow).map(function (row) { return row.filter(String).join('  '); }).filter(String);
