@@ -21,28 +21,31 @@ import { PanelSwitchButton } from '@/components/tracker/panel-switch'
 import { ActivePill, MotionRoot } from './motion'
 import { playChime, PreferencesProvider, PreferencesSettings, useDarkMode, usePreferences } from './preferences'
 import { MonitoringSettings } from './settings-panel'
-import { api, buttonClass, Icon3D, LoadingOrb } from './ui'
+import { api, buttonClass, Icon3D } from './ui'
+import { ScreenLoader } from './loaders'
 import { clearCaches } from '@/lib/monitoring/view-cache'
 
-const loading = () => <LoadingOrb />
-const Dashboard = dynamic(() => import('./dashboard').then(m => m.Dashboard), { loading })
-const LeadsBoard = dynamic(() => import('./leads-board').then(m => m.LeadsBoard), { loading })
-const ContactsPanel = dynamic(() => import('./contacts-panel').then(m => m.ContactsPanel), { loading })
-const MediaLibrary = dynamic(() => import('./media-library').then(m => m.MediaLibrary), { loading })
-const ReportsPanel = dynamic(() => import('./activity-panels').then(m => m.ReportsPanel), { loading })
-const MessageBrowser = dynamic(() => import('./activity-panels').then(m => m.MessageBrowser), { loading })
-const CrmHelp = dynamic(() => import('./help').then(m => m.CrmHelp), { loading })
-const TeamSettings = dynamic(() => import('./team-settings').then(m => m.TeamSettings), { loading })
-const StorageSettings = dynamic(() => import('./storage-settings').then(m => m.StorageSettings), { loading })
-const SecuritySettings = dynamic(() => import('./security-settings').then(m => m.SecuritySettings), { loading })
-const QuickRepliesPanel = dynamic(() => import('./quick-replies').then(m => m.QuickRepliesPanel), { loading })
-const BusinessNumbers = dynamic(() => import('./business-numbers').then(m => m.BusinessNumbers), { loading })
-const ConnectNumber = dynamic(() => import('./connect-number').then(m => m.ConnectNumber), { loading })
-const HistoryImport = dynamic(() => import('./setup-panels').then(m => m.HistoryImport), { loading })
-const PortfolioPicker = dynamic(() => import('./setup-panels').then(m => m.PortfolioPicker), { loading })
-const RenewMetaAccess = dynamic(() => import('./renew-access').then(m => m.RenewMetaAccess), { loading })
-const ChannelManager = dynamic(() => import('./admin-panels').then(m => m.ChannelManager), { loading })
-const ReviewEvents = dynamic(() => import('./admin-panels').then(m => m.ReviewEvents), { loading })
+const chart = () => <ScreenLoader kind="chart" label="Counting today’s chats…" />
+const people = () => <ScreenLoader kind="settings" />
+const media = () => <ScreenLoader kind="media" label="Gathering photos and files…" />
+const Dashboard = dynamic(() => import('./dashboard').then(m => m.Dashboard), { loading: chart })
+const LeadsBoard = dynamic(() => import('./leads-board').then(m => m.LeadsBoard), { loading: people })
+const ContactsPanel = dynamic(() => import('./contacts-panel').then(m => m.ContactsPanel), { loading: people })
+const MediaLibrary = dynamic(() => import('./media-library').then(m => m.MediaLibrary), { loading: media })
+const ReportsPanel = dynamic(() => import('./activity-panels').then(m => m.ReportsPanel), { loading: chart })
+const MessageBrowser = dynamic(() => import('./activity-panels').then(m => m.MessageBrowser), { loading: people })
+const CrmHelp = dynamic(() => import('./help').then(m => m.CrmHelp), { loading: people })
+const TeamSettings = dynamic(() => import('./team-settings').then(m => m.TeamSettings), { loading: people })
+const StorageSettings = dynamic(() => import('./storage-settings').then(m => m.StorageSettings), { loading: people })
+const SecuritySettings = dynamic(() => import('./security-settings').then(m => m.SecuritySettings), { loading: people })
+const QuickRepliesPanel = dynamic(() => import('./quick-replies').then(m => m.QuickRepliesPanel), { loading: people })
+const BusinessNumbers = dynamic(() => import('./business-numbers').then(m => m.BusinessNumbers), { loading: people })
+const ConnectNumber = dynamic(() => import('./connect-number').then(m => m.ConnectNumber), { loading: people })
+const HistoryImport = dynamic(() => import('./setup-panels').then(m => m.HistoryImport), { loading: people })
+const PortfolioPicker = dynamic(() => import('./setup-panels').then(m => m.PortfolioPicker), { loading: people })
+const RenewMetaAccess = dynamic(() => import('./renew-access').then(m => m.RenewMetaAccess), { loading: people })
+const ChannelManager = dynamic(() => import('./admin-panels').then(m => m.ChannelManager), { loading: people })
+const ReviewEvents = dynamic(() => import('./admin-panels').then(m => m.ReviewEvents), { loading: people })
 
 type View = 'Inbox' | 'Dashboard' | 'Leads' | 'Contacts' | 'Media' | 'Reports' | 'Help' | 'Settings'
 const VIEWS: readonly View[] = ['Inbox', 'Dashboard', 'Leads', 'Contacts', 'Media', 'Reports', 'Help', 'Settings']

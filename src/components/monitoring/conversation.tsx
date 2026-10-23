@@ -1,5 +1,6 @@
 'use client'
 
+import { ScreenLoader } from './loaders'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AlarmClock, ArrowDown, ArrowLeft, CheckCheck, ChevronDown, Copy, Download, Info, LoaderCircle, LockKeyhole, Mail, MailOpen, MoreVertical, PanelRight, Pin, PinOff, RotateCcw, Send } from 'lucide-react'
 import { MessageMedia, mediaLabel } from './message-media'
@@ -239,7 +240,7 @@ export function Conversation({ id, thread: listThread, channels, repliesEnabled,
         <div ref={sentinel} className="h-1" />
         {olderBusy && <p role="status" className="flex items-center justify-center gap-2 text-xs text-muted-foreground"><LoaderCircle size={14} className="animate-spin" />Loading earlier messages…</p>}
         {snapshot && !snapshot.nextCursor && snapshot.messages.length > 0 && <p className="py-2 text-center text-xs text-muted-foreground">Beginning of saved conversation</p>}
-        {!snapshot && !error && <div role="status" aria-label="Loading messages" className="space-y-4 py-5">{[0, 1, 2, 3].map(i => <div key={i} className={`h-14 w-2/3 animate-pulse rounded-3xl ${i % 2 ? 'ml-auto bubble-agent opacity-20' : 'bubble-customer'}`} />)}</div>}
+        {!snapshot && !error && <ScreenLoader kind="chats" label="Opening the chat…" className="h-full" />}
         {items.map((item, index) => {
           const previous = items[index - 1]
           const day = new Date(item.at).toDateString()

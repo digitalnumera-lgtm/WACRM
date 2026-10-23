@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Check, Copy, Download, KeyRound } from 'lucide-react'
 import type { TrackerLevel, TrackerView } from '@/lib/tracker/model'
-import { api, buttonClass, Icon3D, inputClass, LoadingOrb, primaryButton, sendJson } from '@/components/monitoring/ui'
+import { ScreenLoader } from '@/components/monitoring/loaders'
+import { api, buttonClass, Icon3D, inputClass, primaryButton, sendJson } from '@/components/monitoring/ui'
 import { CommissionRates } from './tracker-commission'
 import type { Changed } from './tracker-edit'
 
@@ -35,7 +36,7 @@ function OwnerSettings({ onConnected }: { onConnected: () => void }) {
   }, [])
   useEffect(() => { void load() }, [load]) // eslint-disable-line react-hooks/set-state-in-effect -- initial fetch
   if (error && !data) return <p role="alert" className="crm-card p-5 text-sm text-destructive">{error}</p>
-  if (!data) return <LoadingOrb />
+  if (!data) return <ScreenLoader kind="settings" />
   if (!data.ready) return <section className="crm-card space-y-2 p-5"><h2 className="font-semibold">One database update needed</h2><p className="text-sm text-muted-foreground">Run <code>supabase/numera/006_client_tracker.sql</code> in the Supabase SQL Editor, then reload this page.</p></section>
   return <>
     <Connection data={data} onSaved={load} onConnected={onConnected} />

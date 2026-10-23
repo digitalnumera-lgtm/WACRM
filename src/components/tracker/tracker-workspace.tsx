@@ -8,20 +8,22 @@ import { atLeast, type TrackerLevel, type TrackerView } from '@/lib/tracker/mode
 import { MonitoringSignOut } from '@/components/monitoring/workspace'
 import { ActivePill, MotionRoot } from '@/components/monitoring/motion'
 import { PreferencesProvider, useDarkMode, usePreferences } from '@/components/monitoring/preferences'
-import { api, buttonClass, Icon3D, LoadingOrb, timeAgo } from '@/components/monitoring/ui'
+import { api, buttonClass, Icon3D, timeAgo } from '@/components/monitoring/ui'
+import { ScreenLoader } from '@/components/monitoring/loaders'
 import { readCache, writeCache } from '@/lib/monitoring/view-cache'
 import { rememberPanel, restorePage, savePage } from './panel'
 import { PanelSwitchButton } from './panel-switch'
 import { SectionBoundary } from '@/components/monitoring/error-boundary'
 
-const loading = () => <LoadingOrb />
+const loading = () => <ScreenLoader kind="clients" />
+const quiet = () => <ScreenLoader kind="settings" />
 const Overview = dynamic(() => import('./tracker-pages').then(m => m.TrackerOverview), { loading })
 const Deals = dynamic(() => import('./tracker-pages').then(m => m.TrackerDeals), { loading })
 const Payments = dynamic(() => import('./tracker-pages').then(m => m.TrackerPayments), { loading })
 const Commission = dynamic(() => import('./tracker-pages').then(m => m.TrackerCommission), { loading })
-const TrackerSettings = dynamic(() => import('./tracker-settings').then(m => m.TrackerSettings), { loading })
-const Tools = dynamic(() => import('./tracker-tools').then(m => m.TrackerTools), { loading })
-const Help = dynamic(() => import('@/components/monitoring/help').then(m => m.TrackerHelp), { loading })
+const TrackerSettings = dynamic(() => import('./tracker-settings').then(m => m.TrackerSettings), { loading: quiet })
+const Tools = dynamic(() => import('./tracker-tools').then(m => m.TrackerTools), { loading: quiet })
+const Help = dynamic(() => import('@/components/monitoring/help').then(m => m.TrackerHelp), { loading: quiet })
 
 export type TrackerPage = 'Overview' | 'Deals' | 'Payments' | 'Commission' | 'Tools' | 'Help' | 'Settings'
 const PAGES: readonly TrackerPage[] = ['Overview', 'Deals', 'Payments', 'Commission', 'Tools', 'Help', 'Settings']
@@ -123,7 +125,7 @@ function Workspace({ accountName, level, crm }: { accountName: string; level: Tr
       <SectionBoundary resetKey={page}>
       {page === 'Settings' ? <TrackerSettings level={level} onConnected={() => void tracker.reload(true)} data={d} onChanged={view => tracker.setData(view)} />
         : page === 'Help' ? <Help />
-        : !d ? tracker.error ? <NotReady error={tracker.error} owner={level === 'owner'} onSettings={() => setPage('Settings')} onRetry={() => void tracker.reload(true)} /> : <LoadingOrb label="Reading the Sheet…" />
+        : !d ? tracker.error ? <NotReady error={tracker.error} owner={level === 'owner'} onSettings={() => setPage('Settings')} onRetry={() => void tracker.reload(true)} /> : <ScreenLoader kind="clients" label="Reading the Sheet…" />
           : <>
             {page === 'Overview' && <Overview data={d} onClient={showClient} onDeals={() => setPage('Deals')} />}
             {page === 'Deals' && <Deals data={d} openClient={openClient} onClient={setOpenClient} canEdit={canEdit} onChanged={view => tracker.setData(view)} />}

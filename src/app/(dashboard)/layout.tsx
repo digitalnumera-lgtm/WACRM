@@ -1,3 +1,4 @@
+import { IntlProvider } from "@/components/intl-provider";
 import type { Metadata } from "next";
 import { DashboardShell } from "./dashboard-shell";
 import { redirect } from 'next/navigation';
@@ -27,5 +28,5 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   if (monitoringOnly()) redirect('/monitoring');
-  return <DashboardShell>{children}</DashboardShell>;
+  return <IntlProvider><DashboardShell>{children}</DashboardShell></IntlProvider>;
 }

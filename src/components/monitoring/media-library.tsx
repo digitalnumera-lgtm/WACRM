@@ -1,5 +1,6 @@
 'use client'
 
+import { ScreenLoader } from './loaders'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, Download, FileText, ImageOff, MessageSquare, Mic, Play, X } from 'lucide-react'
 import type { MonitoringChannel, MonitoringMessage } from '@/lib/monitoring/types'
@@ -70,6 +71,7 @@ export function MediaLibrary({ channels, refresh, onOpen }: { channels: Monitori
     <p className="text-sm text-muted-foreground">{loading && !items.length ? 'Loading…' : `${total.toLocaleString()} ${tabs.find(t => t.id === tab)!.label.toLowerCase()}`}</p>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 
+    {loading && !items.length && <ScreenLoader kind="media" label="Gathering photos and files…" />}
     {groups.map(group => <div key={group.day} className="space-y-2">
       <h3 className="text-xs font-medium text-muted-foreground">{group.day}</h3>
       {tab === 'visual'

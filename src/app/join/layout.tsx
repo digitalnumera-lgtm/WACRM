@@ -1,3 +1,4 @@
+import { IntlProvider } from "@/components/intl-provider";
 // ============================================================
 // /join/[token] layout — minimal full-bleed dark shell.
 //
@@ -38,7 +39,7 @@ export const metadata: Metadata = {
 export default function JoinLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      {children}
+      <IntlProvider only={["JoinPage", "Settings.roles", "Common"]}>{children}</IntlProvider>
     </div>
   );
 }

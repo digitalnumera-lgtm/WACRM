@@ -17,16 +17,25 @@ export async function GET(request: Request) {
     const filters = readInboxFilters(params)
     const messageThreads = filters.search ? await threadsWithText(access, filters.search) : []
     // Includes paused or removed numbers for Settings; their chats stay hidden below.
-    const channels = await scopeChannels(access, supabase.from('monitoring_channels').select(channelColumns).eq('account_id', accountId), 'id', { includeHidden: true }).order('label').order('id')
-    if (channels.error) throw channels.error
+    const channelsQuery = scopeChannels(access, supabase.from('monitoring_channels').select(channelColumns).eq('account_id', accountId), 'id', { includeHidden: true }).order('label').order('id')
+    // Without a number or agent filter the list does not depend on the numbers,
+    // so both are read at the same time (one database trip instead of two).
+    const needsChannels = !!(filters.channel || filters.agent)
+    const channelsPromise = Promise.resolve(channelsQuery)
+    let channels = needsChannels ? await channelsPromise : null
+    if (channels?.error) throw channels.error
     // Channel and agent filters resolve only against this company's channels.
     let channelIds: string[] | null = null
-    if (filters.channel) channelIds = (channels.data ?? []).filter(c => c.id === filters.channel).map(c => c.id)
+    if (filters.channel) channelIds = (channels?.data ?? []).filter(c => c.id === filters.channel).map(c => c.id)
     // The recovered schema stores the agent's display label on each channel.
-    if (filters.agent) channelIds = (channels.data ?? []).filter(c => c.label === filters.agent && (!channelIds || channelIds.includes(c.id))).map(c => c.id)
+    if (filters.agent) channelIds = (channels?.data ?? []).filter(c => c.label === filters.agent && (!channelIds || channelIds.includes(c.id))).map(c => c.id)
     // Members only ever see their assigned numbers.
     channelIds = allowedChannels(access, channelIds)
-    if (channelIds && channelIds.length === 0) return privateJson({ channels: channels.data, threads: [], total: 0, page, nextCursor: null, workflowReady: true })
+    if (channelIds && channelIds.length === 0) {
+      channels ??= await channelsPromise
+      if (channels.error) throw channels.error
+      return privateJson({ channels: channels.data, threads: [], total: 0, page, nextCursor: null, workflowReady: true })
+    }
 
     const ascending = filters.sort === 'oldest'
     // Service role is used only with an explicit company (and number) filter,
@@ -39,7 +48,9 @@ export async function GET(request: Request) {
     if (ids.length) query = query.in('id', ids.map(checkedId))
     query = applyInboxCursor(query, filters)
     const ordered = query.order('last_message_at', { ascending }).order('id', { ascending })
-    const result = await (scroll ? ordered.limit(pageSize + 1) : ordered.range(page * pageSize, page * pageSize + pageSize - 1))
+    const [result, channelRows] = await Promise.all([scroll ? ordered.limit(pageSize + 1) : ordered.range(page * pageSize, page * pageSize + pageSize - 1), channels ?? channelsPromise])
+    channels = channelRows
+    if (channels.error) throw channels.error
     if (result.error && missingWorkflowSchema(result.error)) return legacyList(supabase, accountId, channels.data ?? [], channelIds, { ...filters, messageThreads }, page, scroll, access.hiddenIds)
     if (result.error) throw result.error
     const rows = scroll ? result.data.slice(0, pageSize) : result.data

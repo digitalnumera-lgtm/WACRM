@@ -19,13 +19,13 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
   let metadata: Record<string, unknown> | undefined
   let tracker = false
   try {
-    me = await monitoringMe()
     const account = await getCurrentAccount()
     name = account.account.name
-    tracker = !!(await trackerLevel(account).catch(() => null))
-    // Preferences travel in the (locally verified) session token; the client
-    // refreshes them in the background.
-    const claims = await account.supabase.auth.getClaims().catch(() => null)
+    // Independent lookups run together (each one is a trip to the database).
+    // Preferences travel in the (locally verified) session token.
+    const [access, level, claims] = await Promise.all([monitoringMe(), trackerLevel(account).catch(() => null), account.supabase.auth.getClaims().catch(() => null)])
+    me = access
+    tracker = !!level
     metadata = claims?.data?.claims?.user_metadata as Record<string, unknown> | undefined
   } catch (error) {
     if (error instanceof MfaRequiredError) redirect('/login?step=code')

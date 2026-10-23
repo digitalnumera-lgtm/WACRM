@@ -5,6 +5,7 @@ import { ArrowDownUp, CheckCheck, ChevronDown, Clock, Contact, FileText, Image a
 import { leadStatuses, type MonitoringChannel, type MonitoringThread } from '@/lib/monitoring/types'
 import type { MonitoringLabel } from '@/lib/monitoring/workflow-types'
 import { readCache, writeCache } from '@/lib/monitoring/view-cache'
+import { ScreenLoader } from './loaders'
 import { api, Avatar, buttonClass, inputClass, LabelChip, Menu, MenuItem, PriorityIcon, priorityMeta, waitingFor, Icon3D } from './ui'
 import { ActivePill, pop } from './motion'
 import { AnimatePresence, m } from 'motion/react'
@@ -269,7 +270,7 @@ export function ConversationList({ inbox, filters, setFilters, labels, selected,
       {!pinnedThreads.length && <li className="flex justify-between px-5 pb-1 text-xs text-muted-foreground"><span>{total.toLocaleString()} conversation{total === 1 ? '' : 's'}</span>{loading && <span>Updating…</span>}</li>}
       {rest.map(row)}
       {!loading && !error && threads.length === 0 && <li className="flex flex-col items-center gap-3 p-8 text-center text-sm text-muted-foreground"><Icon3D name={filters.tab === 'waiting' ? 'checkmark' : 'inbox'} size={56} />{live.length ? filters.tab === 'waiting' ? 'Nobody is waiting for a reply.' : 'No chats here.' : 'Add an agent’s number in Settings to start.'}</li>}
-      {loading && threads.length === 0 && [0, 1, 2, 3, 4].map(i => <li key={i} className="flex gap-3 px-5 py-3"><span className="size-10 animate-pulse rounded-full bg-muted" /><span className="flex-1 space-y-2"><span className="block h-3 w-2/3 animate-pulse rounded bg-muted" /><span className="block h-3 w-full animate-pulse rounded bg-muted" /></span></li>)}
+      {loading && threads.length === 0 && <li><ScreenLoader kind="chats" label="Loading chats…" /></li>}
       <li ref={sentinel} className="p-3 text-center text-xs text-muted-foreground">{loadingMore ? 'Loading more…' : !more && threads.length > 0 ? 'End of list' : ''}</li>
     </ul>
   </section>

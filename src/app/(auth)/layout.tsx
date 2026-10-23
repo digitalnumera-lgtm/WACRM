@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { IntlProvider } from "@/components/intl-provider";
 import { Funnel_Display, Funnel_Sans } from "next/font/google";
 
 // Auth pages are never indexed.
@@ -38,7 +39,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
     <main className="flex min-w-0 flex-col">
       {/* eslint-disable-next-line @next/next/no-img-element -- small static brand file */}
       <div className="flex items-center gap-2.5 px-6 pt-6 lg:hidden"><img src="/brand/numera-logo.png" alt="Numera Digital" width={1200} height={347} className="h-8 w-auto" /><span className="rounded-full bg-[#121316] px-2 py-0.5 text-[11px] font-semibold text-[#C0DD11]">CRM</span></div>
-      <div className="flex-1">{children}</div>
+      <div className="flex-1"><IntlProvider only={["LoginPage", "SignupPage", "ForgotPasswordPage", "ResetPasswordPage", "Common"]}>{children}</IntlProvider></div>
     </main>
   </div>;
 }

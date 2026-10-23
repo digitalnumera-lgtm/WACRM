@@ -1,5 +1,6 @@
 'use client'
 
+import { ScreenLoader } from './loaders'
 import { Fragment, useEffect, useState } from 'react'
 import type { MonitoringChannel, MonitoringMessage } from '@/lib/monitoring/types'
 import type { activityReport } from '@/lib/monitoring/activity-report'
@@ -121,7 +122,7 @@ export function ReportsPanel({ channels, refresh }: { channels: MonitoringChanne
       {canExport && <button className={`${button} ml-auto`} disabled={!data} onClick={() => downloadCsv('wacrm-daily-activity.csv', [['Date (UTC)', 'Received', 'Agent replies'], ...(data?.daily ?? []).map(d => [d.date, d.inbound, d.outbound])])}>Export CSV</button>}
     </div>
     {error && <p role="alert" className="text-destructive">{error}</p>}
-    {!data && !error && <div className="crm-card h-56 animate-pulse" />}
+    {!data && !error && <ScreenLoader kind="chart" />}
     {data && <>
       {data.truncated && <p role="status" className="rounded-2xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">Showing the latest {data.included.toLocaleString()} of {data.total.toLocaleString()} messages. Pick fewer days or one agent for complete numbers.</p>}
       <div className="grid gap-3 sm:grid-cols-3">{([['Received', data.inbound, 'var(--series-in)'], ['Agent replies', data.outbound, 'var(--series-out)'], ['All messages', data.total, '']] as const).map(([label, count, color]) => <div key={label} className="crm-card p-5">

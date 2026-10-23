@@ -19,9 +19,10 @@ export default async function TrackerPage() {
   try {
     const account = await getCurrentAccount()
     name = account.account.name
-    level = await trackerLevel(account)
-    crm = !!(await monitoringMe().catch(() => null))
-    const claims = await account.supabase.auth.getClaims().catch(() => null)
+    // Independent lookups run together (each one is a trip to the database).
+    const [found, chats, claims] = await Promise.all([trackerLevel(account), monitoringMe().catch(() => null), account.supabase.auth.getClaims().catch(() => null)])
+    level = found
+    crm = !!chats
     metadataPrefs = claims?.data?.claims?.user_metadata as Record<string, unknown> | undefined
   } catch (error) {
     if (error instanceof MfaRequiredError) redirect('/login?step=code')
