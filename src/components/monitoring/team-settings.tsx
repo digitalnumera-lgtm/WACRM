@@ -9,7 +9,7 @@ import { api, Avatar, buttonClass, inputClass, primaryButton, sendJson } from '.
 type Role = { id: string; name: string; description: string | null; permissions: Permission[]; members: number }
 type Member = { user_id: string; name: string; email: string | null; account_role: string; full: boolean; role_id: string | null; channel_ids: string[] | null; you: boolean }
 type Invite = { id: string; email: string; role_id: string | null; channel_ids: string[] | null; expires_at: string }
-type Team = { ready: boolean; domain: string; roles: Role[]; members: Member[]; invites: Invite[] }
+type Team = { ready: boolean; roles: Role[]; members: Member[]; invites: Invite[] }
 type Access = { access: string; channels: string[] | null }
 
 /** Settings → Team & roles (owners and admins). */
@@ -89,7 +89,8 @@ function InviteForm({ team, channels, onDone }: { team: Team; channels: Monitori
     } catch (err) { setError((err as Error).message) } finally { setBusy(false) }
   }}>
     <h3 className="flex items-center gap-2 text-sm font-semibold"><UserPlus size={16} />Invite a team member</h3>
-    <input className={inputClass} type="email" required placeholder={`name@${team.domain}`} aria-label="Email" value={email} onChange={e => setEmail(e.target.value)} />
+    <input className={inputClass} type="email" required maxLength={254} placeholder="name@example.com" aria-label="Email" aria-describedby="team-invite-email-help" value={email} onChange={e => setEmail(e.target.value)} />
+    <p id="team-invite-email-help" className="text-xs text-muted-foreground">Use any valid email address, including personal or business email. They must sign in with the address you invite.</p>
     <AccessPicker value={access} onChange={setAccess} roles={team.roles} channels={channels} />
     <button className={primaryButton} disabled={busy || !email || !accessReady(access)}>{busy ? 'Creating…' : 'Create invite link'}</button>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
