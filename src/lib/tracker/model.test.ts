@@ -99,3 +99,11 @@ describe('apps script file', () => {
     expect(TRACKER_APPS_SCRIPT).toContain('formulas[name] || CRM_EDITABLE.indexOf(name) < 0')
   })
 })
+
+describe('google error pages', () => {
+  it('shows the headline of a Google error page', async () => {
+    const { googleError } = await import('./connection')
+    expect(googleError('<html><title>Error</title><div class="errorMessage" style="x">Script function not found: doPost</div></html>')).toBe('Script function not found: doPost')
+    expect(googleError('<html><head><title>Google Drive - Page Not Found</title></head></html>')).toBe('Google Drive - Page Not Found')
+  })
+})

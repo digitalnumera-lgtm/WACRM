@@ -50,9 +50,15 @@ export async function callScript(url: string, key: string, action: string, extra
   const text = await response.text()
   let body: Record<string, unknown>
   try { body = JSON.parse(text) } catch {
-    throw new TrackerConnectionError('bad_reply', response.ok
-      ? 'The web app did not answer with data. Check it is deployed with access "Anyone" and the link ends in /exec.'
-      : `Google answered with an error (${response.status}). Check the web app link and that it is deployed.`)
+    // Google's own error page: keep its headline (never script data) so the cause is visible.
+    const said = googleError(text)
+    console.warn('[tracker] non-JSON reply', JSON.stringify({ action, status: response.status, said }))
+    if (/sign in|accounts\.google/i.test(text)) throw new TrackerConnectionError('bad_reply', 'Google asked for a sign-in: set the deployment to Who has access: Anyone, then deploy a new version.')
+    if (/not found: doPost|function not found/i.test(said)) throw new TrackerConnectionError('bad_reply', 'The deployed script has no doPost: paste the full crm-connect script, save and deploy a new version.')
+    throw new TrackerConnectionError('bad_reply', said
+      ? `Google could not run the script: "${said}". Try Refresh again in a minute; if it repeats, deploy a new version.`
+      : response.ok ? 'The web app did not answer with data. Check it is deployed with access "Anyone" and the link ends in /exec.'
+        : `Google answered with an error (${response.status}). Check the web app link and that it is deployed.`)
   }
   if (body.ok !== true) {
     if (body.error === 'unknown_action') throw new TrackerConnectionError('script_error', 'The script file is out of date. Copy the latest script from Client Tracker → Settings, paste it over crm-connect and deploy a new version.')
@@ -125,4 +131,10 @@ export async function accountForKey(key: string): Promise<string | null> {
     if (want.length === given.length && timingSafeEqual(want, given)) return row.account_id as string
   }
   return null
+}
+
+/** The headline of a Google error page (title or first message line), at most 160 characters. */
+export function googleError(html: string): string {
+  const pick = /<div[^>]*class="[^"]*errorMessage[^"]*"[^>]*>([\s\S]*?)<\/div>/i.exec(html)?.[1] ?? /<title>([\s\S]*?)<\/title>/i.exec(html)?.[1] ?? ''
+  return pick.replace(/<[^>]+>/g, ' ').replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim().slice(0, 160)
 }

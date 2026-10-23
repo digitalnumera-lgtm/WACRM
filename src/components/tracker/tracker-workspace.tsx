@@ -48,7 +48,8 @@ function useTracker() {
     finally { running.current = false; setBusy(false) }
   }, [])
   useEffect(() => {
-    void load() // eslint-disable-line react-hooks/set-state-in-effect -- initial fetch
+    // Show the saved copy at once, then read the Sheet again (a page reload is a refresh too).
+    void load().then(() => load(true)) // eslint-disable-line react-hooks/set-state-in-effect -- initial fetch
     const full = window.setInterval(() => { if (!document.hidden) void load() }, 120_000)
     const check = window.setInterval(async () => {
       if (document.hidden) return
