@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import dynamic from 'next/dynamic'
 import { ChartNoAxesCombined, CircleHelp, Columns3, Image as ImageIcon, Inbox, LayoutDashboard, LogOut, Settings, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import type { MonitoringThread } from '@/lib/monitoring/types'
 import type { ThreadWorkflow } from '@/lib/monitoring/workflow-types'
 import { can, type MonitoringMe, type Permission } from '@/lib/monitoring/permissions'
@@ -80,6 +79,8 @@ export function MonitoringSignOut({ compact }: { compact?: boolean }) {
   const router = useRouter()
   const signOut = async () => {
     clearCaches()
+    // Loaded only when needed: the sign-in library is large and nothing else on the page uses it.
+    const { createClient } = await import('@/lib/supabase/client')
     const result = await createClient().auth.signOut()
     if (result.error) { setError('Unable to sign out. Please try again.'); return }
     router.replace('/login'); router.refresh()

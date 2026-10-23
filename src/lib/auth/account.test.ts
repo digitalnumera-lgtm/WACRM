@@ -106,6 +106,23 @@ describe("getCurrentAccount", () => {
     expect(calls[1].eqArgs).toEqual([["id", "acct-1"]]);
   });
 
+  it("uses the single-trip lookup when the database function is installed", async () => {
+    const { client, calls } = makeClient({ user: { id: "user-1" }, byTable: {} });
+    const rpc = vi.fn(() => ({ maybeSingle: () => Promise.resolve({ data: { account_id: "acct-1", account_role: "admin", account_name: "Acme" }, error: null }) }));
+    createClient.mockReturnValue({ ...client, rpc });
+    await expect(getCurrentAccount()).resolves.toMatchObject({ accountId: "acct-1", role: "admin", account: { id: "acct-1", name: "Acme" } });
+    expect(rpc).toHaveBeenCalledWith("current_account_context");
+    expect(calls).toEqual([]);
+  });
+
+  it("falls back to the two lookups when the function is missing", async () => {
+    const { client, calls } = makeClient({ user: { id: "user-2" }, byTable: { profiles: { data: { account_id: "acct-2", account_role: "owner" }, error: null }, accounts: { data: { id: "acct-2", name: "B" }, error: null } } });
+    const rpc = vi.fn(() => ({ maybeSingle: () => Promise.resolve({ data: null, error: { code: "PGRST202" } }) }));
+    createClient.mockReturnValue({ ...client, rpc });
+    await expect(getCurrentAccount()).resolves.toMatchObject({ accountId: "acct-2", role: "owner" });
+    expect(calls.map((c) => c.table)).toEqual(["profiles", "accounts"]);
+  });
+
   it("throws UnauthorizedError when there is no session", async () => {
     const { client } = makeClient({ user: null, byTable: {} });
     createClient.mockReturnValue(client);

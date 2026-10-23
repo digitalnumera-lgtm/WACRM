@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from 'next-intl';
-import { getLocale, getTranslations } from 'next-intl/server';
+import { getLocale, getMessages, getTranslations } from 'next-intl/server';
 import { Inter } from "next/font/google";
 import Script from "next/script";
+import { headers } from "next/headers";
+import { messagesForPath } from "@/lib/i18n/area-messages";
 import "./globals.css";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { ThemedToaster } from "@/components/themed-toaster";
@@ -87,6 +89,8 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const locale = await getLocale();
+  // Only the translations this page needs (set by middleware): none for Chats and Clients.
+  const messages = messagesForPath(await getMessages() as Record<string, unknown>, (await headers()).get("x-numera-path") ?? "");
 
   return (
     <html
@@ -111,8 +115,7 @@ export default async function RootLayout({
         />
       </head>
       <body className="min-h-full bg-background text-foreground font-sans">
-        {/* Translations are added per area (see IntlProvider): Chats and Clients need none. */}
-        <NextIntlClientProvider messages={null} locale={locale}>
+        <NextIntlClientProvider messages={messages as never} locale={locale}>
           <ThemeProvider>
             {children}
             <ThemedToaster />

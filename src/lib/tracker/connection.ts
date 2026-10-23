@@ -37,6 +37,7 @@ export async function saveConnection(accountId: string, userId: string, patch: {
   const saved = await monitoringAdmin().from('tracker_connection').upsert(row, { onConflict: 'account_id' })
   if (saved.error) throw saved.error
   inflight.delete(accountId)
+  memory.delete(accountId)
 }
 
 /** Calls the Apps Script web app. The key travels in the body, never in the URL. */
@@ -69,16 +70,28 @@ export async function callScript(url: string, key: string, action: string, extra
 }
 
 const inflight = new Map<string, Promise<{ raw: RawSnapshot; fetchedAt: string }>>()
+const memory = new Map<string, { raw: RawSnapshot; fetchedAt: string }>()
+function remember(accountId: string, raw: RawSnapshot, fetchedAt: string) {
+  if (memory.size > 100) memory.clear()
+  const known = memory.get(accountId)
+  if (!known || known.fetchedAt <= fetchedAt) memory.set(accountId, { raw, fetchedAt })
+}
+/** Forget the in-memory copy (tests, or after the connection changes). */
+export function forgetSnapshot(accountId?: string) { if (accountId) memory.delete(accountId); else memory.clear() }
 
 /**
  * The Sheet copy: reused for a minute, then fetched again. When Google cannot
  * be reached the last copy is returned with `stale` set.
  */
 export async function getSnapshot(accountId: string, { force = false } = {}): Promise<{ raw: RawSnapshot; fetchedAt: string; stale?: string }> {
+  // A fresh copy in this server's memory needs no database trip (the database is far away).
+  const local = memory.get(accountId)
+  if (local && !force && Date.now() - Date.parse(local.fetchedAt) < FRESH_MS) return local
   const db = monitoringAdmin()
   const cached = await db.from('tracker_snapshot').select('data,fetched_at').eq('account_id', accountId).maybeSingle()
   if (cached.error && !['PGRST205', '42P01'].includes(cached.error.code ?? '')) throw cached.error
   const have = cached.data && isRawSnapshot(cached.data.data) ? { raw: cached.data.data as RawSnapshot, fetchedAt: cached.data.fetched_at as string } : null
+  if (have) remember(accountId, have.raw, have.fetchedAt)
   if (have && !force && Date.now() - Date.parse(have.fetchedAt) < FRESH_MS) return have
   let job = inflight.get(accountId)
   if (!job) {
@@ -103,6 +116,7 @@ export async function getSnapshot(accountId: string, { force = false } = {}): Pr
 export async function storeSnapshot(accountId: string, snapshot: RawSnapshot): Promise<string> {
   const db = monitoringAdmin()
   const fetchedAt = new Date().toISOString()
+  remember(accountId, snapshot, fetchedAt)
   const hash = snapshotHash(snapshot)
   // Same content as last time: only the time is updated (a tiny write instead of the whole copy).
   const same = await db.from('tracker_snapshot').update({ fetched_at: fetchedAt }).eq('account_id', accountId).eq('data_hash', hash).select('account_id')

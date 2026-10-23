@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { blockedMonitoringPath, monitoringOnly } from '@/lib/monitoring/policy'
 
 export async function middleware(request: NextRequest) {
+  // Lets the root layout send only the translations this page needs.
+  request.headers.set('x-numera-path', request.nextUrl.pathname)
   if (request.nextUrl.pathname === '/api/monitoring/webhook') {
     // Webhooks use raw-body signatures, not a user's browser session.
     return NextResponse.next({ request })

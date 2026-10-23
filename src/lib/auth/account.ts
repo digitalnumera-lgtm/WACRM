@@ -177,6 +177,19 @@ export async function getCurrentAccount(): Promise<AccountContext> {
     return { supabase, userId: user.id, accountId: cached.accountId, role: cached.role, account: cached.account };
   }
 
+  // One trip: company, role and company name together (see 009_account_context_rpc.sql).
+  type Row = { account_id: string | null; account_role: string | null; account_name: string | null };
+  let fast: { data: Row | null; error: unknown } = { data: null, error: true };
+  try { fast = await supabase.rpc("current_account_context").maybeSingle<Row>(); } catch { /* fall back below */ }
+  if (!fast.error && fast.data?.account_id && fast.data.account_role && isAccountRole(fast.data.account_role) && fast.data.account_name !== null) {
+    const account = { id: fast.data.account_id, name: fast.data.account_name };
+    if (CONTEXT_CACHE_MS) {
+      if (contextCache.size > 500) contextCache.clear();
+      contextCache.set(user.id, { expires: Date.now() + CONTEXT_CACHE_MS, accountId: account.id, role: fast.data.account_role, account });
+    }
+    return { supabase, userId: user.id, accountId: account.id, role: fast.data.account_role, account };
+  }
+  // Function not installed yet, or no linked company: the original two lookups explain why.
   const { data, error } = await supabase
     .from("profiles")
     .select("account_id, account_role")
