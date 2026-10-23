@@ -9,7 +9,7 @@
       56,
       72
     ],
-    "color": "full color (PNG, self-hosted in public/icons/3d at 128px)",
+    "color": "full color (WebP, self-hosted in public/icons/3d at 128px, ~4 KB each)",
     "note": "Feature and section icons only. Navigation and inline UI icons stay on lucide-react (mono); 3D icons turn to mud below ~32px.",
     "items": {
       "client-tracker": {

@@ -113,5 +113,5 @@ export function MenuItem({ children, onClick, active }: { children: ReactNode; o
 /** A 3D Fluency icon from Icons8 (self-hosted in /public/icons/3d). For feature and section headers only, 32px and up. */
 export function Icon3D({ name, size = 48, className = '' }: { name: string; size?: number; className?: string }) {
   // eslint-disable-next-line @next/next/no-img-element -- small static PNGs; no optimizer needed
-  return <img src={`/icons/3d/${name}.png`} width={size} height={size} alt="" aria-hidden="true" draggable={false} loading="lazy" decoding="async" className={`shrink-0 select-none drop-shadow-sm ${className}`} />
+  return <img src={`/icons/3d/${name}.webp`} width={size} height={size} alt="" aria-hidden="true" draggable={false} loading="lazy" decoding="async" className={`shrink-0 select-none drop-shadow-sm ${className}`} />
 }
