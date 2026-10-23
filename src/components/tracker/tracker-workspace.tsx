@@ -94,7 +94,7 @@ function Workspace({ accountName, level, crm }: { accountName: string; level: Tr
   const d = tracker.data
 
   return <MotionRoot><div data-density={prefs.density} data-style={prefs.style} className={`monitoring-panel flex h-dvh flex-col overflow-hidden text-foreground md:flex-row md:gap-3 md:p-3 ${dark ? 'dark' : ''}`}>
-    <aside aria-label="Client Tracker" className="order-last flex shrink-0 items-center gap-1 border-t border-border bg-card/90 px-2 py-1.5 backdrop-blur md:order-first md:w-14 md:flex-col md:border-0 md:bg-transparent md:p-0 md:py-1">
+    <aside aria-label="Clients" className="order-last flex shrink-0 items-center gap-1 border-t border-border bg-card/90 px-2 py-1.5 backdrop-blur md:order-first md:w-14 md:flex-col md:border-0 md:bg-transparent md:p-0 md:py-1">
       <div title={accountName} role="img" aria-label="Numera Digital" className="brand-mark hidden h-11 w-9 shrink-0 md:mb-4 md:block" />
       <nav className="flex flex-1 items-center justify-around gap-1 md:flex-col md:justify-start">
         {pages.filter(p => atLeast(level, p.min)).map(p => nav(p.name, p.label, p.icon))}
@@ -137,7 +137,7 @@ function NotReady({ error, owner, onSettings, onRetry }: { error: { message: str
   const setup = error.code === 'not_connected'
   return <div className="crm-card max-w-xl space-y-3 p-6">
     <h2 className="text-lg font-semibold">{setup ? 'Connect the Sheet first' : 'The Sheet could not be read'}</h2>
-    <p className="text-sm text-muted-foreground">{setup && !owner ? 'The company owner needs to connect the Client Tracker to the Google Sheet.' : error.message}</p>
+    <p className="text-sm text-muted-foreground">{setup && !owner ? 'The company owner needs to connect Clients to the Google Sheet.' : error.message}</p>
     <div className="flex gap-2"><button className={buttonClass} onClick={onRetry}><RefreshCw size={14} />Try again</button>{owner && <button className={buttonClass} onClick={onSettings}>Open Settings</button>}</div>
   </div>
 }

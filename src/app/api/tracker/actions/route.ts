@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     const body = await readJson(request, 32768)
     const { action, input } = actionInput(body.action, body.input)
     const conn = await readConnection(access.accountId)
-    if (!conn.url || !conn.key) throw new TrackerConnectionError('not_connected', 'The Client Tracker is not connected to the Sheet yet.')
+    if (!conn.url || !conn.key) throw new TrackerConnectionError('not_connected', 'The Google Sheet is not connected yet.')
     const me = await monitoringAdmin().from('profiles').select('full_name,email').eq('user_id', access.userId).maybeSingle()
     const actor = String(me.data?.full_name || me.data?.email || 'CRM user').slice(0, 60)
     const reply = await callScript(conn.url, conn.key, action, { input, actor }, 170_000)

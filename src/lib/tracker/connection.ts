@@ -61,7 +61,7 @@ export async function callScript(url: string, key: string, action: string, extra
         : `Google answered with an error (${response.status}). Check the web app link and that it is deployed.`)
   }
   if (body.ok !== true) {
-    if (body.error === 'unknown_action') throw new TrackerConnectionError('script_error', 'The script file is out of date. Copy the latest script from Client Tracker → Settings, paste it over crm-connect and deploy a new version.')
+    if (body.error === 'unknown_action') throw new TrackerConnectionError('script_error', 'The script file is out of date. Copy the latest script from Clients → Settings, paste it over crm-connect and deploy a new version.')
     if (body.error === 'bad_key') throw new TrackerConnectionError('bad_key', 'The script rejected the key. Paste the current key into the script, save, and deploy a new version.')
     throw new TrackerConnectionError('script_error', typeof body.message === 'string' ? `The script hit an error: ${body.message}` : 'The script could not read the Sheet.')
   }
@@ -84,7 +84,7 @@ export async function getSnapshot(accountId: string, { force = false } = {}): Pr
   if (!job) {
     job = (async () => {
       const conn = await readConnection(accountId)
-      if (!conn.url || !conn.key) throw new TrackerConnectionError('not_connected', 'The Client Tracker is not connected to the Sheet yet.')
+      if (!conn.url || !conn.key) throw new TrackerConnectionError('not_connected', 'The Google Sheet is not connected yet.')
       const body = await callScript(conn.url, conn.key, 'snapshot', {}, 90_000)
       if (!isRawSnapshot(body.snapshot)) throw new TrackerConnectionError('bad_reply', 'The script answered without Sheet data. Update the script file to the latest version.')
       const fetchedAt = await storeSnapshot(accountId, body.snapshot)

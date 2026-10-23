@@ -21,7 +21,7 @@ export function CommissionStatement({ data, canEdit, onChanged }: { data: Tracke
   const [paying, setPaying] = useState<StatementRow | null>(null)
   const c = data.commission
   const rows = useMemo(() => c?.defaults ? commissionStatement({ deals: data.deals, payments: data.payments ?? [], defaults: c.defaults, rates: c.rates, payouts: c.payouts, upTo, includeDay }) : [], [c, data.deals, data.payments, upTo, includeDay])
-  if (!c?.defaults) return <p className="crm-card p-6 text-sm text-muted-foreground">Update the connection script to version 3 (Client Tracker → Settings) to see commission statements.</p>
+  if (!c?.defaults) return <p className="crm-card p-6 text-sm text-muted-foreground">Update the connection script to version 3 (Clients → Settings) to see commission statements.</p>
   const total = (k: 'earned' | 'paid' | 'due') => rows.reduce((s, r) => s + r[k], 0)
   return <div className="space-y-4">
     <div className="crm-card flex flex-wrap items-end gap-4 p-4">

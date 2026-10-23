@@ -11,7 +11,7 @@ type Person = { user_id: string; name: string; email: string | null; account_rol
 type SettingsData = { ready: boolean; connection: { url: string | null; hasKey: boolean; updatedAt: string | null }; script: { version: number; source: string }; people: Person[] }
 
 const LEVELS: { value: Exclude<TrackerLevel, 'owner'> | ''; label: string; hint: string }[] = [
-  { value: '', label: 'No access', hint: 'Cannot open the Client Tracker' },
+  { value: '', label: 'No access', hint: 'Cannot open Clients' },
   { value: 'view', label: 'View', hint: 'Deals, clients and statuses, no amounts' },
   { value: 'amounts', label: 'View + amounts', hint: 'Also totals, paid, owed and payments' },
   { value: 'full', label: 'Full', hint: 'Also commission, and can add and change deals and payments' },
@@ -23,7 +23,7 @@ export function TrackerSettings({ level, onConnected, data, onChanged }: { level
       <div className="flex items-center gap-3"><Icon3D name="coins" size={36} /><h2 className="font-semibold">Commission rates</h2></div>
       <CommissionRates data={data} onChanged={onChanged} />
     </section>}
-    {level === 'owner' ? <OwnerSettings onConnected={onConnected} /> : <p className="crm-card p-5 text-sm text-muted-foreground">Your access: <b className="text-foreground">{LEVELS.find(l => l.value === level)?.label}</b>. The company owner manages the connection and who can see the Client Tracker.</p>}
+    {level === 'owner' ? <OwnerSettings onConnected={onConnected} /> : <p className="crm-card p-5 text-sm text-muted-foreground">Your access: <b className="text-foreground">{LEVELS.find(l => l.value === level)?.label}</b>. The company owner manages the connection and who can see Clients.</p>}
   </div>
 }
 
@@ -141,11 +141,11 @@ function People({ people, onSaved }: { people: Person[]; onSaved: () => void }) 
     catch (e) { setError((e as Error).message) } finally { setBusy(null) }
   }
   return <section className="crm-card p-5">
-    <div className="flex items-center gap-3"><Icon3D name="conference-call" size={36} /><h2 className="font-semibold">Who can open the Client Tracker</h2></div>
+    <div className="flex items-center gap-3"><Icon3D name="conference-call" size={36} /><h2 className="font-semibold">Who can open Clients</h2></div>
     <ul className="mt-4 divide-y divide-border">{people.map(p => <li key={p.user_id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0"><p className="truncate text-sm font-medium">{p.name}{p.you && <span className="text-muted-foreground"> (you)</span>}</p><p className="truncate text-xs text-muted-foreground">{p.email}{p.account_role === 'admin' ? ' · CRM admin' : ''}</p></div>
       {p.level === 'owner' ? <span className="text-sm text-muted-foreground">Owner · always full access</span>
-        : <select className={`${inputClass} w-full sm:w-56`} value={p.level ?? ''} disabled={busy === p.user_id} onChange={e => void change(p, e.target.value)} aria-label={`Client Tracker access for ${p.name}`}>
+        : <select className={`${inputClass} w-full sm:w-56`} value={p.level ?? ''} disabled={busy === p.user_id} onChange={e => void change(p, e.target.value)} aria-label={`Clients access for ${p.name}`}>
           {LEVELS.map(l => <option key={l.value} value={l.value} title={l.hint}>{l.label}</option>)}
         </select>}
     </li>)}</ul>

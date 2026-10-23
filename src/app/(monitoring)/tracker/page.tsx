@@ -9,7 +9,7 @@ import { MonitoringSignOut } from '@/components/monitoring/workspace'
 import { TrackerWorkspace } from '@/components/tracker/tracker-workspace'
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'Client Tracker · Numera CRM' }
+export const metadata = { title: 'Clients · Numera CRM' }
 
 export default async function TrackerPage() {
   let level: TrackerLevel | null
@@ -31,9 +31,9 @@ export default async function TrackerPage() {
     name = ''
   }
   if (!level) return <main className="mx-auto max-w-lg p-10">
-    <h1 className="text-2xl font-semibold">No Client Tracker access</h1>
-    <p className="my-4 text-muted-foreground">Ask the company owner to give you access in Client Tracker → Settings.</p>
-    <div className="flex gap-3">{crm && <Link className="underline" href="/monitoring">Open the WhatsApp CRM</Link>}<MonitoringSignOut /></div>
+    <h1 className="text-2xl font-semibold">No access to Clients</h1>
+    <p className="my-4 text-muted-foreground">Ask the company owner to give you access in Clients → Settings.</p>
+    <div className="flex gap-3">{crm && <Link className="underline" href="/monitoring">Open Chats</Link>}<MonitoringSignOut /></div>
   </main>
   return <TrackerWorkspace accountName={name} level={level} crm={crm} preferences={sanitizePreferences(metadataPrefs?.crm_preferences)} />
 }

@@ -25,12 +25,12 @@ const TRACKER: Topic[] = [
   { icon: 'coins', title: 'Pay commission', when: 'Pay day', where: 'Commission → Statement', steps: ['Pick the date; tick to count that day too', 'Record what you actually paid', 'Paid more or less: the difference carries to the next statement'] },
   { icon: 'calendar', title: 'Rates', when: 'Target or someone’s rate changes', where: 'Commission → Rates, or Settings', steps: ['Defaults: monthly target, below / at-or-above rates, manager rate', 'Own rate for one person; empty uses the default'] },
   { icon: 'tools', title: 'Health check, delete a deal', when: 'Something looks wrong', where: 'Tools', steps: ['Health check lists what to fix', 'Delete removes the deal everywhere, like the Tools tab'] },
-  { icon: 'key', title: 'Who sees the tracker', when: 'New finance or project staff', where: 'Settings → Who can open the Client Tracker', steps: ['View, View + amounts, or Full', 'Agents have no access unless you give it'] },
+  { icon: 'key', title: 'Who sees Clients', when: 'New finance or project staff', where: 'Settings → Who can open Clients', steps: ['View, View + amounts, or Full', 'Agents have no access unless you give it'] },
 ]
 
 function Guide({ topics }: { topics: Topic[] }) {
-  return <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{topics.map(t => <article key={t.title} className="crm-card flex gap-4 p-5">
-    <Icon3D name={t.icon} size={44} />
+  return <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{topics.map(t => <article key={t.title} className="crm-card flex items-start gap-4 p-5">
+    <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-muted/70"><Icon3D name={t.icon} size={30} /></span>
     <div className="min-w-0 space-y-2">
       <h2 className="font-semibold">{t.title}</h2>
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs"><dt className="text-muted-foreground">When</dt><dd>{t.when}</dd><dt className="text-muted-foreground">Where</dt><dd className="font-medium">{t.where}</dd></dl>

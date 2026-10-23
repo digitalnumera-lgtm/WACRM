@@ -14,7 +14,7 @@ export async function GET() {
     const hit = cache.get(accountId)
     if (hit && hit.expires > Date.now()) return privateJson(hit.options)
     const conn = await readConnection(accountId)
-    if (!conn.url || !conn.key) throw new TrackerConnectionError('not_connected', 'The Client Tracker is not connected to the Sheet yet.')
+    if (!conn.url || !conn.key) throw new TrackerConnectionError('not_connected', 'The Google Sheet is not connected yet.')
     const reply = await callScript(conn.url, conn.key, 'options')
     cache.set(accountId, { expires: Date.now() + 600_000, options: reply.options })
     return privateJson(reply.options)

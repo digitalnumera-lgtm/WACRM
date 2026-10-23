@@ -7,9 +7,10 @@ import { trackerLevel } from '@/lib/tracker/access'
 import { MonitoringWorkspace, MonitoringSignOut, type SettingsSection } from '@/components/monitoring/workspace'
 
 export const dynamic = 'force-dynamic'
+export const metadata = { title: 'Chats · Numera CRM' }
 
 function NoAccess({ tracker = false }: { tracker?: boolean }) {
-  return <main className="mx-auto max-w-lg p-10"><h1 className="text-2xl font-semibold">No WhatsApp CRM access yet</h1><p className="my-4 text-muted-foreground">Ask your company owner to give you a role in Settings → Team &amp; roles, then sign in again.</p><div className="flex gap-3">{tracker && <a className="underline" href="/tracker">Open the Client Tracker</a>}<MonitoringSignOut /></div></main>
+  return <main className="mx-auto max-w-lg p-10"><h1 className="text-2xl font-semibold">No access to Chats yet</h1><p className="my-4 text-muted-foreground">Ask your company owner to give you a role in Settings → Team &amp; roles, then sign in again.</p><div className="flex gap-3">{tracker && <a className="underline" href="/tracker">Open the Client Tracker</a>}<MonitoringSignOut /></div></main>
 }
 
 export default async function MonitoringPage({ searchParams }: { searchParams: Promise<{ view?: string; section?: string }> }) {
